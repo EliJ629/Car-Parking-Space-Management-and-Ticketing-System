@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
@@ -12,9 +13,13 @@ use Illuminate\View\View;
  */
 class HomeController extends Controller
 {
-    public function staff(Request $request): View
+    public function staff(Request $request): View|RedirectResponse
     {
         $user = $request->user();
+
+        if ($user->role === User::ROLE_MANAGER) {
+            return redirect()->route('manager.dashboard');
+        }
 
         return view('staff.home', [
             'user' => $user,

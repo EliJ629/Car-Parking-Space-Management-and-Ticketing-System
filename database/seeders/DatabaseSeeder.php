@@ -22,7 +22,10 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        $this->call(StaffSeeder::class);
+        $this->call([
+            StaffSeeder::class,
+            ParkingSlotSeeder::class,
+        ]);
 
         $driver = User::firstOrCreate(
             ['email' => 'driver@test.com'],

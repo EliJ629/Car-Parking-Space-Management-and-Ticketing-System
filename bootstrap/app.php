@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\EnsureArea;
+use App\Http\Middleware\EnsureRole;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -13,7 +14,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        $middleware->alias(['area' => EnsureArea::class]);
+        $middleware->alias([
+            'area' => EnsureArea::class,
+            'role' => EnsureRole::class,
+        ]);
 
         // Someone who is already signed in and opens a sign in page goes to their own home.
         $middleware->redirectUsersTo(fn (Request $request) => $request->user()?->isStaff()

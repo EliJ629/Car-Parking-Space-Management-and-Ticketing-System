@@ -7,14 +7,17 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Http\Request;
 
-#[Fillable(['user_id', 'action', 'subject', 'area', 'ip_address'])]
+#[Fillable(['user_id', 'action', 'subject', 'area', 'ip_address', 'details'])]
 class ActivityLog extends Model
 {
     public const UPDATED_AT = null;
 
     protected function casts(): array
     {
-        return ['created_at' => 'datetime'];
+        return [
+            'created_at' => 'datetime',
+            'details' => 'array',
+        ];
     }
 
     public function user(): BelongsTo
@@ -25,14 +28,24 @@ class ActivityLog extends Model
     /**
      * Write one line to the activity log.
      */
-    public static function record(string $action, ?User $user, ?Request $request = null, ?string $subject = null, ?string $area = null): self
-    {
+    /**
+     * @param  array<string, mixed>|null  $details
+     */
+    public static function record(
+        string $action,
+        ?User $user,
+        ?Request $request = null,
+        ?string $subject = null,
+        ?string $area = null,
+        ?array $details = null,
+    ): self {
         return static::create([
             'user_id' => $user?->id,
             'action' => $action,
             'subject' => $subject !== null ? mb_substr($subject, 0, 255) : null,
             'area' => $area,
             'ip_address' => $request?->ip(),
+            'details' => $details,
         ]);
     }
 }

@@ -5,6 +5,8 @@ use App\Http\Controllers\Driver\PasswordResetController;
 use App\Http\Controllers\Driver\RegisterController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\LandingController;
+use App\Http\Controllers\Manager\DashboardController as ManagerDashboardController;
+use App\Http\Controllers\Manager\ParkingSlotController;
 use App\Http\Controllers\Staff\LoginController as StaffLoginController;
 use Illuminate\Support\Facades\Route;
 
@@ -30,6 +32,21 @@ Route::prefix('staff')->name('staff.')->group(function () {
         Route::get('home', [HomeController::class, 'staff'])->name('home');
         Route::post('logout', [StaffLoginController::class, 'destroy'])->name('logout');
     });
+
+});
+
+Route::prefix('staff/manager')->name('manager.')->middleware(['area:staff', 'role:manager'])->group(function () {
+    Route::get('/', [ManagerDashboardController::class, 'index'])->name('dashboard');
+    Route::get('slots', [ParkingSlotController::class, 'index'])->name('slots.index');
+    Route::get('slots/create', [ParkingSlotController::class, 'create'])->name('slots.create');
+    Route::post('slots', [ParkingSlotController::class, 'store'])->name('slots.store');
+    Route::get('slots/{slot}/edit', [ParkingSlotController::class, 'edit'])->name('slots.edit');
+    Route::patch('slots/{slot}', [ParkingSlotController::class, 'update'])->name('slots.update');
+    Route::get('slots/{slot}/service', [ParkingSlotController::class, 'editServiceStatus'])
+        ->name('slots.service.edit');
+    Route::patch('slots/{slot}/service', [ParkingSlotController::class, 'updateServiceStatus'])
+        ->name('slots.service.update');
+    Route::delete('slots/{slot}', [ParkingSlotController::class, 'destroy'])->name('slots.destroy');
 });
 
 /*
