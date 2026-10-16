@@ -25,6 +25,7 @@ class DatabaseSeeder extends Seeder
         $this->call([
             StaffSeeder::class,
             ParkingSlotSeeder::class,
+            ManagerDefaultsSeeder::class,
         ]);
 
         $driver = User::firstOrCreate(

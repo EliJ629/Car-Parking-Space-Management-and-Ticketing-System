@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\SystemSetting;
 use App\Services\SignInService;
 use Closure;
 use Illuminate\Http\Request;
@@ -45,7 +46,9 @@ class EnsureArea
         if ($area === SignInService::AREA_STAFF) {
             $last = (int) $request->session()->get('staff_last_activity', now()->timestamp);
 
-            if (now()->timestamp - $last > self::STAFF_IDLE_SECONDS) {
+            $idleTimeout = (int) SystemSetting::value('idle_timeout_minutes', 15) * 60;
+
+            if (now()->timestamp - $last > $idleTimeout) {
                 $this->signIn->signOut($request, $area, 'idle_sign_out');
 
                 return redirect()->route($loginRoute)
@@ -53,6 +56,10 @@ class EnsureArea
             }
 
             $request->session()->put('staff_last_activity', now()->timestamp);
+
+            if ($user->must_change_password && ! $request->routeIs('staff.password.change', 'staff.password.change.update', 'staff.logout')) {
+                return redirect()->route('staff.password.change');
+            }
         }
 
         return $next($request);

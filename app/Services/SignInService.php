@@ -62,6 +62,7 @@ class SignInService
         }
 
         $user->clearFailedLogins();
+        $user->forceFill(['last_login_at' => now()])->save();
 
         Auth::login($user);
         $request->session()->regenerate();

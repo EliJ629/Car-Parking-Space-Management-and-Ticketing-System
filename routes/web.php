@@ -5,9 +5,17 @@ use App\Http\Controllers\Driver\PasswordResetController;
 use App\Http\Controllers\Driver\RegisterController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\LandingController;
+use App\Http\Controllers\Manager\AccountController;
+use App\Http\Controllers\Manager\ActivityLogController;
 use App\Http\Controllers\Manager\DashboardController as ManagerDashboardController;
+use App\Http\Controllers\Manager\IncidentController;
 use App\Http\Controllers\Manager\ParkingSlotController;
+use App\Http\Controllers\Manager\RatePolicyController;
+use App\Http\Controllers\Manager\RecordsController;
+use App\Http\Controllers\Manager\SalesReportController;
+use App\Http\Controllers\Manager\SettingsController;
 use App\Http\Controllers\Staff\LoginController as StaffLoginController;
+use App\Http\Controllers\Staff\PasswordChangeController;
 use Illuminate\Support\Facades\Route;
 
 // The first page people see is the driver page. Staff have their own address.
@@ -31,6 +39,8 @@ Route::prefix('staff')->name('staff.')->group(function () {
     Route::middleware('area:staff')->group(function () {
         Route::get('home', [HomeController::class, 'staff'])->name('home');
         Route::post('logout', [StaffLoginController::class, 'destroy'])->name('logout');
+        Route::get('change-password', [PasswordChangeController::class, 'edit'])->name('password.change');
+        Route::put('change-password', [PasswordChangeController::class, 'update'])->name('password.change.update');
     });
 
 });
@@ -47,6 +57,46 @@ Route::prefix('staff/manager')->name('manager.')->middleware(['area:staff', 'rol
     Route::patch('slots/{slot}/service', [ParkingSlotController::class, 'updateServiceStatus'])
         ->name('slots.service.update');
     Route::delete('slots/{slot}', [ParkingSlotController::class, 'destroy'])->name('slots.destroy');
+
+    Route::get('rates', [RatePolicyController::class, 'index'])->name('rates.index');
+    Route::post('rates', [RatePolicyController::class, 'storeRate'])->name('rates.store');
+    Route::post('discounts', [RatePolicyController::class, 'storeDiscount'])->name('discounts.store');
+    Route::patch('discounts/{discount}', [RatePolicyController::class, 'updateDiscount'])->name('discounts.update');
+    Route::delete('discounts/{discount}', [RatePolicyController::class, 'destroyDiscount'])->name('discounts.destroy');
+
+    Route::get('accounts', [AccountController::class, 'index'])->name('accounts.index');
+    Route::get('my-account', [AccountController::class, 'myAccount'])->name('my-account');
+    Route::put('my-account', [AccountController::class, 'updateMyAccount'])->name('my-account.update');
+    Route::put('my-account/password', [AccountController::class, 'changeOwnPassword'])->name('my-account.password');
+    Route::get('accounts/create', [AccountController::class, 'create'])->name('accounts.create');
+    Route::post('accounts', [AccountController::class, 'store'])->name('accounts.store');
+    Route::get('accounts/{account}/edit', [AccountController::class, 'edit'])->name('accounts.edit');
+    Route::patch('accounts/{account}', [AccountController::class, 'update'])->name('accounts.update');
+    Route::patch('accounts/{account}/status', [AccountController::class, 'toggleStatus'])->name('accounts.status');
+    Route::post('accounts/{account}/reset-password', [AccountController::class, 'resetPassword'])->name('accounts.reset-password');
+    Route::get('drivers', [AccountController::class, 'drivers'])->name('drivers.index');
+    Route::get('drivers/{account}', [AccountController::class, 'showDriver'])->name('drivers.show');
+
+    Route::get('records', [RecordsController::class, 'index'])->name('records.index');
+    Route::get('records/export', [RecordsController::class, 'export'])->name('records.export');
+    Route::get('records/sessions/{session}', [RecordsController::class, 'showSession'])->name('records.sessions.show');
+
+    Route::get('sales', [SalesReportController::class, 'sales'])->name('sales.index');
+    Route::get('sales/export', [SalesReportController::class, 'salesExport'])->name('sales.export');
+    Route::get('reports', [SalesReportController::class, 'report'])->name('reports.index');
+    Route::get('reports/export', [SalesReportController::class, 'reportExport'])->name('reports.export');
+
+    Route::get('activity', [ActivityLogController::class, 'index'])->name('activity.index');
+    Route::get('activity/{activityLog}', [ActivityLogController::class, 'show'])->name('activity.show');
+
+    Route::get('incidents', [IncidentController::class, 'index'])->name('incidents.index');
+    Route::get('incidents/create', [IncidentController::class, 'create'])->name('incidents.create');
+    Route::post('incidents', [IncidentController::class, 'store'])->name('incidents.store');
+    Route::get('incidents/{incident}', [IncidentController::class, 'show'])->name('incidents.show');
+    Route::patch('incidents/{incident}', [IncidentController::class, 'update'])->name('incidents.update');
+
+    Route::get('settings', [SettingsController::class, 'index'])->name('settings.index');
+    Route::put('settings', [SettingsController::class, 'update'])->name('settings.update');
 });
 
 /*

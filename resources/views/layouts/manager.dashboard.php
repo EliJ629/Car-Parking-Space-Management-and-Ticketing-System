@@ -19,8 +19,11 @@
       <span><b>Bayline</b><small>Parking manager console</small></span>
     </a>
     <span class="manager-header-spacer"></span>
-    <time class="manager-clock" datetime="<?= e(now()->toIso8601String()) ?>"><?= e(now()->format('D, M j, Y g:i A')) ?></time>
-    <span class="manager-user"><b><?= e(auth()->user()->name) ?></b><span>Parking manager</span></span>
+    <time class="manager-clock" datetime="<?= e(now()->setTimezone('Asia/Manila')->toIso8601String()) ?>">
+    <?= e(now()->setTimezone('Asia/Manila')->format('D, M j, Y g:i A')) ?>
+</time>
+
+    <a class="manager-user" href="<?= e(route('manager.my-account')) ?>"><b><?= e(auth()->user()->name) ?></b><span>Parking manager</span></a>
     <button class="tt" id="theme" type="button">Dark mode</button>
     <form method="POST" action="<?= e(route('staff.logout')) ?>" class="manager-logout">
       <?= csrf_field() ?>
@@ -31,16 +34,36 @@
 
 <?php $activePage = $activePage ?? ''; ?>
 <nav class="manager-nav w" aria-label="Manager workspace">
-  <a class="<?= $activePage === 'dashboard' ? 'active' : '' ?>" href="<?= e(route('manager.dashboard')) ?>"<?= $activePage === 'dashboard' ? ' aria-current="page"' : '' ?>>Dashboard</a>
-  <a class="<?= $activePage === 'slots' ? 'active' : '' ?>" href="<?= e(route('manager.slots.index')) ?>"<?= $activePage === 'slots' ? ' aria-current="page"' : '' ?>>Slots</a>
-  <?php foreach (['Rates and policies', 'Accounts', 'Records', 'Sales', 'Reports', 'Activity log', 'Incidents', 'Settings'] as $plannedPage) { ?>
-    <span class="manager-nav-planned" aria-disabled="true" title="This manager workspace is being built next"><?= e($plannedPage) ?></span>
+  <?php
+  $managerLinks = [
+      'dashboard' => ['Dashboard', 'manager.dashboard'],
+      'slots' => ['Slots', 'manager.slots.index'],
+      'rates' => ['Rates and policies', 'manager.rates.index'],
+      'accounts' => ['Accounts', 'manager.accounts.index'],
+      'records' => ['Records', 'manager.records.index'],
+      'sales' => ['Sales', 'manager.sales.index'],
+      'reports' => ['Reports', 'manager.reports.index'],
+      'activity' => ['Activity log', 'manager.activity.index'],
+      'incidents' => ['Incidents', 'manager.incidents.index'],
+      'settings' => ['Settings', 'manager.settings.index'],
+  ];
+foreach ($managerLinks as $page => [$label, $routeName]) {
+    $active = $activePage === $page;
+    ?>
+    <a class="<?= $active ? 'active' : '' ?>" href="<?= e(route($routeName)) ?>"<?= $active ? ' aria-current="page"' : '' ?>><?= e($label) ?></a>
   <?php } ?>
 </nav>
 
 <main class="manager-main w">
   <?php if (session('status')) { ?>
     <div class="manager-feedback manager-feedback-success" role="status"><?= e(session('status')) ?></div>
+  <?php } ?>
+  <?php if (session('temporaryPassword')) { ?>
+    <div class="manager-feedback" role="status">
+      <strong>Temporary password (shown once)</strong>
+      <code class="manager-temporary-password"><?= e(session('temporaryPassword')) ?></code>
+      <span>Copy it now and share it securely with the staff member.</span>
+    </div>
   <?php } ?>
   <?php if (isset($errors) && $errors->any()) { ?>
     <div class="manager-feedback manager-feedback-error" role="alert">

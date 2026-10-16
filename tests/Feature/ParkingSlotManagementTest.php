@@ -41,7 +41,7 @@ class ParkingSlotManagementTest extends TestCase
             ->assertSee('A-01')
             ->assertSee('A-02')
             ->assertSee('Maintenance')
-            ->assertSee('Total slots');
+            ->assertSee('Parking slots');
     }
 
     public function test_manager_can_create_edit_and_audit_a_slot(): void

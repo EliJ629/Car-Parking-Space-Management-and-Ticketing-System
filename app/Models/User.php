@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
-#[Fillable(['name', 'username', 'email', 'phone', 'password', 'role', 'status'])]
+#[Fillable(['name', 'username', 'email', 'phone', 'password', 'role', 'status', 'last_login_at', 'must_change_password'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
@@ -47,6 +47,8 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'locked_until' => 'datetime',
+            'last_login_at' => 'datetime',
+            'must_change_password' => 'boolean',
             'password' => 'hashed',
         ];
     }
@@ -91,11 +93,14 @@ class User extends Authenticatable
     public function recordFailedLogin(): void
     {
         $count = $this->failed_login_count + 1;
+        $maxAttempts = (int) SystemSetting::value('failed_sign_ins_before_lock', self::MAX_FAILED_LOGINS);
 
-        if ($count >= self::MAX_FAILED_LOGINS) {
+        if ($count >= $maxAttempts) {
             $this->forceFill([
                 'failed_login_count' => 0,
-                'locked_until' => now()->addMinutes(self::LOCK_MINUTES),
+                'locked_until' => now()->addMinutes(
+                    (int) SystemSetting::value('lock_duration_minutes', self::LOCK_MINUTES),
+                ),
             ])->save();
 
             return;

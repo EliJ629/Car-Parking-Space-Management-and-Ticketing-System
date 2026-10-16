@@ -16,9 +16,13 @@
       <span>{{ \App\Models\ParkingSlot::statuses()[$status] }}</span>
     </a>
   @endforeach
-  <a class="manager-stat manager-stat-total" href="{{ route('manager.slots.index') }}">
-    <strong>{{ $totalSlots }}</strong>
-    <span>Total slots</span>
+  <a class="manager-stat" href="{{ route('manager.sales.index') }}">
+    <strong>₱{{ number_format($salesToday, 2) }}</strong>
+    <span>Sales today</span>
+  </a>
+  <a class="manager-stat manager-stat-out-of-service" href="{{ route('manager.incidents.index', ['status' => 'open']) }}">
+    <strong>{{ $openIncidents }}</strong>
+    <span>Open incidents</span>
   </a>
 </section>
 
@@ -103,7 +107,7 @@
       <div class="manager-summary-row"><span>Parking slots</span><strong>{{ $totalSlots }}</strong></div>
       <div class="manager-summary-row"><span>Zones</span><strong>{{ $zoneCount }}</strong></div>
       <div class="manager-summary-row"><span>Last slot change</span><strong>{{ $lastUpdated ? \Illuminate\Support\Carbon::parse($lastUpdated)->format('g:i A') : 'No changes yet' }}</strong></div>
-      <p class="manager-summary-note">Sales, vehicle activity, and incident totals will appear when their records are connected.</p>
+      <p class="manager-summary-note">Vehicle activity and reservations will appear as booth and driver operations are connected.</p>
     </section>
   </aside>
 </section>

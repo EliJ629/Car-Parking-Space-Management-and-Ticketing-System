@@ -26,10 +26,10 @@ class ActivityLog extends Model
     }
 
     /**
-     * Write one line to the activity log.
+     * @param  array<string, mixed>|null  $details
      */
     /**
-     * @param  array<string, mixed>|null  $details
+     * Write one line to the activity log.
      */
     public static function record(
         string $action,

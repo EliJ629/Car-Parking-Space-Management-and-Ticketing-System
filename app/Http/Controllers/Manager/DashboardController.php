@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Manager;
 
+use App\Models\Incident;
+use App\Models\ParkingPayment;
 use App\Models\ParkingSlot;
 use Illuminate\Contracts\View\View;
 
@@ -31,6 +33,8 @@ class DashboardController extends ManagerController
                 ParkingSlot::STATUS_OUT_OF_SERVICE,
             ])
             ->take(6);
+        $salesToday = (float) ParkingPayment::query()->whereDate('paid_at', today())->sum('total');
+        $openIncidents = Incident::query()->whereIn('status', ['open', 'under_review'])->count();
 
         return $this->managerPage(
             'Dashboard',
@@ -42,6 +46,8 @@ class DashboardController extends ManagerController
                 'totalSlots' => $slots->count(),
                 'zoneCount' => $slots->pluck('zone')->unique()->count(),
                 'lastUpdated' => $slots->max('updated_at'),
+                'salesToday' => $salesToday,
+                'openIncidents' => $openIncidents,
             ]),
         );
     }
