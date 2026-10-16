@@ -36,7 +36,10 @@ class EnsureArea
             return redirect()->route($user->isStaff() ? 'staff.home' : 'driver.home');
         }
 
-        if (! $user->isActive()) {
+        // A suspended driver may stay signed in, but only sees the account notice (EnsureDriverActive).
+        $suspendedDriver = $area === SignInService::AREA_DRIVER && $user->isSuspended();
+
+        if (! $user->isActive() && ! $suspendedDriver) {
             $this->signIn->signOut($request, $area);
 
             return redirect()->route($loginRoute)
@@ -55,7 +58,10 @@ class EnsureArea
                     ->with('status', 'You were signed out after 15 minutes without activity. Please sign in again.');
             }
 
-            $request->session()->put('staff_last_activity', now()->timestamp);
+            // Background polling must not keep an unattended tablet signed in.
+            if (! $request->headers->has('X-Bayline-Poll')) {
+                $request->session()->put('staff_last_activity', now()->timestamp);
+            }
 
             if ($user->must_change_password && ! $request->routeIs('staff.password.change', 'staff.password.change.update', 'staff.logout')) {
                 return redirect()->route('staff.password.change');

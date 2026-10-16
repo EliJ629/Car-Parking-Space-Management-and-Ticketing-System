@@ -5,10 +5,14 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
-#[Fillable(['user_id', 'plate_number', 'vehicle_type', 'color'])]
+#[Fillable(['user_id', 'plate_number', 'vehicle_type', 'color', 'make_model', 'contact_number'])]
 class Vehicle extends Model
 {
+    /** A removed vehicle keeps its row (a removed mark) so past records still point at it. */
+    use SoftDeletes;
+
     public const TYPES = ['Car', 'SUV', 'Van', 'Pickup', 'Motorcycle', 'Truck'];
 
     public function user(): BelongsTo
@@ -32,5 +36,13 @@ class Vehicle extends Model
         $plate = $this->plate_number;
 
         return strlen($plate) > 3 ? substr($plate, 0, 3).' '.substr($plate, 3) : $plate;
+    }
+
+    /** "Toyota Vios, white sedan" style line. */
+    public function describe(): string
+    {
+        $kind = strtolower($this->color.' '.$this->vehicle_type);
+
+        return $this->make_model ? $this->make_model.', '.$kind : $kind;
     }
 }

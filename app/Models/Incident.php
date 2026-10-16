@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable([
     'code',
@@ -21,6 +22,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'resolved_by',
     'reported_at',
     'resolved_at',
+    'detection_count',
+    'last_seen_at',
+    'driver_notified',
+    'driver_notice_reason',
 ])]
 class Incident extends Model
 {
@@ -31,16 +36,35 @@ class Incident extends Model
         'Vehicle damage',
         'Suspicious vehicle',
         'Violation',
+        'Mismatched plate or details',
         'Other',
     ];
 
     public const STATUSES = ['open', 'under_review', 'resolved'];
+
+    /** What the Security Guard screens call a category, where the wording differs from the stored value. */
+    public const GUARD_LABELS = [
+        'Suspicious vehicle' => 'Suspicious vehicle or individual',
+        'Violation' => 'Parking violation',
+    ];
+
+    public static function guardLabel(string $category): string
+    {
+        return self::GUARD_LABELS[$category] ?? $category;
+    }
+
+    public static function statusLabel(string $status): string
+    {
+        return ucfirst(str_replace('_', ' ', $status));
+    }
 
     protected function casts(): array
     {
         return [
             'reported_at' => 'datetime',
             'resolved_at' => 'datetime',
+            'last_seen_at' => 'datetime',
+            'driver_notified' => 'boolean',
         ];
     }
 
@@ -62,5 +86,15 @@ class Incident extends Model
     public function slot(): BelongsTo
     {
         return $this->belongsTo(ParkingSlot::class, 'slot_id');
+    }
+
+    public function photos(): HasMany
+    {
+        return $this->hasMany(IncidentPhoto::class);
+    }
+
+    public function notes(): HasMany
+    {
+        return $this->hasMany(IncidentNote::class)->orderBy('created_at')->orderBy('id');
     }
 }

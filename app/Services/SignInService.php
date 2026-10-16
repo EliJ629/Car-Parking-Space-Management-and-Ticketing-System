@@ -56,7 +56,10 @@ class SignInService
                 : 'Email or password is incorrect.');
         }
 
-        if (! $user->isActive()) {
+        // A suspended driver signs in and is shown the account notice instead of the app.
+        $suspendedDriver = $area === self::AREA_DRIVER && $user->isSuspended();
+
+        if (! $user->isActive() && ! $suspendedDriver) {
             ActivityLog::record('sign_in_failed', $user, $request, $identity, $area);
             $this->fail('This account cannot sign in right now. Please ask your supervisor.');
         }

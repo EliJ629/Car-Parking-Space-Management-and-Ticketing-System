@@ -2,14 +2,16 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Driver\DashboardController;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 /**
- * The first screen after sign in. These pages are the starting point for the
- * next sprints: each account type gets its own workspace here.
+ * The first screen after sign in. The manager, the security guard and every
+ * driver land on their own workspace. The booth attendant workspace is still
+ * the placeholder page.
  */
 class HomeController extends Controller
 {
@@ -21,20 +23,23 @@ class HomeController extends Controller
             return redirect()->route('manager.dashboard');
         }
 
+        if ($user->role === User::ROLE_GUARD) {
+            return redirect()->route('guard.gate');
+        }
+
         return view('staff.home', [
             'user' => $user,
             'tools' => $this->toolsFor($user),
         ]);
     }
 
-    public function driver(Request $request): View
+    public function driver(Request $request): View|RedirectResponse
     {
-        $user = $request->user();
+        if ($request->user()->isSuspended()) {
+            return redirect()->route('driver.suspended');
+        }
 
-        return view('driver.home', [
-            'user' => $user,
-            'vehicles' => $user->vehicles()->orderBy('created_at')->get(),
-        ]);
+        return app()->call([app(DashboardController::class), 'home']);
     }
 
     /**

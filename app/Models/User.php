@@ -31,6 +31,8 @@ class User extends Authenticatable
 
     public const STATUS_ACTIVE = 'active';
 
+    public const STATUS_SUSPENDED = 'suspended';
+
     /** Wrong passwords in a row before the account locks. */
     public const MAX_FAILED_LOGINS = 5;
 
@@ -71,6 +73,11 @@ class User extends Authenticatable
     public function isActive(): bool
     {
         return $this->status === self::STATUS_ACTIVE;
+    }
+
+    public function isSuspended(): bool
+    {
+        return $this->status === self::STATUS_SUSPENDED;
     }
 
     public function isLocked(): bool
