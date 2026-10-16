@@ -8,7 +8,7 @@
 </form>
 <div class="manager-table-wrap"><table class="manager-table"><thead><tr><th>Time</th><th>User</th><th>Area</th><th>Action</th><th>Subject / details</th><th></th></tr></thead><tbody>
 @forelse ($logs as $entry)
-<tr><td>{{ $entry->created_at->format('M j, Y g:i A') }}</td><td>{{ $entry->user?->name ?? 'System / removed user' }}</td><td>{{ $entry->area ?? '—' }}</td><td>{{ str_replace('_', ' ', ucfirst($entry->action)) }}</td><td>{{ $entry->subject ?? '—' }}</td><td><a class="manager-text-link" href="{{ route('manager.activity.show', $entry) }}">Details</a></td></tr>
+<tr><td>{{ \App\Support\Lot::local($entry->created_at)?->format('M j, Y g:i A') }}</td><td>{{ $entry->user?->name ?? 'System / removed user' }}</td><td>{{ $entry->area ?? '—' }}</td><td>{{ str_replace('_', ' ', ucfirst($entry->action)) }}</td><td>{{ $entry->subject ?? '—' }}</td><td><a class="manager-text-link" href="{{ route('manager.activity.show', $entry) }}">Details</a></td></tr>
 @empty<tr><td colspan="6" class="manager-table-empty">No activity matches these filters.</td></tr>@endforelse
 </tbody></table></div>
 <div class="manager-table-footer"><span>Showing {{ $logs->firstItem() ?? 0 }}–{{ $logs->lastItem() ?? 0 }} of {{ $logs->total() }}</span>{{ $logs->links() }}</div>

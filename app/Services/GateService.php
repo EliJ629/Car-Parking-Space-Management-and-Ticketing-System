@@ -110,7 +110,7 @@ class GateService
             if ($fresh->slot_id) {
                 ParkingSlot::query()->whereKey($fresh->slot_id)
                     ->whereIn('status', [ParkingSlot::STATUS_PENDING_EXIT, ParkingSlot::STATUS_OCCUPIED])
-                    ->update(['status' => ParkingSlot::STATUS_AVAILABLE]);
+                    ->update(['status' => $this->heldToday($fresh->slot_id) ? ParkingSlot::STATUS_RESERVED : ParkingSlot::STATUS_AVAILABLE]);
             }
 
             ParkingReservation::query()
@@ -212,6 +212,16 @@ class GateService
         ActivityLog::record('exit_window_ended', null, null, $expired->ticket_number, 'system', ['plate' => $expired->plate_number]);
 
         return true;
+    }
+
+    /** A booked reservation for today still holds this slot, so it goes back to Reserved, not Available. */
+    private function heldToday(int $slotId): bool
+    {
+        return ParkingReservation::query()
+            ->where('slot_id', $slotId)
+            ->where('status', ParkingReservation::STATUS_BOOKED)
+            ->whereBetween('scheduled_at', [Lot::dayStart(), Lot::dayEnd()])
+            ->exists();
     }
 
     /** Look up a session by ticket number or plate. A plate with an open session wins over older ones. */

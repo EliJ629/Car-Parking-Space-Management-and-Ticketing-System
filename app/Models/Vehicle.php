@@ -15,6 +15,11 @@ class Vehicle extends Model
 
     public const TYPES = ['Car', 'SUV', 'Van', 'Pickup', 'Motorcycle', 'Truck'];
 
+    /** Three letters then three or four digits, as normalizePlate writes it (ABC1234). */
+    public const PLATE_PATTERN = '/^[A-Z]{3}[0-9]{3,4}$/';
+
+    public const COLORS = ['White', 'Black', 'Gray', 'Silver', 'Red', 'Blue', 'Green', 'Yellow', 'Orange', 'Brown', 'Other'];
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);

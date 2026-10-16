@@ -22,7 +22,7 @@
 <ul class="menu" style="margin-top:14px">
   <li><a href="{{ route('driver.account.profile') }}">Edit profile</a></li>
   <li><a href="{{ route('driver.account.password') }}">Change password</a></li>
-  <li><button class="tt" id="theme" type="button" style="border:0;border-radius:0;background:transparent;color:var(--ink);min-height:52px;width:100%;text-align:left;padding:0 16px;font:600 15px var(--f-b)">Dark mode</button></li>
+  <li><button class="tt tt-row" id="theme" type="button" title="Switch between light and dark mode"><span>Appearance <small>Light or dark</small></span><svg class="ico" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/><circle cx="16.6" cy="7.4" r="1.5"/><path d="M19.5 7.4L20.5 7.4M18.7 9.5L19.4 10.2M16.6 10.3L16.6 11.3M14.5 9.5L13.8 10.2M13.7 7.4L12.7 7.4M14.5 5.3L13.8 4.6M16.6 4.5L16.6 3.5M18.7 5.3L19.4 4.6"/></svg></button></li>
 </ul>
 <form method="POST" action="{{ route('driver.logout') }}" class="actions">
   @csrf

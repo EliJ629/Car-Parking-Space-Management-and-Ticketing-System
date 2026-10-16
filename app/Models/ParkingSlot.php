@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable(['code', 'zone', 'type', 'status', 'notes', 'out_of_service_reason'])]
 class ParkingSlot extends Model
@@ -41,9 +42,23 @@ class ParkingSlot extends Model
         return self::statuses()[$this->status] ?? 'Unknown';
     }
 
+    public function reservations(): HasMany
+    {
+        return $this->hasMany(ParkingReservation::class, 'slot_id');
+    }
+
+    /** The next reservation that still holds this slot (booked, not yet used), on any day. */
+    public function nextOpenBooking(): ?ParkingReservation
+    {
+        return $this->reservations()
+            ->whereIn('status', [ParkingReservation::STATUS_BOOKED, ParkingReservation::STATUS_CHECKED_IN])
+            ->orderBy('scheduled_at')
+            ->first();
+    }
+
     public function canBeTakenOutOfService(): bool
     {
-        return $this->status === self::STATUS_AVAILABLE;
+        return $this->status === self::STATUS_AVAILABLE && $this->nextOpenBooking() === null;
     }
 
     public function canBeRemoved(): bool
@@ -51,6 +66,20 @@ class ParkingSlot extends Model
         return in_array($this->status, [
             self::STATUS_AVAILABLE,
             self::STATUS_OUT_OF_SERVICE,
-        ], true);
+        ], true) && $this->nextOpenBooking() === null;
+    }
+
+    /** Why the slot cannot leave service or be removed, in words for the screen. Null when it can. */
+    public function blockedReason(): ?string
+    {
+        if ($booking = $this->nextOpenBooking()) {
+            return "{$this->code} has reservation {$booking->code} for ".\App\Support\Lot::whenText($booking->scheduled_at).'. Cancel it or let it finish first.';
+        }
+
+        if ($this->status !== self::STATUS_AVAILABLE && $this->status !== self::STATUS_OUT_OF_SERVICE) {
+            return "{$this->code} is {$this->statusLabel()} and must be available first.";
+        }
+
+        return null;
     }
 }

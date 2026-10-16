@@ -6,7 +6,7 @@
   <a class="btn ghost sm" href="{{ route('manager.reports.export', ['from' => $from, 'to' => $to]) }}">Export CSV</a>
 </form>
 @if ($sessionCount === 0)
-  <div class="manager-empty"><h2>No data for this range</h2><p>No parking sessions overlap {{ \Illuminate\Support\Carbon::parse($from)->format('M j, Y') }} to {{ \Illuminate\Support\Carbon::parse($to)->format('M j, Y') }}. Report values will be calculated from recorded parking sessions.</p><a class="manager-text-link" href="{{ route('manager.reports.index', ['from' => today()->subDays(6)->toDateString(), 'to' => today()->toDateString()]) }}">Use last 7 days</a></div>
+  <div class="manager-empty"><h2>No data for this range</h2><p>No parking sessions overlap {{ \Illuminate\Support\Carbon::parse($from)->format('M j, Y') }} to {{ \Illuminate\Support\Carbon::parse($to)->format('M j, Y') }}. Report values will be calculated from recorded parking sessions.</p><a class="manager-text-link" href="{{ route('manager.reports.index', ['from' => \App\Support\Lot::now()->subDays(6)->toDateString(), 'to' => \App\Support\Lot::now()->toDateString()]) }}">Use last 7 days</a></div>
 @endif
 <section class="manager-stat-grid manager-report-stats">
   <div class="manager-stat"><strong>{{ $averageOccupancy }}%</strong><span>Average occupancy</span></div>

@@ -118,6 +118,23 @@ class GuardConsoleTest extends TestCase
         $this->actingAs($guard)->get(route('guard.gate.show', [$session, 'done' => 1]))->assertOk()->assertSee('Exit approved');
     }
 
+    public function test_the_slot_goes_back_to_reserved_when_a_booking_for_today_holds_it(): void
+    {
+        $this->lot();
+        $guard = $this->guard();
+        $session = $this->parked('PK-0019', 'BNM6629', 'A-08', 'paid', 60);
+        $slot = ParkingSlot::where('code', 'A-08')->first();
+        \App\Models\ParkingReservation::create([
+            'code' => 'RSV-9100', 'slot_id' => $slot->id, 'slot_code' => 'A-08', 'plate_number' => 'QRS3317',
+            'scheduled_at' => \App\Support\Lot::dayEnd()->subMinutes(2), 'status' => 'booked',
+        ]);
+
+        $this->actingAs($guard)->post(route('guard.gate.approve', $session), ['checks' => ['plate' => 1, 'details' => 1, 'ticket' => 1]])
+            ->assertRedirect(route('guard.gate.show', [$session, 'done' => 1]));
+
+        $this->assertSame('reserved', $slot->fresh()->status);
+    }
+
     public function test_an_unpaid_session_cannot_be_approved(): void
     {
         $this->lot();

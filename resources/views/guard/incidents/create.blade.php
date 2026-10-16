@@ -27,7 +27,7 @@
       </fieldset>
       @error('category')<p class="g-err" style="margin:-8px 0 12px">{{ $message }}</p>@enderror
       <label class="f" for="description">Description</label>
-      <textarea id="description" name="description" placeholder="Describe what you saw. Include the time and anything the Manager should know." @error('description') aria-invalid="true" @enderror>{{ $val('description') }}</textarea>
+      <textarea id="description" name="description" maxlength="500" placeholder="Describe what you saw. Include the time and anything the Manager should know." @error('description') aria-invalid="true" @enderror>{{ $val('description') }}</textarea>
       @error('description')<p class="g-err">{{ $message }}</p>@else<p class="hint">At least 10 characters.</p>@enderror
     </section>
 
@@ -40,7 +40,7 @@
       </div>
       <div class="fld">
         <label class="f" for="location">Slot or location</label>
-        <input id="location" name="location" type="text" value="{{ $val('location') }}" placeholder="For example B-03 or Zone A lane" maxlength="60">
+        <input id="location" name="location" type="text" value="{{ $val('location') }}" placeholder="For example B-03 or Zone A lane" maxlength="120">
       </div>
       <p class="g-lab" style="margin-top:4px">Photos (optional, up to 3)</p>
       <div class="g-photos">

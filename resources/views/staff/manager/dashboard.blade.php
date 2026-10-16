@@ -106,7 +106,7 @@
       <h2>Current layout</h2>
       <div class="manager-summary-row"><span>Parking slots</span><strong>{{ $totalSlots }}</strong></div>
       <div class="manager-summary-row"><span>Zones</span><strong>{{ $zoneCount }}</strong></div>
-      <div class="manager-summary-row"><span>Last slot change</span><strong>{{ $lastUpdated ? \Illuminate\Support\Carbon::parse($lastUpdated)->format('g:i A') : 'No changes yet' }}</strong></div>
+      <div class="manager-summary-row"><span>Last slot change</span><strong>{{ $lastUpdated ? \App\Support\Lot::time(\Illuminate\Support\Carbon::parse($lastUpdated)) : 'No changes yet' }}</strong></div>
       <p class="manager-summary-note">Vehicle activity and reservations will appear as booth and driver operations are connected.</p>
     </section>
   </aside>

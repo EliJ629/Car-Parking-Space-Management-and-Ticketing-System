@@ -33,7 +33,7 @@ class DashboardController extends ManagerController
                 ParkingSlot::STATUS_OUT_OF_SERVICE,
             ])
             ->take(6);
-        $salesToday = (float) ParkingPayment::query()->whereDate('paid_at', today())->sum('total');
+        $salesToday = (float) ParkingPayment::query()->whereBetween('paid_at', [\App\Support\Lot::dayStart(), \App\Support\Lot::dayEnd()])->sum('total');
         $openIncidents = Incident::query()->whereIn('status', ['open', 'under_review'])->count();
 
         return $this->managerPage(

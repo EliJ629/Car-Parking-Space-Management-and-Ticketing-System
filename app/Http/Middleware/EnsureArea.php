@@ -49,13 +49,14 @@ class EnsureArea
         if ($area === SignInService::AREA_STAFF) {
             $last = (int) $request->session()->get('staff_last_activity', now()->timestamp);
 
-            $idleTimeout = (int) SystemSetting::value('idle_timeout_minutes', 15) * 60;
+            $idleMinutes = max(1, (int) SystemSetting::value('idle_timeout_minutes', 15));
+            $idleTimeout = $idleMinutes * 60;
 
             if (now()->timestamp - $last > $idleTimeout) {
                 $this->signIn->signOut($request, $area, 'idle_sign_out');
 
                 return redirect()->route($loginRoute)
-                    ->with('status', 'You were signed out after 15 minutes without activity. Please sign in again.');
+                    ->with('status', "You were signed out after {$idleMinutes} minutes without activity. Please sign in again.");
             }
 
             // Background polling must not keep an unattended tablet signed in.

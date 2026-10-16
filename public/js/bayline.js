@@ -1,16 +1,29 @@
 (function(){
 var root=document.documentElement,tb=document.getElementById('theme'),KEY='bayline-theme';
 function eff(){var t=root.getAttribute('data-theme');if(t)return t;return matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}
-function lab(){if(tb)tb.textContent=eff()==='dark'?'Light mode':'Dark mode'}
+function lab(){if(!tb)return;var t=eff()==='dark'?'Switch to light mode':'Switch to dark mode';tb.setAttribute('title',t);if(!tb.textContent.trim())tb.setAttribute('aria-label',t)}
 try{var saved=localStorage.getItem(KEY);if(saved==='dark'||saved==='light')root.setAttribute('data-theme',saved)}catch(e){}
 if(tb){tb.addEventListener('click',function(){var n=eff()==='dark'?'light':'dark';root.setAttribute('data-theme',n);try{localStorage.setItem(KEY,n)}catch(e){}lab()});lab()}
-/* Show password check boxes: data-toggle-password="#field1,#field2" */
-document.querySelectorAll('[data-toggle-password]').forEach(function(box){
-  box.addEventListener('change',function(){
-    box.getAttribute('data-toggle-password').split(',').forEach(function(sel){
-      var f=document.querySelector(sel.trim());if(f)f.type=box.checked?'text':'password';
-    });
+/* Every password field gets an eye button that shows or hides what was typed */
+var EYE='<svg class="on" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>'
+ +'<svg class="off" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9.9 5.2A10 10 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-3.2 4.1M6.1 6.6C3.6 8.3 2 12 2 12s3.6 7 10 7a9.6 9.6 0 0 0 4.2-1M9.9 9.9a3 3 0 0 0 4.2 4.2"/><path d="M3 3l18 18"/></svg>';
+document.querySelectorAll('input[type=password]').forEach(function(input){
+  if(input.closest('.pw'))return;
+  var wrap=document.createElement('div');wrap.className='pw';
+  input.parentNode.insertBefore(wrap,input);wrap.appendChild(input);
+  var b=document.createElement('button');
+  b.type='button';b.className='pw-eye';b.innerHTML=EYE;
+  b.setAttribute('aria-pressed','false');b.setAttribute('aria-label','Show password');b.setAttribute('title','Show password');
+  if(input.id)b.setAttribute('aria-controls',input.id);
+  b.addEventListener('click',function(){
+    var show=input.type==='password';
+    input.type=show?'text':'password';
+    b.setAttribute('aria-pressed',show?'true':'false');
+    var t=show?'Hide password':'Show password';
+    b.setAttribute('aria-label',t);b.setAttribute('title',t);
+    input.focus({preventScroll:true});
   });
+  wrap.appendChild(b);
 });
 /* Disable the submit button while a form is sending, so a double tap does not send it twice */
 document.querySelectorAll('form[data-busy]').forEach(function(form){

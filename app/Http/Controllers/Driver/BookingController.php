@@ -18,8 +18,8 @@ class BookingController extends Controller
         $query = ParkingReservation::query()->where('driver_id', $request->user()->id)->with(['slot', 'vehicle']);
 
         $items = $tab === 'upcoming'
-            ? $query->where('status', ParkingReservation::STATUS_BOOKED)->orderBy('scheduled_at')->get()
-            : $query->where('status', '!=', ParkingReservation::STATUS_BOOKED)->orderByDesc('scheduled_at')->get();
+            ? $query->whereIn('status', [ParkingReservation::STATUS_BOOKED, ParkingReservation::STATUS_CHECKED_IN])->orderBy('scheduled_at')->get()
+            : $query->whereNotIn('status', [ParkingReservation::STATUS_BOOKED, ParkingReservation::STATUS_CHECKED_IN])->orderByDesc('scheduled_at')->get();
 
         return view('driver.app.bookings.index', [
             'tab' => $tab,

@@ -71,14 +71,15 @@ class ParkingSlotController extends ManagerController
         $request->merge([
             'code' => strtoupper(trim((string) $request->input('code'))),
             'zone' => trim((string) $request->input('zone')),
+            'notes' => $this->cleanNotes($request->input('notes')),
         ]);
 
         $validated = $request->validate([
             'code' => ['required', 'string', 'max:10', 'regex:/^[A-Z]-\d{2}$/', 'unique:parking_slots,code'],
-            'zone' => ['required', 'string', 'max:40'],
+            'zone' => ['required', 'string', Rule::in($this->zoneOptions())],
             'type' => ['required', Rule::in([ParkingSlot::TYPE_STANDARD, ParkingSlot::TYPE_PWD])],
             'notes' => ['nullable', 'string', 'max:1000'],
-        ]);
+        ], $this->messages());
 
         $slot = ParkingSlot::create($validated + [
             'status' => ParkingSlot::STATUS_AVAILABLE,
@@ -111,13 +112,16 @@ class ParkingSlotController extends ManagerController
 
     public function update(Request $request, ParkingSlot $slot): RedirectResponse
     {
-        $request->merge(['zone' => trim((string) $request->input('zone'))]);
+        $request->merge([
+            'zone' => trim((string) $request->input('zone')),
+            'notes' => $this->cleanNotes($request->input('notes')),
+        ]);
 
         $validated = $request->validate([
-            'zone' => ['required', 'string', 'max:40'],
+            'zone' => ['required', 'string', Rule::in($this->zoneOptions($slot->zone))],
             'type' => ['required', Rule::in([ParkingSlot::TYPE_STANDARD, ParkingSlot::TYPE_PWD])],
             'notes' => ['nullable', 'string', 'max:1000'],
-        ]);
+        ], $this->messages());
 
         $before = $slot->only(['code', 'zone', 'type', 'status', 'notes']);
         $slot->update($validated);
@@ -138,7 +142,7 @@ class ParkingSlotController extends ManagerController
     {
         if (! $slot->canBeTakenOutOfService()) {
             return redirect()->route('manager.slots.index')
-                ->withErrors(['slot' => "{$slot->code} must be available before it can be taken out of service."]);
+                ->withErrors(['slot' => $slot->blockedReason() ?? "{$slot->code} must be available before it can be taken out of service."]);
         }
 
         return $this->managerPage(
@@ -174,13 +178,14 @@ class ParkingSlotController extends ManagerController
 
         if (! $slot->canBeTakenOutOfService()) {
             return redirect()->route('manager.slots.index')
-                ->withErrors(['slot' => "{$slot->code} must be available before it can be taken out of service."]);
+                ->withErrors(['slot' => $slot->blockedReason() ?? "{$slot->code} must be available before it can be taken out of service."]);
         }
 
+        $request->merge(['notes' => $this->cleanNotes($request->input('notes'))]);
         $validated = $request->validate([
             'reason' => ['required', Rule::in(self::SERVICE_REASONS)],
             'notes' => ['nullable', 'string', 'max:1000'],
-        ]);
+        ], $this->messages());
 
         $before = $slot->only(['status', 'out_of_service_reason', 'notes']);
         $slot->update([
@@ -205,7 +210,7 @@ class ParkingSlotController extends ManagerController
     {
         if (! $slot->canBeRemoved()) {
             return redirect()->route('manager.slots.index')
-                ->withErrors(['slot' => "{$slot->code} cannot be removed while it is occupied, reserved, or awaiting exit."]);
+                ->withErrors(['slot' => $slot->blockedReason() ?? "{$slot->code} cannot be removed while it is occupied, reserved, or awaiting exit."]);
         }
 
         $details = $slot->only(['code', 'zone', 'type', 'status', 'notes', 'out_of_service_reason']);
@@ -236,5 +241,30 @@ class ParkingSlotController extends ManagerController
         }
 
         return $zones->sort()->values()->all();
+    }
+
+    /** Trim the note and treat an empty one as none. */
+    private function cleanNotes(mixed $notes): ?string
+    {
+        $notes = trim((string) $notes);
+
+        return $notes === '' ? null : $notes;
+    }
+
+    /** @return array<string, string> */
+    private function messages(): array
+    {
+        return [
+            'code.required' => 'Enter a slot code like B-04.',
+            'code.regex' => 'Use a zone letter, a dash and two digits, for example B-04.',
+            'code.unique' => 'This slot code already exists.',
+            'zone.required' => 'Choose a zone.',
+            'zone.in' => 'Choose a zone from the list.',
+            'type.required' => 'Choose a slot type.',
+            'type.in' => 'Choose a slot type from the list.',
+            'reason.required' => 'Choose a reason.',
+            'reason.in' => 'Choose a reason from the list.',
+            'notes.max' => 'Notes can have up to 1000 characters.',
+        ];
     }
 }

@@ -166,7 +166,7 @@ class IncidentService
      *
      * @throws \InvalidArgumentException with a message fit for the screen
      */
-    public function changeStatus(Incident $incident, User $user, string $status, ?string $note, ?Request $request = null): void
+    public function changeStatus(Incident $incident, User $user, string $status, ?string $note, ?Request $request = null, string $area = 'guard'): void
     {
         $rank = ['open' => 0, 'under_review' => 1, 'resolved' => 2];
 
@@ -201,7 +201,7 @@ class IncidentService
             'body' => 'Set to '.Incident::statusLabel($status).'.'.(trim((string) $note) !== '' ? ' Note: '.trim($note) : ''),
         ]);
 
-        ActivityLog::record('incident_status_updated', $user, $request, $incident->code, 'guard', [
+        ActivityLog::record('incident_status_updated', $user, $request, $incident->code, $area, [
             'before' => $before, 'after' => $incident->only(['status', 'resolution_note']),
         ]);
     }

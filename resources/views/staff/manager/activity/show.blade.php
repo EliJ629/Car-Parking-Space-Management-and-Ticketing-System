@@ -1,6 +1,6 @@
 <section class="manager-page-heading"><p class="eyebrow"><a class="manager-breadcrumb" href="{{ route('manager.activity.index') }}">Activity log</a> / Entry detail</p><h1>{{ str_replace('_', ' ', ucfirst($entry->action)) }}</h1></section>
 <section class="manager-panel manager-detail-panel"><div class="manager-data-grid">
-  <div><span>Time</span><strong>{{ $entry->created_at->format('M j, Y g:i:s A') }}</strong></div>
+  <div><span>Time</span><strong>{{ \App\Support\Lot::local($entry->created_at)?->format('M j, Y g:i:s A') }}</strong></div>
   <div><span>User</span><strong>{{ $entry->user?->name ?? 'System / removed user' }}{{ $entry->user?->username ? ' ('.$entry->user->username.')' : '' }}</strong></div>
   <div><span>Area</span><strong>{{ $entry->area ?? '—' }}</strong></div>
   <div><span>IP address</span><strong>{{ $entry->ip_address ?? 'Not recorded' }}</strong></div>

@@ -26,7 +26,7 @@ class GateController extends Controller
             'approvedToday' => $gate->approvedToday(),
             'longAlerts' => $gate->openLongParkingAlerts(),
             'gate' => $gate,
-            'q' => trim((string) $request->query('q', '')),
+            'q' => mb_substr(trim((string) $request->query('q', '')), 0, 40),
             'result' => null,
             'state' => null,
             'due' => null,

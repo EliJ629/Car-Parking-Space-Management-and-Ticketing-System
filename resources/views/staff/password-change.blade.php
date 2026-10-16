@@ -22,11 +22,12 @@
         <div class="manager-form-grid">
           <div class="manager-field manager-field-wide">
             <label class="f" for="password">New password</label>
-            <input id="password" name="password" type="password" minlength="12" autocomplete="new-password" required>
+            <input id="password" name="password" type="password" minlength="12" maxlength="64" autocomplete="new-password" required @error('password') aria-invalid="true" @enderror>
+            @error('password')<p class="err">{{ $message }}</p>@else<p class="hint">At least 12 characters with a letter and a number.</p>@enderror
           </div>
           <div class="manager-field manager-field-wide">
             <label class="f" for="password_confirmation">Confirm new password</label>
-            <input id="password_confirmation" name="password_confirmation" type="password" minlength="12" autocomplete="new-password" required>
+            <input id="password_confirmation" name="password_confirmation" type="password" minlength="12" maxlength="64" autocomplete="new-password" required>
           </div>
         </div>
         <div class="manager-form-actions">

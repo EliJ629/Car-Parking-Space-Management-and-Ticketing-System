@@ -21,7 +21,22 @@
   <div class="err-box" role="alert"><b>Check your arrival time</b>{{ $errors->first() }}</div>
 @endif
 
-@if ($step === 1)
+@if (! empty($blocking))
+  <section class="dcard" aria-labelledby="busy-t">
+    <h2 id="busy-t" style="margin:0 0 6px;font-size:18px">
+      {{ $blocking['kind'] === 'parked' ? 'Your car is still parked' : ($blocking['kind'] === 'checked_in' ? 'You are already checked in' : 'You already have a reservation') }}
+    </h2>
+    <p style="margin:0 0 14px">{{ $blocking['message'] }}</p>
+    <div class="actions">
+      @if ($blocking['kind'] === 'parked')
+        <a class="btn" href="{{ route('driver.session') }}">View my ticket</a>
+      @else
+        <a class="btn" href="{{ route('driver.bookings.show', $blocking['reservation']) }}">View reservation</a>
+      @endif
+      <a class="btn ghost" href="{{ route('driver.home') }}">Back to home</a>
+    </div>
+  </section>
+@elseif ($step === 1)
   <form method="GET" action="{{ route('driver.reserve') }}" novalidate>
     <input type="hidden" name="step" value="2">
     @if ($slotId)<input type="hidden" name="slot" value="{{ $slotId }}">@endif

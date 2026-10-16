@@ -9,6 +9,7 @@ use App\Models\Vehicle;
 use App\Services\GateService;
 use App\Services\IncidentService;
 use App\Support\Lot;
+use App\Support\Rules;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -62,10 +63,10 @@ class IncidentController extends Controller
 
         $data = $request->validate([
             'category' => ['required', Rule::in(Incident::CATEGORIES)],
-            'description' => ['required', 'string', 'min:10', 'max:1000'],
-            'plate_number' => ['nullable', 'regex:/^[A-Z0-9]{5,8}$/'],
-            'location' => ['nullable', 'string', 'max:60'],
-            'session_id' => ['nullable', 'integer'],
+            'description' => ['required', 'string', 'min:10', 'max:500'],
+            'plate_number' => Rules::plate(false),
+            'location' => ['nullable', 'string', 'max:120'],
+            'session_id' => ['nullable', 'integer', 'exists:parking_sessions,id'],
             'photos' => ['nullable', 'array', 'max:3'],
             'photos.*' => ['file', 'mimes:jpg,jpeg,png', 'max:5120'],
         ], $this->messages());
@@ -128,9 +129,11 @@ class IncidentController extends Controller
 
     public function storeLongParked(Request $request, IncidentService $incidents): RedirectResponse
     {
+        $request->merge(['description' => trim((string) $request->input('description'))]);
+
         $data = $request->validate([
             'session_id' => ['required', 'integer', 'exists:parking_sessions,id'],
-            'description' => ['required', 'string', 'min:10', 'max:1000'],
+            'description' => ['required', 'string', 'min:10', 'max:500'],
             'notify_driver' => ['nullable', 'boolean'],
             'photos' => ['nullable', 'array', 'max:3'],
             'photos.*' => ['file', 'mimes:jpg,jpeg,png', 'max:5120'],
@@ -164,7 +167,8 @@ class IncidentController extends Controller
 
     public function addNote(Request $request, Incident $incident, IncidentService $incidents): RedirectResponse
     {
-        $data = $request->validate(['body' => ['required', 'string', 'min:2', 'max:500']], ['body.required' => 'Write the note first.', 'body.min' => 'Write the note first.']);
+        $request->merge(['body' => trim((string) $request->input('body'))]);
+        $data = $request->validate(['body' => ['required', 'string', 'min:2', 'max:500']], ['body.required' => 'Write the note first.', 'body.min' => 'Write the note first.', 'body.max' => 'The note can have up to 500 characters.']);
         $incidents->addNote($incident, $request->user(), $data['body'], $request);
 
         return redirect()->route('guard.incidents.show', $incident)->with('toast', ['Note added', 'The note is on the timeline record.']);
@@ -175,7 +179,7 @@ class IncidentController extends Controller
         $data = $request->validate([
             'status' => ['required', Rule::in(Incident::STATUSES)],
             'note' => ['nullable', 'string', 'max:500'],
-        ], ['status.required' => 'Choose a status.']);
+        ], ['status.required' => 'Choose a status.', 'status.in' => 'Choose a status from the list.', 'note.max' => 'The note can have up to 500 characters.']);
 
         try {
             $incidents->changeStatus($incident, $request->user(), $data['status'], $data['note'] ?? null, $request);
@@ -222,7 +226,11 @@ class IncidentController extends Controller
     private function normalize(Request $request): void
     {
         $plate = Vehicle::normalizePlate((string) $request->input('plate_number', ''));
-        $request->merge(['plate_number' => $plate !== '' ? $plate : null]);
+        $request->merge([
+            'plate_number' => $plate !== '' ? $plate : null,
+            'location' => Rules::squish($request->input('location')) ?: null,
+            'description' => trim((string) $request->input('description')),
+        ]);
     }
 
     /** @return array<string, string> */
@@ -233,7 +241,10 @@ class IncidentController extends Controller
             'category.in' => 'Choose a category from the list.',
             'description.required' => 'Describe what you saw.',
             'description.min' => 'Write at least 10 characters.',
+            'description.max' => 'The description can have up to 500 characters.',
             'plate_number.regex' => 'Enter a plate like ABC 1234, or leave it empty.',
+            'location.max' => 'The location can have up to 120 characters.',
+            'session_id.exists' => 'There is no parking session with that number.',
             'photos.max' => 'You can add up to 3 photos.',
             'photos.*.mimes' => 'Photos must be JPG or PNG.',
             'photos.*.max' => 'Each photo must be under 5 MB.',

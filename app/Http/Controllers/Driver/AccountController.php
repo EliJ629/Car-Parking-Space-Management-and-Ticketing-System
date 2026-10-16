@@ -8,11 +8,11 @@ use App\Models\PasswordHistory;
 use App\Models\User;
 use App\Services\DriverData;
 use App\Support\Lot;
+use App\Support\Rules;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
-use Illuminate\Validation\Rules\Password;
 use Illuminate\View\View;
 
 class AccountController extends Controller
@@ -47,26 +47,27 @@ class AccountController extends Controller
     public function updateProfile(Request $request): RedirectResponse
     {
         $user = $request->user();
+        Rules::tidy($request, 'name');
         $request->merge([
-            'email' => mb_strtolower(trim((string) $request->input('email'))),
+            'email' => Rules::email($request->input('email')),
             'phone' => Lot::normalizePhone($request->input('phone')),
         ]);
 
         $data = $request->validate([
-            'name' => ['required', 'string', 'min:2', 'max:120'],
+            'name' => Rules::personName(),
             'email' => ['required', 'email:rfc', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
-            'phone' => ['required', 'regex:/^09\d{9}$/'],
-        ], [
-            'name.required' => 'Enter your full name.',
+            'phone' => Rules::mobile(),
+        ], Rules::personNameMessages() + [
             'email.required' => 'Enter your email.',
             'email.email' => 'Enter a valid email, for example maria@example.com.',
+            'email.max' => 'The email can have up to 255 characters.',
             'email.unique' => 'This email is already registered.',
             'phone.required' => 'Enter your mobile number.',
-            'phone.regex' => 'Enter a mobile number like 0917 555 0142.',
+            'phone.regex' => Rules::MOBILE_MESSAGE,
         ]);
 
         $before = $user->only(['name', 'email', 'phone']);
-        $user->update(['name' => trim($data['name']), 'email' => $data['email'], 'phone' => $data['phone']]);
+        $user->update(['name' => $data['name'], 'email' => $data['email'], 'phone' => $data['phone']]);
         ActivityLog::record('driver_profile_updated', $user, $request, null, 'driver', ['before' => $before, 'after' => $user->only(['name', 'email', 'phone'])]);
 
         return redirect()->route('driver.account')->with('toast', ['Profile saved', 'Your details were updated.']);
@@ -82,22 +83,27 @@ class AccountController extends Controller
         $user = $request->user();
 
         $data = $request->validate([
-            'current_password' => ['required', 'string'],
-            'password' => ['required', 'confirmed', Password::min(8)->letters()->numbers()],
-        ], [
+            'current_password' => ['required', 'string', 'max:255'],
+            'password' => Rules::driverPassword(),
+        ], Rules::driverPasswordMessages() + [
             'current_password.required' => 'Enter your current password.',
-            'password.required' => 'Choose a new password.',
-            'password.confirmed' => 'Passwords do not match.',
         ]);
 
+        // Both problems show together, as the screen design asks.
+        $errors = [];
+
         if (! Hash::check($data['current_password'], $user->password)) {
-            return back()->withErrors(['current_password' => 'Current password is incorrect.']);
+            $errors['current_password'] = 'Current password is incorrect.';
         }
 
         $recent = PasswordHistory::query()->where('user_id', $user->id)->latest('id')->limit(3)->pluck('password');
 
         if (Hash::check($data['password'], $user->password) || $recent->contains(fn (string $hash) => Hash::check($data['password'], $hash))) {
-            return back()->withErrors(['password' => 'Choose a password that is different from your last 3 passwords.']);
+            $errors['password'] = 'Choose a password that is different from your last 3 passwords.';
+        }
+
+        if ($errors !== []) {
+            return back()->withErrors($errors);
         }
 
         PasswordHistory::create(['user_id' => $user->id, 'password' => $user->password]);

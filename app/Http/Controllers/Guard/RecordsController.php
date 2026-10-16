@@ -19,7 +19,7 @@ class RecordsController extends Controller
     {
         $tab = $request->query('tab') === 'incidents' ? 'incidents' : 'parking';
         [$from, $to, $range] = $this->range($request);
-        $q = trim((string) $request->query('q', ''));
+        $q = mb_substr(trim((string) $request->query('q', '')), 0, 40);
 
         $filters = ['range' => $range, 'from' => Lot::local($from)->format('Y-m-d'), 'to' => Lot::local($to)->format('Y-m-d'), 'q' => $q];
         $data = ['tab' => $tab, 'f' => $filters, 'rangeText' => $this->rangeText($from, $to, $range), 'detail' => null];

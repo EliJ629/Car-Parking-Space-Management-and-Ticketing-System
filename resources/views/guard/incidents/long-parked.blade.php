@@ -35,7 +35,7 @@
         @if ($existing)<div class="g-banner" style="margin-top:14px"><b>{{ $existing->code }} already exists for this vehicle</b>Your report is added as a follow-up. <a href="{{ route('guard.incidents.show', $existing) }}">Open incident</a></div>@endif
         <div class="fld" style="margin-top:16px">
           <label class="f" for="description">What did you see?</label>
-          <textarea id="description" name="description" placeholder="For example: car is still in B-01, doors locked, no one nearby." @error('description') aria-invalid="true" @enderror>{{ old('description') }}</textarea>
+          <textarea id="description" name="description" maxlength="500" placeholder="For example: car is still in B-01, doors locked, no one nearby." @error('description') aria-invalid="true" @enderror>{{ old('description') }}</textarea>
           @error('description')<p class="g-err">{{ $message }}</p>@else<p class="hint">At least 10 characters.</p>@enderror
         </div>
       </section>

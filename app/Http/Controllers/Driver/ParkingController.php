@@ -74,8 +74,12 @@ class ParkingController extends Controller
             'nowTime' => Lot::now()->format('H:i'),
         ];
 
+        if ($blocking = $reservations->blockingFor($user)) {
+            return view('driver.app.reserve', array_merge($base, ['step' => 1, 'vehicles' => $vehicles, 'blocking' => $blocking]));
+        }
+
         if ($step === 1) {
-            return view('driver.app.reserve', $base + ['vehicles' => $vehicles]);
+            return view('driver.app.reserve', $base + ['vehicles' => $vehicles, 'blocking' => null]);
         }
 
         $problem = $this->checkWhen($date, $time);
@@ -206,6 +210,7 @@ class ParkingController extends Controller
                 'body' => 'Another driver reserved it a moment ago. Choose another slot for '.Lot::date(Lot::parse($back['date'], $back['time'])).' at '.Lot::time(Lot::parse($back['date'], $back['time'])).'.',
                 'primary' => ['label' => 'Choose another slot', 'close' => true],
             ]),
+            'driver_busy' => redirect()->route('driver.reserve', $stepOne)->with('modal', $this->busyModal($e)),
             'vehicle_busy' => redirect()->route('driver.reserve', $stepOne)->with('modal', [
                 'title' => 'You already have a reservation',
                 'body' => $e->getMessage(),
@@ -214,6 +219,22 @@ class ParkingController extends Controller
             ]),
             default => redirect()->route('driver.reserve', $stepOne)->withErrors(['when' => $e->getMessage()]),
         };
+    }
+
+    /** The pop-up for a driver who still has a reservation or a parked car. */
+    private function busyModal(ReservationException $e): array
+    {
+        $parked = $e->context instanceof \App\Models\ParkingSession;
+        $checkedIn = $e->context instanceof ParkingReservation && $e->context->status === ParkingReservation::STATUS_CHECKED_IN;
+
+        return [
+            'title' => $parked ? 'Your car is still parked' : ($checkedIn ? 'You are already checked in' : 'You already have a reservation'),
+            'body' => $e->getMessage(),
+            'primary' => $parked
+                ? ['label' => 'View my ticket', 'url' => route('driver.session')]
+                : ['label' => 'View reservation', 'url' => $e->context ? route('driver.bookings.show', $e->context) : route('driver.bookings')],
+            'secondary' => ['label' => 'Close', 'close' => true],
+        ];
     }
 
     private function addVehicleModal(): array

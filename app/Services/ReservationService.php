@@ -69,6 +69,45 @@ class ReservationService
         });
     }
 
+    /**
+     * What keeps this driver from booking again: an open reservation, a checked-in reservation, or a car that
+     * is still parked (ticket not yet exited). Null when the driver is free to reserve.
+     *
+     * @return array{kind:string,reservation:?ParkingReservation,session:?ParkingSession,slot:string,message:string}|null
+     */
+    public function blockingFor(User $driver): ?array
+    {
+        $reservation = ParkingReservation::query()
+            ->where('driver_id', $driver->id)
+            ->whereIn('status', [ParkingReservation::STATUS_BOOKED, ParkingReservation::STATUS_CHECKED_IN])
+            ->with('slot')
+            ->orderBy('scheduled_at')
+            ->first();
+
+        if ($reservation) {
+            $slot = $reservation->slot?->code ?? $reservation->slot_code;
+
+            if ($reservation->status === ParkingReservation::STATUS_CHECKED_IN) {
+                return ['kind' => 'checked_in', 'reservation' => $reservation, 'session' => null, 'slot' => $slot,
+                    'message' => "You are checked in at slot {$slot} ({$reservation->code}). You can reserve again after you exit."];
+            }
+
+            return ['kind' => 'booked', 'reservation' => $reservation, 'session' => null, 'slot' => $slot,
+                'message' => "{$reservation->code} holds {$slot} for you ".Lot::whenText($reservation->scheduled_at).'. You can reserve again after you exit, or cancel it first.'];
+        }
+
+        $session = app(DriverData::class)->openSession($driver);
+
+        if ($session) {
+            $slot = $session->slot?->code ?? $session->slot_code;
+
+            return ['kind' => 'parked', 'reservation' => null, 'session' => $session, 'slot' => (string) $slot,
+                'message' => "Your car is parked in slot {$slot} (ticket {$session->ticket_number}). You can reserve again after you exit."];
+        }
+
+        return null;
+    }
+
     /** Create the reservation or throw a ReservationException that says why not. */
     public function create(User $driver, Vehicle $vehicle, ParkingSlot $slot, Carbon $at, ?Request $request = null): ParkingReservation
     {
@@ -89,6 +128,13 @@ class ReservationService
         }
 
         $reservation = DB::transaction(function () use ($driver, $vehicle, $slot, $at) {
+            // Lock the driver row so two quick taps cannot both pass the one-reservation check.
+            User::query()->lockForUpdate()->find($driver->id);
+
+            if ($blocking = $this->blockingFor($driver)) {
+                throw new ReservationException('driver_busy', $blocking['message'], $blocking['reservation'] ?? $blocking['session']);
+            }
+
             $window = $this->overlapMinutes();
             $range = [$at->copy()->subMinutes($window - 1), $at->copy()->addMinutes($window - 1)];
 

@@ -118,7 +118,7 @@ Route::prefix('driver')->name('driver.')->group(function () {
         Route::post('forgot-password', [PasswordResetController::class, 'email'])
             ->middleware('throttle:5,1')
             ->name('password.email');
-        Route::post('reset-password', [PasswordResetController::class, 'update'])->name('password.update');
+        Route::post('reset-password', [PasswordResetController::class, 'update'])->middleware('throttle:10,1')->name('password.update');
     });
 
     Route::middleware('area:driver')->group(function () {

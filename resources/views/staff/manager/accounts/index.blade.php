@@ -26,7 +26,7 @@
         <tr>
           <th scope="row">{{ $account->name }}</th><td>{{ $account->username }}</td><td>{{ $roles[$account->role] }}</td>
           <td><span class="badge {{ $account->status === 'active' ? 'b-ok' : 'b-done' }}">{{ strtoupper($account->status) }}</span></td>
-          <td>{{ $account->last_login_at?->format('M j, g:i A') ?? 'Never' }}</td>
+          <td>{{ \App\Support\Lot::local($account->last_login_at)?->format('M j, g:i A') ?? 'Never' }}</td>
           <td><div class="manager-row-actions">
             <a href="{{ route('manager.accounts.edit', $account) }}">Edit</a>
             <form method="POST" action="{{ route('manager.accounts.reset-password', $account) }}">@csrf<button type="submit">Reset password</button></form>

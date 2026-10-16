@@ -138,7 +138,7 @@ class DriverAppTest extends TestCase
         $this->assertSame(1, ParkingReservation::count());
     }
 
-    public function test_the_same_vehicle_cannot_hold_two_bookings_at_the_same_time(): void
+    public function test_a_driver_with_a_booking_cannot_reserve_again(): void
     {
         $this->lot();
         $driver = $this->driver();
@@ -148,7 +148,95 @@ class DriverAppTest extends TestCase
 
         $this->actingAs($driver)->post(route('driver.reserve.store'), $q + ['slot' => ParkingSlot::where('code', 'A-01')->value('id')])->assertRedirect();
         $this->actingAs($driver)->post(route('driver.reserve.store'), $q + ['slot' => ParkingSlot::where('code', 'A-02')->value('id')])->assertSessionHas('modal');
+        $this->assertStringContainsString('already have a reservation', session('modal')['title']);
+
+        // A different day does not get around it, and a second vehicle does not either.
+        $later = Lot::now()->addDays(2);
+        $second = $driver->vehicles()->create(['plate_number' => 'GHI3300', 'color' => 'Red', 'vehicle_type' => 'Car', 'make_model' => 'Honda City']);
+        $this->actingAs($driver)->post(route('driver.reserve.store'), ['date' => $later->format('Y-m-d'), 'time' => '10:00', 'vehicle' => $second->id, 'slot' => ParkingSlot::where('code', 'A-03')->value('id')])
+            ->assertSessionHas('modal');
         $this->assertSame(1, ParkingReservation::count());
+        $this->assertSame($driver->id, ParkingReservation::first()->driver_id);
+
+        // The reserve screen explains it instead of showing the form.
+        $this->actingAs($driver)->get(route('driver.reserve'))->assertOk()->assertSee('You already have a reservation')->assertDontSee('Choose a slot');
+    }
+
+    public function test_another_driver_is_not_blocked_by_someone_elses_booking(): void
+    {
+        $this->lot();
+        $first = $this->driver();
+        $second = $this->driver('juan@example.com', 'XYZ9876');
+        $at = Lot::now()->addHours(3);
+        $q = ['date' => $at->format('Y-m-d'), 'time' => $at->format('H:i')];
+
+        $this->actingAs($first)->post(route('driver.reserve.store'), $q + ['vehicle' => $first->vehicles()->first()->id, 'slot' => ParkingSlot::where('code', 'A-01')->value('id')])->assertRedirect();
+        $this->actingAs($second)->post(route('driver.reserve.store'), $q + ['vehicle' => $second->vehicles()->first()->id, 'slot' => ParkingSlot::where('code', 'A-02')->value('id')])->assertRedirect();
+        $this->assertSame(2, ParkingReservation::count());
+        $this->assertSame(1, ParkingReservation::where('driver_id', $second->id)->count());
+    }
+
+    public function test_a_driver_can_reserve_again_after_canceling(): void
+    {
+        $this->lot();
+        $driver = $this->driver();
+        $vehicle = $driver->vehicles()->first();
+        $at = Lot::now()->addHours(3);
+        $q = ['date' => $at->format('Y-m-d'), 'time' => $at->format('H:i'), 'vehicle' => $vehicle->id];
+
+        $this->actingAs($driver)->post(route('driver.reserve.store'), $q + ['slot' => ParkingSlot::where('code', 'A-01')->value('id')]);
+        $this->actingAs($driver)->post(route('driver.bookings.cancel', ParkingReservation::first()));
+        $this->actingAs($driver)->post(route('driver.reserve.store'), $q + ['slot' => ParkingSlot::where('code', 'A-02')->value('id')])->assertRedirect();
+        $this->assertSame(2, ParkingReservation::count());
+    }
+
+    public function test_a_driver_who_is_parked_or_checked_in_cannot_reserve_until_they_exit(): void
+    {
+        $this->lot();
+        $driver = $this->driver();
+        $vehicle = $driver->vehicles()->first();
+        $session = $this->parkedSession($driver);
+        $at = Lot::now()->addHours(3);
+        $q = ['date' => $at->format('Y-m-d'), 'time' => $at->format('H:i'), 'vehicle' => $vehicle->id, 'slot' => ParkingSlot::where('code', 'A-05')->value('id')];
+
+        $this->actingAs($driver)->post(route('driver.reserve.store'), $q)->assertSessionHas('modal');
+        $this->assertStringContainsString('still parked', session('modal')['title']);
+        $this->assertSame(0, ParkingReservation::count());
+        $this->actingAs($driver)->get(route('driver.reserve'))->assertOk()->assertSee('Your car is still parked');
+
+        // Paid but not yet through the gate still counts as parked.
+        $session->update(['status' => ParkingSession::STATUS_PAID]);
+        $this->actingAs($driver)->post(route('driver.reserve.store'), $q)->assertSessionHas('modal');
+
+        // Once the guard lets the car out, the driver can book again.
+        $session->update(['status' => ParkingSession::STATUS_COMPLETED, 'exited_at' => now()]);
+        $this->actingAs($driver)->post(route('driver.reserve.store'), $q)->assertRedirect();
+        $this->assertSame(1, ParkingReservation::where('driver_id', $driver->id)->count());
+
+        // A checked-in reservation blocks too, until it is completed.
+        $reservation = ParkingReservation::first();
+        $reservation->update(['status' => ParkingReservation::STATUS_CHECKED_IN]);
+        $again = ['date' => Lot::now()->addDays(1)->format('Y-m-d'), 'time' => '09:00'] + $q;
+        $this->actingAs($driver)->post(route('driver.reserve.store'), $again)->assertSessionHas('modal');
+        $this->assertStringContainsString('already checked in', session('modal')['title']);
+        $reservation->update(['status' => ParkingReservation::STATUS_COMPLETED]);
+        $this->actingAs($driver)->post(route('driver.reserve.store'), $again)->assertRedirect();
+        $this->assertSame(2, ParkingReservation::where('driver_id', $driver->id)->count());
+    }
+
+    public function test_the_car_model_is_required_when_a_driver_signs_up(): void
+    {
+        $base = [
+            'name' => 'Pedro Cruz', 'email' => 'pedro@example.com', 'phone' => '09171234567', 'plate_number' => 'KLM 4455',
+            'vehicle_type' => 'Car', 'color' => 'Black', 'password' => 'Driver123x', 'password_confirmation' => 'Driver123x',
+        ];
+
+        $this->get(route('driver.register'))->assertOk()->assertSee('Car model');
+        $this->post(route('driver.register'), $base)->assertSessionHasErrors('make_model');
+        $this->assertSame(0, User::where('email', 'pedro@example.com')->count());
+
+        $this->post(route('driver.register'), $base + ['make_model' => 'Toyota Vios'])->assertRedirect(route('driver.home'));
+        $this->assertSame('Toyota Vios', Vehicle::where('plate_number', 'KLM4455')->value('make_model'));
     }
 
     public function test_a_date_too_far_ahead_is_refused(): void
@@ -240,17 +328,17 @@ class DriverAppTest extends TestCase
         $driver = $this->driver('maria@example.com', null);
         $other = $this->driver('other@example.com', 'ZZZ1111');
 
-        $this->actingAs($driver)->post(route('driver.vehicles.store'), ['plate_number' => 'abc 1234', 'color' => 'Blue', 'vehicle_type' => 'SUV', 'contact_number' => '0917 555 0142'])
+        $this->actingAs($driver)->post(route('driver.vehicles.store'), ['plate_number' => 'abc 1234', 'color' => 'Blue', 'vehicle_type' => 'SUV', 'make_model' => 'Honda CR-V', 'contact_number' => '0917 555 0142'])
             ->assertRedirect(route('driver.vehicles'));
         $vehicle = Vehicle::where('plate_number', 'ABC1234')->first();
         $this->assertNotNull($vehicle);
 
-        $this->actingAs($driver)->post(route('driver.vehicles.store'), ['plate_number' => 'ZZZ1111', 'color' => 'Blue', 'vehicle_type' => 'SUV'])
+        $this->actingAs($driver)->post(route('driver.vehicles.store'), ['plate_number' => 'ZZZ1111', 'color' => 'Blue', 'vehicle_type' => 'SUV', 'make_model' => 'Honda CR-V'])
             ->assertSessionHas('modal');
-        $this->actingAs($driver)->post(route('driver.vehicles.store'), ['plate_number' => '', 'color' => '', 'vehicle_type' => ''])
-            ->assertSessionHasErrors(['plate_number', 'color', 'vehicle_type']);
+        $this->actingAs($driver)->post(route('driver.vehicles.store'), ['plate_number' => '', 'color' => '', 'vehicle_type' => '', 'make_model' => ''])
+            ->assertSessionHasErrors(['plate_number', 'color', 'vehicle_type', 'make_model']);
 
-        $this->actingAs($driver)->put(route('driver.vehicles.update', $vehicle), ['plate_number' => 'ABC1234', 'color' => 'Red', 'vehicle_type' => 'SUV'])
+        $this->actingAs($driver)->put(route('driver.vehicles.update', $vehicle), ['plate_number' => 'ABC1234', 'color' => 'Red', 'vehicle_type' => 'SUV', 'make_model' => 'Honda CR-V'])
             ->assertRedirect(route('driver.vehicles'));
         $this->assertSame('Red', $vehicle->fresh()->color);
 

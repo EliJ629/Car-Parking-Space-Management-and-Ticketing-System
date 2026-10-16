@@ -36,12 +36,13 @@
     @error('color')<p class="err">{{ $message }}</p>@enderror
   </div>
   <div class="fld">
-    <label class="f" for="make_model">Make and model <span class="fine">(optional)</span></label>
-    <input id="make_model" name="make_model" type="text" value="{{ old('make_model', $vehicle->make_model) }}" maxlength="60" placeholder="Toyota Vios">
+    <label class="f" for="make_model">Car model</label>
+    <input id="make_model" name="make_model" type="text" value="{{ old('make_model', $vehicle->make_model) }}" maxlength="60" placeholder="Toyota Vios" autocomplete="off" required @error('make_model') aria-invalid="true" @enderror>
+    @error('make_model')<p class="err">{{ $message }}</p>@enderror
   </div>
   <div class="fld">
     <label class="f" for="contact_number">Contact number <span class="fine">(optional)</span></label>
-    <input id="contact_number" name="contact_number" type="tel" inputmode="tel" value="{{ old('contact_number', $vehicle->contact_number) }}" placeholder="0917 555 0142" @error('contact_number') aria-invalid="true" @enderror>
+    <input id="contact_number" name="contact_number" type="tel" inputmode="tel" maxlength="17" value="{{ old('contact_number', $vehicle->contact_number) }}" placeholder="0917 555 0142" @error('contact_number') aria-invalid="true" @enderror>
     @error('contact_number')<p class="err">{{ $message }}</p>@enderror
   </div>
   <div class="actions"><button class="btn" type="submit">Save vehicle</button><a class="btn ghost" href="{{ route('driver.vehicles') }}">Cancel</a></div>

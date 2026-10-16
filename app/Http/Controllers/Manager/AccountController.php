@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Manager;
 
 use App\Models\ActivityLog;
 use App\Models\User;
+use App\Support\Lot;
+use App\Support\Rules;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -85,12 +87,7 @@ class AccountController extends ManagerController
     public function updateMyAccount(Request $request): RedirectResponse
     {
         $account = $request->user();
-        $data = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'username' => ['required', 'string', 'max:40', 'regex:/^[A-Za-z0-9]+$/', Rule::unique('users', 'username')->ignore($account->id)],
-            'email' => ['nullable', 'email', 'max:255', Rule::unique('users', 'email')->ignore($account->id), 'required_without:phone'],
-            'phone' => ['nullable', 'string', 'max:20', 'required_without:email'],
-        ]);
+        $data = $this->validatedAccount($request, $account, false);
         $before = $account->only(['name', 'username', 'email', 'phone']);
         $account->update($data);
 
@@ -105,8 +102,11 @@ class AccountController extends ManagerController
     public function changeOwnPassword(Request $request): RedirectResponse
     {
         $data = $request->validate([
-            'current_password' => ['required', 'current_password'],
-            'password' => ['required', 'string', 'min:12', 'confirmed', 'different:current_password'],
+            'current_password' => ['required', 'string', 'max:255', 'current_password'],
+            'password' => [...Rules::staffPassword(), 'different:current_password'],
+        ], Rules::staffPasswordMessages() + [
+            'current_password.required' => 'Enter your current password.',
+            'current_password.current_password' => 'Current password is incorrect.',
         ]);
         $account = $request->user();
         $account->forceFill(['password' => Hash::make($data['password'])])->save();
@@ -125,13 +125,7 @@ class AccountController extends ManagerController
 
     public function store(Request $request): RedirectResponse
     {
-        $data = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'username' => ['required', 'string', 'max:40', 'regex:/^[A-Za-z0-9]+$/', 'unique:users,username'],
-            'email' => ['nullable', 'email', 'max:255', 'unique:users,email', 'required_without:phone'],
-            'phone' => ['nullable', 'string', 'max:20', 'required_without:email'],
-            'role' => ['required', Rule::in([User::ROLE_MANAGER, User::ROLE_ATTENDANT, User::ROLE_GUARD])],
-        ]);
+        $data = $this->validatedAccount($request, null, true);
         $temporaryPassword = Str::password(16);
         $account = User::create($data + [
             'password' => $temporaryPassword,
@@ -162,13 +156,7 @@ class AccountController extends ManagerController
     {
         abort_unless($account->isStaff(), 404);
 
-        $data = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'username' => ['required', 'string', 'max:40', 'regex:/^[A-Za-z0-9]+$/', Rule::unique('users', 'username')->ignore($account->id)],
-            'email' => ['nullable', 'email', 'max:255', Rule::unique('users', 'email')->ignore($account->id), 'required_without:phone'],
-            'phone' => ['nullable', 'string', 'max:20', 'required_without:email'],
-            'role' => ['required', Rule::in([User::ROLE_MANAGER, User::ROLE_ATTENDANT, User::ROLE_GUARD])],
-        ]);
+        $data = $this->validatedAccount($request, $account, true);
 
         if ($account->is($request->user()) && $data['role'] !== User::ROLE_MANAGER) {
             return back()->withErrors(['role' => 'You cannot remove your own manager access.'])->withInput();
@@ -226,6 +214,60 @@ class AccountController extends ManagerController
 
         return back()->with('status', "A temporary password was created for {$account->name}.")
             ->with('temporaryPassword', $temporaryPassword);
+    }
+
+    /**
+     * Shared rules for a staff account or the manager's own profile. Writes the tidied values
+     * (squished name, lowercase email, 09 mobile number) back to the request first.
+     *
+     * @return array<string, mixed>
+     */
+    private function validatedAccount(Request $request, ?User $ignore, bool $withRole): array
+    {
+        Rules::tidy($request, 'name');
+        $request->merge([
+            'username' => trim((string) $request->input('username')),
+            'email' => ($email = Rules::email($request->input('email'))) !== '' ? $email : null,
+            'phone' => ($phone = Lot::normalizePhone($request->input('phone'))) !== '' ? $phone : null,
+        ]);
+
+        $unique = function (string $column) use ($ignore) {
+            return function (string $attribute, mixed $value, \Closure $fail) use ($column, $ignore): void {
+                $taken = User::query()
+                    ->whereRaw("lower({$column}) = ?", [mb_strtolower((string) $value)])
+                    ->when($ignore, fn ($query) => $query->where('id', '!=', $ignore->id))
+                    ->exists();
+
+                if ($taken) {
+                    $fail($column === 'email' ? 'This email is already registered.' : 'This username is already taken.');
+                }
+            };
+        };
+
+        $rules = [
+            'name' => Rules::personName(),
+            'username' => ['required', 'string', 'min:4', 'max:40', 'regex:/^[A-Za-z0-9]+$/', $unique('username')],
+            'email' => ['nullable', 'email:rfc', 'max:255', $unique('email'), 'required_without:phone'],
+            'phone' => [...Rules::mobile(false), 'required_without:email'],
+        ];
+
+        if ($withRole) {
+            $rules['role'] = ['required', Rule::in([User::ROLE_MANAGER, User::ROLE_ATTENDANT, User::ROLE_GUARD])];
+        }
+
+        return $request->validate($rules, Rules::personNameMessages() + [
+            'username.required' => 'Enter a username.',
+            'username.min' => 'The username needs at least 4 letters or numbers.',
+            'username.max' => 'The username can have up to 40 characters.',
+            'username.regex' => 'Use letters and numbers only in the username, with no spaces.',
+            'email.email' => 'Enter a valid email, for example name@example.com.',
+            'email.max' => 'The email can have up to 255 characters.',
+            'email.required_without' => 'Enter an email or a mobile number.',
+            'phone.regex' => Rules::MOBILE_MESSAGE,
+            'phone.required_without' => 'Enter a mobile number or an email.',
+            'role.required' => 'Choose a role.',
+            'role.in' => 'Choose a role from the list.',
+        ]);
     }
 
     /**

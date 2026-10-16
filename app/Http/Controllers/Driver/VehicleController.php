@@ -7,6 +7,7 @@ use App\Models\ActivityLog;
 use App\Models\Vehicle;
 use App\Services\DriverData;
 use App\Support\Lot;
+use App\Support\Rules;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -14,7 +15,7 @@ use Illuminate\View\View;
 
 class VehicleController extends Controller
 {
-    public const COLORS = ['White', 'Black', 'Gray', 'Silver', 'Red', 'Blue', 'Green', 'Yellow', 'Orange', 'Brown', 'Other'];
+    public const COLORS = Vehicle::COLORS;
 
     public function index(Request $request, DriverData $data): View
     {
@@ -148,20 +149,21 @@ class VehicleController extends Controller
     /** @return array<string, mixed> */
     private function validated(Request $request, ?Vehicle $vehicle = null): array
     {
+        Rules::tidy($request, 'make_model');
         $request->merge([
             'plate_number' => Vehicle::normalizePlate($request->input('plate_number')),
             'contact_number' => Lot::normalizePhone($request->input('contact_number')),
         ]);
 
         return $request->validate([
-            'plate_number' => ['required', 'regex:/^[A-Z0-9]{5,8}$/'],
+            'plate_number' => Rules::plate(),
             'color' => ['required', Rule::in(self::COLORS)],
             'vehicle_type' => ['required', Rule::in(Vehicle::TYPES)],
-            'make_model' => ['nullable', 'string', 'max:60'],
-            'contact_number' => ['nullable', 'regex:/^09\d{9}$/'],
-        ], [
+            'make_model' => Rules::makeModel(),
+            'contact_number' => Rules::mobile(false),
+        ], Rules::makeModelMessages() + [
             'plate_number.required' => 'Enter the plate number.',
-            'plate_number.regex' => 'Enter a plate like ABC 1234.',
+            'plate_number.regex' => Rules::PLATE_MESSAGE,
             'color.required' => 'Choose a color.',
             'color.in' => 'Choose a color from the list.',
             'vehicle_type.required' => 'Choose a vehicle type.',

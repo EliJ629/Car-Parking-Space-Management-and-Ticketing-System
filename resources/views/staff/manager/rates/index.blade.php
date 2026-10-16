@@ -6,7 +6,7 @@
 </section>
 
 <section class="manager-panel">
-  <div class="manager-panel-heading"><div><p class="eyebrow">Current parking rates</p><h2>Fees and penalties</h2></div><span class="badge b-ok">{{ $currentRate ? 'Effective '.$currentRate->effective_at->format('M j, Y') : 'No rates set' }}</span></div>
+  <div class="manager-panel-heading"><div><p class="eyebrow">Current parking rates</p><h2>Fees and penalties</h2></div><span class="badge b-ok">{{ $currentRate ? 'Effective '.\App\Support\Lot::local($currentRate->effective_at)?->format('M j, Y') : 'No rates set' }}</span></div>
   @if ($currentRate)
     <div class="manager-data-grid">
       <div><span>First hour</span><strong>₱{{ number_format((float) $currentRate->first_hour_fee, 2) }}</strong></div>
@@ -23,7 +23,7 @@
   @if ($upcomingRates->isNotEmpty())
     <h3 class="manager-subheading">Scheduled rate changes</h3>
     @foreach ($upcomingRates as $rate)
-      <div class="manager-summary-row"><span>{{ $rate->effective_at->format('M j, Y g:i A') }} &mdash; {{ $rate->reason }}</span><strong>₱{{ number_format((float) $rate->first_hour_fee, 2) }} first hour / ₱{{ number_format((float) $rate->additional_hour_fee, 2) }} additional</strong></div>
+      <div class="manager-summary-row"><span>{{ \App\Support\Lot::local($rate->effective_at)?->format('M j, Y g:i A') }} &mdash; {{ $rate->reason }}</span><strong>₱{{ number_format((float) $rate->first_hour_fee, 2) }} first hour / ₱{{ number_format((float) $rate->additional_hour_fee, 2) }} additional</strong></div>
     @endforeach
   @endif
 </section>
@@ -43,7 +43,7 @@
       ] as $field => $label)
         <div class="manager-field"><label class="f" for="{{ $field }}">{{ $label }}</label><input id="{{ $field }}" name="{{ $field }}" type="number" min="0" max="1000000" step="0.01" value="{{ old($field, $currentRate?->$field ?? 0) }}" required></div>
       @endforeach
-      <div class="manager-field"><label class="f" for="effective_at">Effective from</label><input id="effective_at" name="effective_at" type="datetime-local" value="{{ old('effective_at', now()->addDay()->startOfDay()->format('Y-m-d\TH:i')) }}" required></div>
+      <div class="manager-field"><label class="f" for="effective_at">Effective from</label><input id="effective_at" name="effective_at" type="datetime-local" min="{{ \App\Support\Lot::now()->format('Y-m-d\TH:i') }}" value="{{ old('effective_at', \App\Support\Lot::now()->addDay()->startOfDay()->format('Y-m-d\TH:i')) }}" required><p class="hint">Lot time (Asia/Manila). The new rates start at this time.</p></div>
       <div class="manager-field manager-field-wide"><label class="f" for="reason">Reason for change</label><input id="reason" name="reason" type="text" maxlength="255" value="{{ old('reason') }}" required></div>
     </div>
     @foreach (['first_hour_fee','additional_hour_fee','daily_maximum','lost_ticket_penalty','overstay_penalty','effective_at','reason'] as $field)
@@ -121,7 +121,7 @@
 <section class="manager-panel manager-section-gap">
   <p class="eyebrow">Rate change history</p><h2>Recent updates</h2>
   @forelse ($history as $entry)
-    <div class="manager-summary-row"><span>{{ $entry->created_at->format('M j, Y g:i A') }} &mdash; {{ $entry->subject }}</span><strong>{{ $entry->user?->name ?? 'System' }}</strong></div>
+    <div class="manager-summary-row"><span>{{ \App\Support\Lot::local($entry->created_at)?->format('M j, Y g:i A') }} &mdash; {{ $entry->subject }}</span><strong>{{ $entry->user?->name ?? 'System' }}</strong></div>
   @empty
     <p class="manager-muted">No rate changes have been recorded yet.</p>
   @endforelse

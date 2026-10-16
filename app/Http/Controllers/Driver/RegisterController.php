@@ -7,12 +7,14 @@ use App\Models\ActivityLog;
 use App\Models\User;
 use App\Models\Vehicle;
 use App\Services\SignInService;
+use App\Support\Lot;
+use App\Support\Rules;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
-use Illuminate\Validation\Rules\Password;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class RegisterController extends Controller
@@ -24,40 +26,47 @@ class RegisterController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
+        Rules::tidy($request, 'name', 'make_model');
         $request->merge([
-            'email' => mb_strtolower(trim((string) $request->input('email'))),
-            'phone' => $this->normalizePhone($request->input('phone')),
+            'email' => Rules::email($request->input('email')),
+            'phone' => Lot::normalizePhone($request->input('phone')),
             'plate_number' => Vehicle::normalizePlate($request->input('plate_number')),
         ]);
 
         $data = $request->validate([
-            'name' => ['required', 'string', 'min:2', 'max:120'],
-            'email' => ['required', 'email:rfc', 'max:255', 'unique:users,email'],
-            'phone' => ['required', 'regex:/^09\d{9}$/'],
-            'plate_number' => ['required', 'regex:/^[A-Z0-9]{5,8}$/'],
+            'name' => Rules::personName(),
+            'email' => ['required', 'email:rfc', 'max:255', Rule::unique('users', 'email')],
+            'phone' => Rules::mobile(),
+            'plate_number' => Rules::plate(),
             'vehicle_type' => ['required', Rule::in(Vehicle::TYPES)],
-            'color' => ['required', 'string', 'min:3', 'max:30'],
-            'password' => ['required', 'confirmed', Password::min(8)->letters()->numbers()],
-        ], [
-            'name.required' => 'Enter your full name.',
+            'make_model' => Rules::makeModel(),
+            'color' => ['required', Rule::in(Vehicle::COLORS)],
+            'password' => Rules::driverPassword(),
+        ], Rules::personNameMessages() + Rules::makeModelMessages() + Rules::driverPasswordMessages() + [
             'email.required' => 'Enter your email.',
             'email.email' => 'Enter a valid email, for example maria@example.com.',
-            'email.unique' => 'An account with this email already exists. Try signing in.',
+            'email.max' => 'The email can have up to 255 characters.',
+            'email.unique' => 'This email is already registered. Try signing in.',
             'phone.required' => 'Enter your mobile number.',
-            'phone.regex' => 'Enter a Philippine mobile number, for example 0917 123 4567.',
+            'phone.regex' => Rules::MOBILE_MESSAGE,
             'plate_number.required' => 'Enter your plate number.',
-            'plate_number.regex' => 'Enter 5 to 8 letters and numbers, for example ABC 1234.',
+            'plate_number.regex' => Rules::PLATE_MESSAGE,
             'vehicle_type.required' => 'Choose your vehicle type.',
             'vehicle_type.in' => 'Choose your vehicle type from the list.',
-            'color.required' => 'Enter your vehicle colour.',
-            'color.min' => 'Enter your vehicle colour, for example Black.',
-            'password.required' => 'Choose a password.',
-            'password.confirmed' => 'The two passwords do not match.',
+            'color.required' => 'Choose your vehicle color.',
+            'color.in' => 'Choose a color from the list.',
         ]);
 
         $user = DB::transaction(function () use ($data) {
+            // A plate belongs to one account. Removed vehicles still hold their plate.
+            if (Vehicle::withTrashed()->where('plate_number', $data['plate_number'])->lockForUpdate()->exists()) {
+                throw ValidationException::withMessages([
+                    'plate_number' => Lot::plate($data['plate_number']).' is already registered to an account. A plate can belong to one account only.',
+                ]);
+            }
+
             $user = User::create([
-                'name' => trim($data['name']),
+                'name' => $data['name'],
                 'email' => $data['email'],
                 'phone' => $data['phone'],
                 'password' => $data['password'],
@@ -68,7 +77,9 @@ class RegisterController extends Controller
             $user->vehicles()->create([
                 'plate_number' => $data['plate_number'],
                 'vehicle_type' => $data['vehicle_type'],
-                'color' => trim($data['color']),
+                'color' => $data['color'],
+                'make_model' => $data['make_model'],
+                'contact_number' => $data['phone'],
             ]);
 
             return $user;
@@ -80,19 +91,5 @@ class RegisterController extends Controller
         $request->session()->regenerate();
 
         return redirect()->route('driver.home')->with('status', 'Your account is ready. Welcome to Bayline.');
-    }
-
-    /**
-     * 0917 123 4567, 0917-123-4567 and +63 917 123 4567 all become 09171234567.
-     */
-    private function normalizePhone(?string $phone): string
-    {
-        $phone = preg_replace('/[\s()\-]+/', '', (string) $phone);
-
-        if (preg_match('/^\+?63(9\d{9})$/', $phone, $matches)) {
-            return '0'.$matches[1];
-        }
-
-        return $phone;
     }
 }
