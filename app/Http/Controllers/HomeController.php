@@ -27,6 +27,10 @@ class HomeController extends Controller
             return redirect()->route('guard.gate');
         }
 
+        if ($user->role === User::ROLE_ATTENDANT) {
+            return redirect()->route('attendant.home');
+        }
+
         return view('staff.home', [
             'user' => $user,
             'tools' => $this->toolsFor($user),

@@ -1,0 +1,338 @@
+/* Bayline Booth Attendant Console Styles (1280px Desktop) */
+
+.ba-skip{position:absolute;left:-999px;top:0;background:var(--ink);color:var(--bg);padding:10px 14px;z-index:100}
+.ba-skip:focus{left:8px;top:8px}
+
+.ba-w{width:100%;max-width:1200px;margin-inline:auto;padding-inline:20px}
+
+/* Header */
+.ba-head{background:var(--bg);border-bottom:1px solid var(--line)}
+.ba-head .ba-w{display:flex;align-items:center;gap:14px;padding-block:14px}
+.ba-head .sp{flex:1}
+.ba-head .brand b{font-size:32px;letter-spacing:-0.5px}
+.ba-head .brand small{font-size:12px;color:var(--muted);display:block;margin-top:-2px}
+
+.ba-clock{font-size:13px;color:var(--muted);white-space:nowrap}
+.ba-clock b{color:var(--ink);font-weight:700}
+
+.ba-chip{font-size:13px;font-weight:600;background:var(--surface);border:1.5px solid var(--line);border-radius:99px;padding:7px 16px;white-space:nowrap}
+.ba-chip small{color:var(--muted);font-weight:500;margin-left:4px}
+
+.ba-alertbtn{display:inline-flex;align-items:center;gap:8px;min-height:38px;padding:0 16px;border-radius:99px;background:var(--surface);color:var(--ink);border:1.5px solid var(--stop);font:600 13px var(--f-b);cursor:pointer;transition:background .15s}
+.ba-alertbtn:hover{background:var(--stop-bg)}
+
+.ba-badge{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;border-radius:99px;background:var(--stop);color:#fff;font-size:11px;font-weight:700;padding:0 6px}
+.ba-badge[hidden]{display:none}
+
+/* Navigation Tabs */
+.ba-tabs{display:flex;gap:8px;padding:16px 0;flex-wrap:wrap}
+.ba-tabs a{display:inline-flex;align-items:center;min-height:42px;padding:0 18px;background:var(--surface);border:1.5px solid var(--line);border-radius:6px;font-size:14px;font-weight:600;text-decoration:none;color:var(--ink);transition:all .15s}
+.ba-tabs a:hover{border-color:var(--ink)}
+.ba-tabs a[aria-current=page]{background:var(--paint);border-color:var(--paint-deep);color:var(--paint-ink);font-weight:700}
+
+/* Titles and subtitles */
+.ba-page-title{font-size:46px;font-family:var(--f-d);font-weight:800;letter-spacing:-0.5px;margin:8px 0 4px}
+.ba-sub{color:var(--muted);font-size:15px;margin-bottom:20px}
+
+/* Stats / Status Tiles (BA-01) */
+.ba-tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:20px}
+.ba-tile{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px 20px}
+.ba-tile b{display:block;font-size:48px;font-family:var(--f-d);font-weight:800;line-height:1}
+.ba-tile span{display:block;font-size:14px;color:var(--muted);margin-top:6px;font-weight:500}
+.ba-tile.warn{background:var(--warn-bg);border-color:var(--paint-deep)}
+
+/* Quick Actions Cards (BA-01) */
+.ba-actions{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:28px}
+.ba-action-card{background:var(--surface);border:1px solid var(--line);border-top:4px solid var(--paint);border-radius:8px;padding:18px;text-decoration:none;color:inherit;display:flex;flex-direction:column;transition:transform .15s,box-shadow .15s}
+.ba-action-card:hover{transform:translateY(-2px);box-shadow:0 6px 14px rgba(0,0,0,.06)}
+.ba-action-card h3{font-size:18px;font-weight:700;margin-bottom:6px}
+.ba-action-card p{font-size:13px;color:var(--muted);line-height:1.4;margin:0}
+
+/* Split Columns (BA-01) */
+.ba-split{display:grid;grid-template-columns:1.6fr 1fr;gap:24px;align-items:start}
+.ba-card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:22px}
+.ba-card h2{font-size:20px;font-weight:700;margin-bottom:14px}
+.ba-card h3{font-size:14px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:16px 0 10px}
+
+.ba-list-group{display:flex;flex-direction:column;gap:10px}
+.ba-item{display:flex;align-items:center;justify-content:space-between;padding:14px;border:1px solid var(--line);border-radius:8px;background:#fff;gap:14px}
+.ba-item .details b{display:block;font-size:15px;color:var(--ink)}
+.ba-item .details p{font-size:13px;color:var(--muted);margin:3px 0 0}
+
+/* Step Bar */
+.ba-steps{display:flex;gap:12px;margin:14px 0 24px;border-bottom:1px solid var(--line);padding-bottom:16px}
+.ba-step{font-size:14px;font-weight:600;color:var(--muted);position:relative}
+.ba-step.active{color:var(--ink);font-weight:700}
+.ba-step.active::after{content:'';position:absolute;bottom:-17px;left:0;right:0;height:3px;background:var(--paint-deep)}
+
+/* Lot Status Summary Pills */
+.ba-pills{display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap}
+.ba-pill{font-size:13px;font-weight:700;padding:6px 14px;border-radius:99px;border:1px solid var(--line);background:var(--surface);display:inline-flex;align-items:center;gap:6px}
+.ba-pill.available{background:#E0F2FE;border-color:#38BDF8;color:#0369A1}
+.ba-pill.reserved{background:#FEF3C7;border-color:#F59E0B;color:#B45309}
+.ba-pill.occupied{background:#E2E8F0;border-color:#94A3B8;color:#334155}
+.ba-pill.pending{background:#FEF9C3;border-color:#EAB308;color:#A16207}
+.ba-pill.out{background:#F1F5F9;border-color:#CBD5E1;color:#64748B}
+
+/* Status Badges */
+.badge{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;padding:4px 8px;border-radius:4px;display:inline-block}
+.badge.available{background:#E0F2FE;color:#0369A1}
+.badge.reserved{background:#FEF3C7;color:#B45309}
+.badge.occupied{background:#334155;color:#fff}
+.badge.pending{background:#F59E0B;color:#fff}
+.badge.out{background:#94A3B8;color:#fff}
+.badge.paid{background:#DCFCE7;color:#166534}
+.badge.unpaid{background:#FEE2E2;color:#991B1B}
+.badge.completed{background:#E2E8F0;color:#475569}
+
+/* Interactive Lot Map (BA-16, BA-51) */
+.ba-lot-map{background:#D1D5DB;border-radius:12px;padding:24px;margin-bottom:20px}
+.ba-zone{margin-bottom:20px}
+.ba-zone-title{font-size:15px;font-weight:800;color:#1F2937;margin-bottom:12px}
+.ba-slot-grid{display:grid;grid-template-columns:repeat(8,1fr);gap:10px}
+.ba-slot-grid.zone-b{grid-template-columns:repeat(4,1fr) 2fr 2fr}
+
+.ba-slot{background:#fff;border:2px solid #E5E7EB;border-radius:8px;padding:12px 10px;text-align:center;cursor:pointer;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:92px;transition:all .15s}
+.ba-slot b{font-size:18px;font-family:var(--f-d);font-weight:800}
+.ba-slot span.st{font-size:11px;font-weight:700;margin-top:4px}
+.ba-slot span.plt{font-size:11px;color:var(--muted);margin-top:2px;font-weight:600}
+.ba-slot span.pwd-tag{position:absolute;top:4px;right:6px;font-size:9px;font-weight:800;color:#2563EB;background:#DBEAFE;padding:2px 4px;border-radius:3px}
+
+.ba-slot.available{background:#EFF6FF;border-color:#BFDBFE;color:#1E40AF}
+.ba-slot.available:hover{border-color:#2563EB;transform:scale(1.02);box-shadow:0 4px 10px rgba(0,0,0,.1)}
+.ba-slot.available.selected{border-color:#F59E0B;background:#FFFBEB;box-shadow:0 0 0 3px #F59E0B}
+
+.ba-slot.occupied{background:#475569;border-color:#334155;color:#fff}
+.ba-slot.occupied span.st{color:#CBD5E1}
+.ba-slot.occupied span.plt{color:#F1F5F9}
+
+.ba-slot.reserved{background:#FEF3C7;border-color:#FCD34D;color:#92400E;border-style:dashed}
+.ba-slot.pending_exit{background:#FBBF24;border-color:#F59E0B;color:#78350F}
+.ba-slot.out_of_service{background:#E2E8F0;border-color:#CBD5E1;color:#64748B;opacity:.7}
+
+.ba-slot.dimmed{opacity:.4;cursor:not-allowed}
+.ba-facility{background:#9CA3AF;color:#fff;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px}
+
+/* Forms */
+.ba-form-group{margin-bottom:18px}
+.ba-label{display:block;font-size:13px;font-weight:700;margin-bottom:6px;color:var(--ink)}
+.ba-input{width:100%;min-height:44px;padding:8px 14px;border:1.5px solid var(--line);border-radius:6px;font-size:15px;font-family:inherit;background:#fff}
+.ba-input:focus{outline:0;border-color:var(--paint-deep);box-shadow:0 0 0 3px rgba(245,158,11,.2)}
+.ba-input.error{border-color:var(--stop);background:var(--stop-bg)}
+.ba-err-msg{color:var(--stop);font-size:12px;font-weight:600;margin-top:4px}
+
+/* Thermal Paper Ticket / Receipt Preview (BA-18, BA-19, BA-46, BA-47) - 58mm Thermal Size */
+.ba-thermal{background:#fff;border:1px dashed #94A3B8;border-radius:6px;padding:16px 14px;width:250px;max-width:250px;margin-inline:auto;font-family:'Consolas','Lucida Console','Courier New',monospace;color:#000;font-weight:700;box-shadow:0 4px 12px rgba(0,0,0,.08)}
+.ba-thermal h4{font-size:19px;text-align:center;font-weight:900;margin:0 0 2px;letter-spacing:1px;text-transform:uppercase;color:#000}
+.ba-thermal p.subt{font-size:12px;text-align:center;margin:0 0 8px;text-transform:uppercase;color:#000;font-weight:800;letter-spacing:.5px}
+.ba-thermal .t-div{border-top:2px dashed #000;margin:8px 0}
+.ba-thermal .t-num-label{text-align:center;font-size:11px;color:#000;margin-bottom:2px;font-weight:700}
+.ba-thermal .t-num{text-align:center;font-size:26px;font-weight:900;letter-spacing:1.5px;margin-bottom:6px;color:#000}
+.ba-thermal .t-row{display:flex;justify-content:space-between;font-size:12px;margin:3px 0;font-weight:700;color:#000}
+.ba-thermal .t-row b{font-weight:900;font-size:12.5px;color:#000}
+.ba-thermal .t-qr{display:flex;justify-content:center;margin:10px 0}
+.ba-thermal .t-qr canvas,.ba-thermal .t-qr img{width:115px !important;height:115px !important;display:block;margin:0 auto;image-rendering:pixelated}
+.ba-thermal p.foot{font-size:10px;text-align:center;margin:8px 0 0;line-height:1.3;color:#000;font-weight:700}
+
+/* Modals / Dialogs */
+.badlg{border:0;border-radius:12px;padding:0;background:transparent;max-width:540px;width:90%;box-shadow:0 20px 40px rgba(0,0,0,.25)}
+.badlg::backdrop{background:rgba(15,23,42,.6);backdrop-filter:blur(3px)}
+.badlg .in{background:#fff;border-radius:12px;padding:28px;position:relative}
+.badlg.wide{max-width:680px}
+.badlg h2{font-size:24px;font-weight:800;margin:0 0 12px;font-family:var(--f-d)}
+.badlg p{font-size:14px;color:var(--muted);line-height:1.5;margin:0 0 18px}
+.badlg .x{position:absolute;top:18px;right:20px;background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted)}
+.badlg .actions{display:flex;gap:12px;justify-content:flex-end;margin-top:24px}
+
+/* Alerts Panel (BA-65) */
+.ba-alerts-list{list-style:none;padding:0;margin:0 0 16px;max-height:380px;overflow-y:auto}
+.ba-alerts-list li{border-bottom:1px solid var(--line)}
+.ba-alerts-list li a{display:flex;align-items:flex-start;gap:12px;padding:12px 6px;text-decoration:none;color:inherit}
+.ba-alerts-list li.unread a{background:var(--warn-bg)}
+.ba-alerts-list .dot{width:8px;height:8px;border-radius:99px;background:var(--paint-deep);margin-top:6px;flex-shrink:0}
+.ba-alerts-list li:not(.unread) .dot{background:transparent}
+.ba-alerts-list .meta{flex:1}
+.ba-alerts-list .meta b{display:block;font-size:14px;color:var(--ink)}
+.ba-alerts-list .meta p{font-size:13px;color:var(--muted);margin:3px 0 0}
+.ba-alerts-list time{font-size:12px;color:var(--muted);white-space:nowrap}
+.ba-alert-foot{font-size:12px;color:var(--muted);margin-top:10px}
+
+/* Toasts (BA-56, BA-66) */
+.ba-toasts{position:fixed;top:20px;right:20px;z-index:999;display:flex;flex-direction:column;gap:10px}
+.ba-toast{background:#1E293B;color:#fff;border-radius:8px;padding:14px 18px;box-shadow:0 8px 20px rgba(0,0,0,.25);min-width:280px;max-width:380px;font-size:13px;animation:slideIn .25s ease-out}
+.ba-toast b{display:block;font-size:14px;margin-bottom:3px}
+@keyframes slideIn{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
+
+/* Fee Calculation Summary (BA-37, BA-38) */
+.ba-fee-card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:24px}
+.ba-fee-row{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line);font-size:14px}
+.ba-fee-row.total{border-top:2px solid var(--ink);border-bottom:none;margin-top:10px;padding-top:14px}
+.ba-fee-row.total b.amt{font-size:36px;font-family:var(--f-d);font-weight:800;color:var(--ink)}
+
+/* Buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:42px;padding:0 20px;border-radius:6px;font-size:14px;font-weight:700;border:1.5px solid transparent;cursor:pointer;text-decoration:none;transition:all .15s}
+.btn.primary{background:var(--paint);border-color:var(--paint-deep);color:var(--paint-ink)}
+.btn.primary:hover{background:#EAB308}
+.btn.dark{background:var(--ink);color:#fff}
+.btn.dark:hover{background:#000}
+.btn.ghost{background:transparent;border-color:var(--line);color:var(--ink)}
+.btn.ghost:hover{border-color:var(--ink)}
+.btn.danger{background:var(--stop);color:#fff}
+.btn.sm{min-height:34px;padding:0 12px;font-size:13px}
+.btn.wide{width:100%}
+
+/* 58mm Thermal Printer (XP-58) Print Styles */
+@media print {
+  @page {
+    size: 58mm auto;
+    margin: 0mm;
+  }
+
+  html, body {
+    width: 58mm !important;
+    max-width: 58mm !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+    color: #000 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Hide the entire web interface */
+  .ba-skip,
+  .ba-head,
+  .ba-tabs,
+  .ba-steps,
+  .ba-toasts,
+  .ba-page-title,
+  .ba-sub,
+  .ba-card,
+  dialog::backdrop,
+  dialog .x,
+  dialog .actions,
+  dialog h2,
+  dialog p:not(.subt):not(.foot),
+  div[style*="background:#F0FDF4"],
+  header,
+  nav,
+  main > div > div:first-child {
+    display: none !important;
+  }
+
+  /* Thermal slip printed size and layout */
+  .ba-thermal {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 58mm !important;
+    max-width: 58mm !important;
+    padding: 2mm 3mm 8mm 3mm !important;
+    margin: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    background: #fff !important;
+    color: #000 !important;
+    font-family: 'Consolas', 'Lucida Console', 'Courier New', monospace !important;
+    font-size: 12px !important;
+    font-weight: 700 !important;
+    line-height: 1.25 !important;
+    display: block !important;
+  }
+
+  .ba-thermal h4 {
+    font-size: 19px !important;
+    font-weight: 900 !important;
+    color: #000 !important;
+    text-align: center !important;
+    letter-spacing: 1px !important;
+    text-transform: uppercase !important;
+  }
+
+  .ba-thermal p.subt {
+    font-size: 12px !important;
+    font-weight: 800 !important;
+    color: #000 !important;
+    text-align: center !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.5px !important;
+  }
+
+  .ba-thermal .t-div {
+    border-top: 2px dashed #000 !important;
+    margin: 8px 0 !important;
+  }
+
+  .ba-thermal .t-num-label {
+    font-size: 11px !important;
+    font-weight: 700 !important;
+    color: #000 !important;
+  }
+
+  .ba-thermal .t-num {
+    font-size: 26px !important;
+    font-weight: 900 !important;
+    letter-spacing: 1.5px !important;
+    color: #000 !important;
+  }
+
+  .ba-thermal .t-row {
+    font-size: 12px !important;
+    font-weight: 700 !important;
+    color: #000 !important;
+    display: flex !important;
+    justify-content: space-between !important;
+    margin: 3px 0 !important;
+  }
+
+  .ba-thermal .t-row b {
+    font-weight: 900 !important;
+    font-size: 12.5px !important;
+    color: #000 !important;
+  }
+
+  .ba-thermal .t-qr {
+    display: flex !important;
+    justify-content: center !important;
+    margin: 10px 0 !important;
+  }
+
+  .ba-thermal .t-qr img,
+  .ba-thermal .t-qr canvas {
+    width: 115px !important;
+    height: 115px !important;
+    display: block !important;
+    margin: 0 auto !important;
+    image-rendering: pixelated !important;
+  }
+
+  .ba-thermal p.foot {
+    font-size: 10.5px !important;
+    font-weight: 700 !important;
+    color: #000 !important;
+    text-align: center !important;
+    margin-top: 8px !important;
+    line-height: 1.3 !important;
+  }
+
+  dialog {
+    display: block !important;
+    position: static !important;
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: transparent !important;
+    max-width: 58mm !important;
+    width: 58mm !important;
+    box-shadow: none !important;
+  }
+
+  dialog .in {
+    padding: 0 !important;
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+}
