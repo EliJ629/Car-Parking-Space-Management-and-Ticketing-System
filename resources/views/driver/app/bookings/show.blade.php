@@ -13,7 +13,7 @@
 @endphp
 
 @if ($fresh)
-  <div class="alert ok" role="status" style="margin-bottom:14px"><b>Your slot is reserved</b>Show this QR code to the booth attendant when you arrive.</div>
+  <div class="alert ok" role="status" style="margin-bottom:14px"><b>Your slot is reserved</b>Show this QR code to the booth attendant when you arrive. Check in by {{ \App\Support\Lot::time($holdEnds) }}, or the reservation expires and the slot is released.</div>
 @endif
 @if (session('canceled'))
   <div class="alert" role="status" style="margin-bottom:14px"><b>Reservation canceled</b>Slot {{ $slotCode }} is free again.</div>

@@ -124,10 +124,10 @@ class ParkingController extends Controller
             'vehicle' => $vehicle,
             'vehicleId' => $vehicleId,
             'vehicles' => $vehicles,
+            'opens' => $at->copy()->subMinutes(Lot::earlyMinutes()),
+            'holdEnds' => $at->copy()->addMinutes(Lot::graceMinutes()),
             'policies' => [
                 'Reservation is free. You pay the parking fee in cash at the booth when you leave.',
-                'Your slot is held for '.Lot::graceMinutes().' minutes after your arrival time. After that the reservation expires.',
-                'Check in opens '.Lot::earlyMinutes().' minutes before your arrival time.',
                 'You can cancel any time before you check in.',
             ],
         ]);
@@ -141,6 +141,9 @@ class ParkingController extends Controller
             'time' => ['required', 'date_format:H:i'],
             'slot' => ['required', 'integer'],
             'vehicle' => ['required', 'integer'],
+            'understand' => ['accepted'],
+        ], [
+            'understand.accepted' => 'Tick the box to confirm that you will arrive on time. The slot is released when the grace period ends.',
         ]);
 
         $problem = $this->checkWhen($data['date'], $data['time']);

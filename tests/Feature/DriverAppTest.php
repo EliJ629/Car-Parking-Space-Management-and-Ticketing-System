@@ -33,6 +33,12 @@ class DriverAppTest extends TestCase
         return $driver;
     }
 
+    /** The tick box on the review screen: the driver agrees to arrive on time. */
+    private function ack(): array
+    {
+        return ['understand' => '1'];
+    }
+
     private function lot(): void
     {
         $this->seed(ManagerDefaultsSeeder::class);
@@ -105,7 +111,7 @@ class DriverAppTest extends TestCase
         $this->actingAs($driver)->get(route('driver.reserve', ['step' => 2] + $q))->assertOk()->assertSee('A-03')->assertSee('DEF 2208');
         $this->actingAs($driver)->get(route('driver.reserve', ['step' => 3, 'slot' => $slot->id, 'vehicle' => $vehicle->id] + $q))->assertOk()->assertSee('Confirm reservation')->assertSee('Free');
 
-        $response = $this->actingAs($driver)->post(route('driver.reserve.store'), $q + ['slot' => $slot->id, 'vehicle' => $vehicle->id]);
+        $response = $this->actingAs($driver)->post(route('driver.reserve.store'), $this->ack() + $q + ['slot' => $slot->id, 'vehicle' => $vehicle->id]);
         $reservation = ParkingReservation::first();
         $this->assertNotNull($reservation);
         $response->assertRedirect(route('driver.bookings.show', [$reservation, 'new' => 1]));
@@ -131,8 +137,8 @@ class DriverAppTest extends TestCase
         $at = Lot::now()->addHours(3);
         $q = ['date' => $at->format('Y-m-d'), 'time' => $at->format('H:i'), 'slot' => $slot->id];
 
-        $this->actingAs($first)->post(route('driver.reserve.store'), $q + ['vehicle' => $first->vehicles()->first()->id])->assertRedirect();
-        $response = $this->actingAs($second)->post(route('driver.reserve.store'), $q + ['vehicle' => $second->vehicles()->first()->id]);
+        $this->actingAs($first)->post(route('driver.reserve.store'), $this->ack() + $q + ['vehicle' => $first->vehicles()->first()->id])->assertRedirect();
+        $response = $this->actingAs($second)->post(route('driver.reserve.store'), $this->ack() + $q + ['vehicle' => $second->vehicles()->first()->id]);
         $response->assertRedirect()->assertSessionHas('modal');
         $this->assertStringContainsString('just taken', session('modal')['title']);
         $this->assertSame(1, ParkingReservation::count());
@@ -146,14 +152,14 @@ class DriverAppTest extends TestCase
         $at = Lot::now()->addHours(3);
         $q = ['date' => $at->format('Y-m-d'), 'time' => $at->format('H:i'), 'vehicle' => $vehicle->id];
 
-        $this->actingAs($driver)->post(route('driver.reserve.store'), $q + ['slot' => ParkingSlot::where('code', 'A-01')->value('id')])->assertRedirect();
-        $this->actingAs($driver)->post(route('driver.reserve.store'), $q + ['slot' => ParkingSlot::where('code', 'A-02')->value('id')])->assertSessionHas('modal');
+        $this->actingAs($driver)->post(route('driver.reserve.store'), $this->ack() + $q + ['slot' => ParkingSlot::where('code', 'A-01')->value('id')])->assertRedirect();
+        $this->actingAs($driver)->post(route('driver.reserve.store'), $this->ack() + $q + ['slot' => ParkingSlot::where('code', 'A-02')->value('id')])->assertSessionHas('modal');
         $this->assertStringContainsString('already have a reservation', session('modal')['title']);
 
         // A different day does not get around it, and a second vehicle does not either.
         $later = Lot::now()->addDays(2);
         $second = $driver->vehicles()->create(['plate_number' => 'GHI3300', 'color' => 'Red', 'vehicle_type' => 'Car', 'make_model' => 'Honda City']);
-        $this->actingAs($driver)->post(route('driver.reserve.store'), ['date' => $later->format('Y-m-d'), 'time' => '10:00', 'vehicle' => $second->id, 'slot' => ParkingSlot::where('code', 'A-03')->value('id')])
+        $this->actingAs($driver)->post(route('driver.reserve.store'), $this->ack() + ['date' => $later->format('Y-m-d'), 'time' => '10:00', 'vehicle' => $second->id, 'slot' => ParkingSlot::where('code', 'A-03')->value('id')])
             ->assertSessionHas('modal');
         $this->assertSame(1, ParkingReservation::count());
         $this->assertSame($driver->id, ParkingReservation::first()->driver_id);
@@ -170,8 +176,8 @@ class DriverAppTest extends TestCase
         $at = Lot::now()->addHours(3);
         $q = ['date' => $at->format('Y-m-d'), 'time' => $at->format('H:i')];
 
-        $this->actingAs($first)->post(route('driver.reserve.store'), $q + ['vehicle' => $first->vehicles()->first()->id, 'slot' => ParkingSlot::where('code', 'A-01')->value('id')])->assertRedirect();
-        $this->actingAs($second)->post(route('driver.reserve.store'), $q + ['vehicle' => $second->vehicles()->first()->id, 'slot' => ParkingSlot::where('code', 'A-02')->value('id')])->assertRedirect();
+        $this->actingAs($first)->post(route('driver.reserve.store'), $this->ack() + $q + ['vehicle' => $first->vehicles()->first()->id, 'slot' => ParkingSlot::where('code', 'A-01')->value('id')])->assertRedirect();
+        $this->actingAs($second)->post(route('driver.reserve.store'), $this->ack() + $q + ['vehicle' => $second->vehicles()->first()->id, 'slot' => ParkingSlot::where('code', 'A-02')->value('id')])->assertRedirect();
         $this->assertSame(2, ParkingReservation::count());
         $this->assertSame(1, ParkingReservation::where('driver_id', $second->id)->count());
     }
@@ -184,9 +190,9 @@ class DriverAppTest extends TestCase
         $at = Lot::now()->addHours(3);
         $q = ['date' => $at->format('Y-m-d'), 'time' => $at->format('H:i'), 'vehicle' => $vehicle->id];
 
-        $this->actingAs($driver)->post(route('driver.reserve.store'), $q + ['slot' => ParkingSlot::where('code', 'A-01')->value('id')]);
+        $this->actingAs($driver)->post(route('driver.reserve.store'), $this->ack() + $q + ['slot' => ParkingSlot::where('code', 'A-01')->value('id')]);
         $this->actingAs($driver)->post(route('driver.bookings.cancel', ParkingReservation::first()));
-        $this->actingAs($driver)->post(route('driver.reserve.store'), $q + ['slot' => ParkingSlot::where('code', 'A-02')->value('id')])->assertRedirect();
+        $this->actingAs($driver)->post(route('driver.reserve.store'), $this->ack() + $q + ['slot' => ParkingSlot::where('code', 'A-02')->value('id')])->assertRedirect();
         $this->assertSame(2, ParkingReservation::count());
     }
 
@@ -199,28 +205,28 @@ class DriverAppTest extends TestCase
         $at = Lot::now()->addHours(3);
         $q = ['date' => $at->format('Y-m-d'), 'time' => $at->format('H:i'), 'vehicle' => $vehicle->id, 'slot' => ParkingSlot::where('code', 'A-05')->value('id')];
 
-        $this->actingAs($driver)->post(route('driver.reserve.store'), $q)->assertSessionHas('modal');
+        $this->actingAs($driver)->post(route('driver.reserve.store'), $this->ack() + $q)->assertSessionHas('modal');
         $this->assertStringContainsString('still parked', session('modal')['title']);
         $this->assertSame(0, ParkingReservation::count());
         $this->actingAs($driver)->get(route('driver.reserve'))->assertOk()->assertSee('Your car is still parked');
 
         // Paid but not yet through the gate still counts as parked.
         $session->update(['status' => ParkingSession::STATUS_PAID]);
-        $this->actingAs($driver)->post(route('driver.reserve.store'), $q)->assertSessionHas('modal');
+        $this->actingAs($driver)->post(route('driver.reserve.store'), $this->ack() + $q)->assertSessionHas('modal');
 
         // Once the guard lets the car out, the driver can book again.
         $session->update(['status' => ParkingSession::STATUS_COMPLETED, 'exited_at' => now()]);
-        $this->actingAs($driver)->post(route('driver.reserve.store'), $q)->assertRedirect();
+        $this->actingAs($driver)->post(route('driver.reserve.store'), $this->ack() + $q)->assertRedirect();
         $this->assertSame(1, ParkingReservation::where('driver_id', $driver->id)->count());
 
         // A checked-in reservation blocks too, until it is completed.
         $reservation = ParkingReservation::first();
         $reservation->update(['status' => ParkingReservation::STATUS_CHECKED_IN]);
         $again = ['date' => Lot::now()->addDays(1)->format('Y-m-d'), 'time' => '09:00'] + $q;
-        $this->actingAs($driver)->post(route('driver.reserve.store'), $again)->assertSessionHas('modal');
+        $this->actingAs($driver)->post(route('driver.reserve.store'), $this->ack() + $again)->assertSessionHas('modal');
         $this->assertStringContainsString('already checked in', session('modal')['title']);
         $reservation->update(['status' => ParkingReservation::STATUS_COMPLETED]);
-        $this->actingAs($driver)->post(route('driver.reserve.store'), $again)->assertRedirect();
+        $this->actingAs($driver)->post(route('driver.reserve.store'), $this->ack() + $again)->assertRedirect();
         $this->assertSame(2, ParkingReservation::where('driver_id', $driver->id)->count());
     }
 
@@ -237,6 +243,33 @@ class DriverAppTest extends TestCase
 
         $this->post(route('driver.register'), $base + ['make_model' => 'Toyota Vios'])->assertRedirect(route('driver.home'));
         $this->assertSame('Toyota Vios', Vehicle::where('plate_number', 'KLM4455')->value('make_model'));
+    }
+
+    public function test_the_reservation_flow_asks_for_time_slot_vehicle_and_an_on_time_promise(): void
+    {
+        $this->lot();
+        $driver = $this->driver();
+        $slot = ParkingSlot::where('code', 'A-06')->first();
+        $vehicle = $driver->vehicles()->first();
+        $at = Lot::now()->addHours(3);
+        $q = ['date' => $at->format('Y-m-d'), 'time' => $at->format('H:i')];
+        $grace = Lot::graceMinutes();
+
+        $this->actingAs($driver)->get(route('driver.reserve'))
+            ->assertOk()->assertSee('Arrive on time')->assertSee("{$grace} minutes");
+        $this->get(route('driver.reserve', ['step' => 2] + $q))
+            ->assertOk()->assertSee('1. Pick a slot')->assertSee('2. Pick the vehicle you will use')->assertSee('A-06');
+        $this->get(route('driver.reserve', ['step' => 3, 'slot' => $slot->id, 'vehicle' => $vehicle->id] + $q))
+            ->assertOk()->assertSee('arrive on time')->assertSee('Last check in')->assertSee('the reservation expires')
+            ->assertSee(Lot::time($at->copy()->addMinutes($grace)), false);
+
+        // Without the promise nothing is reserved.
+        $this->post(route('driver.reserve.store'), $q + ['slot' => $slot->id, 'vehicle' => $vehicle->id])->assertSessionHasErrors('understand');
+        $this->assertSame(0, ParkingReservation::count());
+
+        $this->post(route('driver.reserve.store'), $this->ack() + $q + ['slot' => $slot->id, 'vehicle' => $vehicle->id])->assertRedirect();
+        $this->assertSame(1, ParkingReservation::count());
+        $this->get(route('driver.bookings.show', [ParkingReservation::first(), 'new' => 1]))->assertOk()->assertSee('Check in by');
     }
 
     public function test_a_date_too_far_ahead_is_refused(): void
@@ -312,7 +345,7 @@ class DriverAppTest extends TestCase
         $owner = $this->driver();
         $other = $this->driver('other@example.com', 'ZZZ1111');
         $at = Lot::now()->addHours(3);
-        $this->actingAs($owner)->post(route('driver.reserve.store'), [
+        $this->actingAs($owner)->post(route('driver.reserve.store'), $this->ack() + [
             'date' => $at->format('Y-m-d'), 'time' => $at->format('H:i'),
             'slot' => ParkingSlot::where('code', 'A-01')->value('id'), 'vehicle' => $owner->vehicles()->first()->id,
         ]);
@@ -354,7 +387,7 @@ class DriverAppTest extends TestCase
         $driver = $this->driver();
         $vehicle = $driver->vehicles()->first();
         $at = Lot::now()->addHours(3);
-        $this->actingAs($driver)->post(route('driver.reserve.store'), [
+        $this->actingAs($driver)->post(route('driver.reserve.store'), $this->ack() + [
             'date' => $at->format('Y-m-d'), 'time' => $at->format('H:i'),
             'slot' => ParkingSlot::where('code', 'A-01')->value('id'), 'vehicle' => $vehicle->id,
         ]);
