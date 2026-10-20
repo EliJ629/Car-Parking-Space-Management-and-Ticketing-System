@@ -16,6 +16,17 @@
   <span class="ba-step">5. Ticket</span>
 </div>
 
+@if ($errors->any())
+  <div style="background:#FEF2F2;border-left:5px solid #EF4444;border-radius:0 8px 8px 0;padding:14px 18px;margin-bottom:20px;color:#991B1B;">
+    <b style="font-size:15px;display:block;margin-bottom:4px;">Cannot check in reservation &mdash; please check details:</b>
+    <ul style="margin:0;padding-left:18px;font-size:13px;">
+      @foreach ($errors->all() as $err)
+        <li>{{ $err }}</li>
+      @endforeach
+    </ul>
+  </div>
+@endif
+
 <form id="checkin-form" method="POST" action="{{ route('attendant.entry.reserved.check-in') }}">
   @csrf
   <input type="hidden" name="reservation_id" id="hidden-rsv-id" value="">
@@ -226,7 +237,7 @@
 </form>
 
 <!-- POP-UP BA-28: Plate Does Not Match -->
-<dialog class="badlg" id="plate-mismatch-dlg">
+<dialog class="badlg {{ (session('error_modal') && session('error_modal')['type'] === 'plate_mismatch') ? 'auto-open' : '' }}" id="plate-mismatch-dlg">
   <div class="in">
     <button class="x" type="button" data-close aria-label="Close">&times;</button>
     <h2 style="color:var(--stop);">Plate does not match</h2>
@@ -234,11 +245,11 @@
     <div style="background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;padding:16px;margin-bottom:16px;font-size:14px;">
       <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
         <span style="color:var(--muted);">Reservation plate</span>
-        <b id="mismatch-exp"></b>
+        <b id="mismatch-exp">{{ session('error_modal')['expected'] ?? '' }}</b>
       </div>
       <div style="display:flex;justify-content:space-between;">
         <span style="color:var(--muted);">Plate you entered</span>
-        <b id="mismatch-got" style="color:var(--stop);"></b>
+        <b id="mismatch-got" style="color:var(--stop);">{{ session('error_modal')['entered'] ?? '' }}</b>
       </div>
     </div>
 

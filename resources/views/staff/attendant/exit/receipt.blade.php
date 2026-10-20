@@ -152,6 +152,7 @@
       <div class="t-row" style="font-size:15px;"><span>Total paid</span><b>{{ \App\Support\Lot::peso($payment->total) }}</b></div>
       <div class="t-row"><span>Cash received</span><b>{{ \App\Support\Lot::peso($payment->receipt_snapshot['cash_received'] ?? $payment->total) }}</b></div>
       <div class="t-row"><span>Change</span><b>{{ \App\Support\Lot::peso($payment->receipt_snapshot['change_given'] ?? 0) }}</b></div>
+      <div class="t-div"></div>
       <p class="foot">Exit gate approval is required before you leave. Valid for 15 minutes.</p>
     </div>
 

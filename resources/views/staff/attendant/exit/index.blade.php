@@ -41,10 +41,6 @@
 
         <div style="display:flex;gap:10px;align-items:center;">
           <button class="btn primary" type="submit">Search</button>
-          <button class="btn ghost" type="button" id="btn-open-exit-scanner" data-open="#scan-ticket-dlg" style="display:inline-flex;align-items:center;gap:6px;">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3h-3z"/><path d="M21 14v3"/><path d="M14 21h7"/></svg>
-            Scan ticket QR
-          </button>
           <a class="btn ghost" href="{{ route('attendant.exit.index') }}">Clear</a>
         </div>
       </form>
@@ -135,154 +131,49 @@
     </div>
   </div>
 </dialog>
-<!-- Scan Ticket QR Code Modal -->
-<dialog class="badlg" id="scan-ticket-dlg">
-  <div class="in" style="background:#0F172A;color:#fff;">
-    <button class="x" type="button" data-close aria-label="Close" style="color:#94A3B8;">&times;</button>
-    <h2 style="color:#fff;margin-bottom:6px;">Scan ticket QR</h2>
-    <p style="color:#94A3B8;font-size:13px;margin-bottom:14px;">Hold the printed ticket up to the camera or USB webcam.</p>
-
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:8px;">
-      <label for="exit-cam-select" style="font-size:12px;color:#94A3B8;white-space:nowrap;">Camera:</label>
-      <select id="exit-cam-select" class="ba-input sm" style="background:#1E293B;color:#fff;border-color:#334155;max-width:240px;font-size:12px;padding:4px 8px;min-height:32px;">
-        <option value="">Detecting cameras...</option>
-      </select>
-    </div>
-
-    <div id="exit-qr-reader" style="width:100%;max-width:320px;margin:0 auto;border-radius:8px;overflow:hidden;background:#000;min-height:220px;display:flex;align-items:center;justify-content:center;">
-      <span style="font-size:12px;color:#64748B;">Starting camera feed...</span>
-    </div>
-
-    <p style="margin:12px 0 0;font-size:12px;color:#94A3B8;text-align:center;" id="exit-qr-status">
-      Point camera at the ticket's QR code.
-    </p>
-
-    <div class="actions" style="margin-top:16px;">
-      <button class="btn ghost" type="button" data-close style="color:#fff;border-color:#475569;">Cancel</button>
-    </div>
-  </div>
-</dialog>
+@endif
 
 @push('scripts')
 <script>
-let exitQrScanner = null;
+document.addEventListener('DOMContentLoaded', () => {
+  const exitInput = document.getElementById('exit-q');
+  if (!exitInput) return;
 
-function playScanBeep() {
-  try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(880, ctx.currentTime);
-    gain.gain.setValueAtTime(0.2, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.15);
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start();
-    osc.stop(ctx.currentTime + 0.15);
-  } catch (e) {}
-}
+  let isDeleting = false;
 
-async function startExitCamera(deviceId = null) {
-  const statusEl = document.getElementById('exit-qr-status');
-  if (typeof Html5Qrcode === 'undefined') {
-    if (statusEl) statusEl.textContent = 'Camera scanner library not loaded.';
-    return;
-  }
+  exitInput.addEventListener('keydown', (e) => {
+    isDeleting = (e.key === 'Backspace' || e.key === 'Delete');
+  });
 
-  try {
-    if (exitQrScanner) {
-      await exitQrScanner.stop().catch(() => {});
-    }
+  exitInput.addEventListener('input', () => {
+    let val = exitInput.value.toUpperCase();
 
-    exitQrScanner = new Html5Qrcode('exit-qr-reader');
-
-    const camSelect = document.getElementById('exit-cam-select');
-    const cameras = await Html5Qrcode.getCameras().catch(() => []);
-    if (camSelect && cameras && cameras.length > 0) {
-      camSelect.innerHTML = '';
-      cameras.forEach((cam, idx) => {
-        const opt = document.createElement('option');
-        opt.value = cam.id;
-        opt.textContent = cam.label || `Camera ${idx + 1}`;
-        camSelect.appendChild(opt);
-      });
-      if (deviceId) {
-        camSelect.value = deviceId;
+    // If backspacing and currently at "PK-", back up to "P"
+    if (isDeleting) {
+      if (val === 'PK-') {
+        exitInput.value = 'P';
       }
+      return;
     }
 
-    const config = {
-      fps: 10,
-      qrbox: { width: 220, height: 220 },
-      aspectRatio: 1.0
-    };
-
-    const targetSource = deviceId ? { deviceId: { exact: deviceId } } : { facingMode: 'environment' };
-
-    if (statusEl) statusEl.textContent = 'Camera active. Point at ticket QR code...';
-
-    await exitQrScanner.start(
-      targetSource,
-      config,
-      (decodedText) => {
-        playScanBeep();
-        if (statusEl) statusEl.textContent = `Scanned ${decodedText}! Searching...`;
-
-        exitQrScanner.stop().catch(() => {});
-        exitQrScanner = null;
-
-        const dlg = document.getElementById('scan-ticket-dlg');
-        if (dlg && dlg.close) dlg.close();
-
-        // Populate search input and submit form
-        const qInput = document.getElementById('exit-q');
-        if (qInput) {
-          qInput.value = decodedText.trim().toUpperCase();
-          qInput.closest('form').submit();
-        }
-      },
-      () => {}
-    );
-  } catch (err) {
-    console.error('Exit camera error:', err);
-    if (statusEl) {
-      statusEl.textContent = 'Camera access blocked or not available.';
+    // If user types a third letter after "PK-" (e.g. plate PKR 1234), remove dash
+    if (/^PK-([A-Z])/i.test(val)) {
+      exitInput.value = 'PK' + val.slice(3);
+      return;
     }
-  }
-}
 
-async function stopExitCamera() {
-  if (exitQrScanner) {
-    try {
-      await exitQrScanner.stop();
-    } catch (e) {}
-    exitQrScanner = null;
-  }
-}
+    // If user typed/pasted "PK" followed by numbers without dash: "PK16" -> "PK-16"
+    if (/^PK[0-9]/i.test(val)) {
+      exitInput.value = 'PK-' + val.slice(2);
+      return;
+    }
 
-const btnOpenExitScanner = document.getElementById('btn-open-exit-scanner');
-if (btnOpenExitScanner) {
-  btnOpenExitScanner.addEventListener('click', () => {
-    startExitCamera();
-  });
-}
-
-const exitCamSelect = document.getElementById('exit-cam-select');
-if (exitCamSelect) {
-  exitCamSelect.addEventListener('change', (e) => {
-    if (e.target.value) {
-      startExitCamera(e.target.value);
+    // When "PK" is typed, automatically append dash: "PK" -> "PK-"
+    if (val === 'PK') {
+      exitInput.value = 'PK-';
     }
   });
-}
-
-const scanTicketDlg = document.getElementById('scan-ticket-dlg');
-if (scanTicketDlg) {
-  scanTicketDlg.addEventListener('close', () => {
-    stopExitCamera();
-  });
-}
+});
 </script>
 @endpush
 @endsection

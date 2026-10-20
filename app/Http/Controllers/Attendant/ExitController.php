@@ -42,7 +42,14 @@ class ExitController extends Controller
 
         if ($q !== '') {
             $searched = true;
-            $norm = Vehicle::normalizePlate($q);
+            $normPlate = Vehicle::normalizePlate($q);
+
+            // Normalize ticket numbers (e.g. PK0016, PK 16, PK-16 -> PK-0016)
+            $cleanTicket = null;
+            if (preg_match('/^PK[\s\-]*(\d+)$/i', $q, $m)) {
+                $num = (int) $m[1];
+                $cleanTicket = 'PK-'.str_pad((string) $num, 4, '0', STR_PAD_LEFT);
+            }
 
             $query = ParkingSession::query()->with(['slot', 'payment', 'driver']);
 
@@ -50,16 +57,27 @@ class ExitController extends Controller
                 $query->whereIn('status', ParkingSession::OPEN_STATUSES);
             }
 
-            $query->where(function ($w) use ($q, $norm) {
+            $query->where(function ($w) use ($q, $normPlate, $cleanTicket) {
                 $w->where('ticket_number', 'like', "%{$q}%")
-                    ->orWhere('plate_number', 'like', "%{$norm}%");
+                    ->orWhere('plate_number', 'like', "%{$normPlate}%");
+
+                if ($cleanTicket) {
+                    $w->orWhere('ticket_number', $cleanTicket);
+                }
             });
 
             $matches = $query->latest('entered_at')->get();
 
-            // Exact single match skips list and opens session directly
-            if ($matches->count() === 1 && (strtoupper($matches->first()->ticket_number) === strtoupper($q) || $matches->first()->plate_number === $norm)) {
-                return view('staff.attendant.exit.redirect', ['url' => route('attendant.exit.show', $matches->first())]);
+            // Exact match (or normalized ticket / plate match) skips list and opens session directly
+            $first = $matches->first();
+            $isExact = $matches->count() === 1 && (
+                strtoupper($first->ticket_number) === strtoupper($q) ||
+                ($cleanTicket && $first->ticket_number === $cleanTicket) ||
+                $first->plate_number === $normPlate
+            );
+
+            if ($isExact) {
+                return view('staff.attendant.exit.redirect', ['url' => route('attendant.exit.show', $first)]);
             }
 
             if ($matches->isEmpty()) {
@@ -198,13 +216,14 @@ class ExitController extends Controller
 
         // Apply penalties
         $penalties = 0.0;
+        $currentRate = ParkingRateSet::current();
         if (! empty($validated['lost_ticket']) || $session->lost_ticket) {
-            $penalties += (float) (ParkingRateSet::current()->lost_ticket_penalty ?? 100);
+            $penalties += (float) ($currentRate?->lost_ticket_penalty ?? 100);
             $session->lost_ticket = true;
         }
 
         if (! empty($validated['overstay']) || $session->exit_window_expired_at) {
-            $penalties += (float) (ParkingRateSet::current()->overstay_penalty ?? 150);
+            $penalties += (float) ($currentRate?->overstay_penalty ?? 150);
         }
 
         $alreadyPaid = (float) ($session->payment?->total ?? 0.0);
@@ -230,7 +249,7 @@ class ExitController extends Controller
             $session, $attendant, $estimate, $discountAmount, $discountName, $penalties,
             $finalAmount, $cashReceived, $changeGiven, $receiptNumber, $validated, $notices, $request
         ) {
-            $payment = ParkingPayment::create([
+            $paymentData = [
                 'receipt_number' => $receiptNumber,
                 'session_id' => $session->id,
                 'received_by' => $attendant->id,
@@ -258,7 +277,14 @@ class ExitController extends Controller
                     'attendant_name' => $attendant->name,
                 ],
                 'paid_at' => now(),
-            ]);
+            ];
+
+            if ($session->payment) {
+                $session->payment->update($paymentData);
+                $payment = $session->payment->fresh();
+            } else {
+                $payment = ParkingPayment::create($paymentData);
+            }
 
             // Update session and slot
             $session->update([

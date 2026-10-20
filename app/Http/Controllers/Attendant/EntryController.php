@@ -226,13 +226,22 @@ class EntryController extends Controller
         }
 
         if ($session === null) {
+            $existing = ParkingSession::query()
+                ->where('plate_number', $normPlate)
+                ->whereIn('status', ParkingSession::OPEN_STATUSES)
+                ->first();
+
             return back()->with('error_modal', [
                 'type' => 'active_session_exists',
                 'plate' => Lot::plate($normPlate),
+                'ticket' => $existing?->ticket_number,
+                'slot' => $existing?->slot_code,
+                'entry' => Lot::stamp($existing?->entered_at),
+                'session_id' => $existing?->id,
             ]);
         }
 
-        return redirect()->route('attendant.entry.ticket', $session);
+        return redirect()->route('attendant.entry.ticket', $session)->with('toast', ['Ticket created', $session->ticket_number]);
     }
 
     /** BA-18 to BA-20: Ticket generated screen */
@@ -445,7 +454,7 @@ class EntryController extends Controller
             return $newSession;
         });
 
-        return redirect()->route('attendant.entry.ticket', $session);
+        return redirect()->route('attendant.entry.ticket', $session)->with('toast', ['Ticket created', $session->ticket_number]);
     }
 
     private function generateNextTicketNumber(): string

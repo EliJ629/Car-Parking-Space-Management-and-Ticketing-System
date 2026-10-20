@@ -18,11 +18,11 @@
 
 <!-- Lot Counts Pills -->
 <div class="ba-pills">
-  <span class="ba-pill available">{{ $counts['available'] }} Available</span>
-  <span class="ba-pill reserved">{{ $counts['reserved'] }} Reserved</span>
-  <span class="ba-pill occupied">{{ $counts['occupied'] }} Occupied</span>
-  <span class="ba-pill pending">{{ $counts['pending_exit'] }} Pending exit</span>
-  <span class="ba-pill out">{{ $counts['out_of_service'] }} Out of service</span>
+  <span class="ba-pill available"><i></i> {{ $counts['available'] }} Available</span>
+  <span class="ba-pill reserved"><i class="r"></i> {{ $counts['reserved'] }} Reserved</span>
+  <span class="ba-pill occupied"><i class="o"></i> {{ $counts['occupied'] }} Occupied</span>
+  <span class="ba-pill pending"><i class="p"></i> {{ $counts['pending_exit'] }} Pending exit</span>
+  <span class="ba-pill out"><i class="x"></i> {{ $counts['out_of_service'] }} Out of service</span>
 </div>
 
 <!-- Two Choice Cards (BA-11) -->

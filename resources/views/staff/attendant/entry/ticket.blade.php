@@ -4,8 +4,14 @@
 @section('tab', 'entry')
 
 @section('content')
-<h1 class="ba-page-title">New entry</h1>
-<p class="ba-sub">Hand the printed ticket to the driver before the vehicle moves.</p>
+<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:6px;">
+  <h1 class="ba-page-title" style="margin:0;display:flex;align-items:center;gap:12px;">
+    <span style="background:#15803D;color:#fff;border-radius:50%;width:34px;height:34px;display:inline-flex;align-items:center;justify-content:center;font-size:18px;font-weight:900;">✓</span>
+    Ticket generated &mdash; <span style="font-family:'Courier New',Courier,monospace;letter-spacing:1px;">{{ $session->ticket_number }}</span>
+  </h1>
+  <a class="btn ghost sm" href="{{ route('attendant.entry.index') }}">+ Start next entry</a>
+</div>
+<p class="ba-sub">Entry complete. Hand the printed thermal ticket to the driver before the vehicle moves into slot <b>{{ $session->slot_code }}</b>.</p>
 
 <!-- Step Bar -->
 <div class="ba-steps">
@@ -13,12 +19,12 @@
   <span class="ba-step">2. {{ $isReserved ? 'Reservation code' : 'Plate' }}</span>
   <span class="ba-step">3. {{ $isReserved ? 'Verify' : 'Vehicle details' }}</span>
   <span class="ba-step">4. Slot</span>
-  <span class="ba-step active">5. Ticket</span>
+  <span class="ba-step active" style="font-weight:700;">5. Ticket generated ✓</span>
 </div>
 
 <!-- Success Banner (BA-18, BA-33) -->
 <div style="background:#F0FDF4;border-left:5px solid #22C55E;border-radius:0 8px 8px 0;padding:16px 20px;margin-bottom:24px;">
-  <b style="color:#15803D;font-size:16px;display:block;">Ticket {{ $session->ticket_number }} created</b>
+  <b style="color:#15803D;font-size:16px;display:block;">Ticket {{ $session->ticket_number }} successfully created!</b>
   <p style="color:#166534;margin:4px 0 0;font-size:14px;">
     @if ($isReserved)
       Reservation {{ $session->reservation->code }} is now Checked in. Slot {{ $session->slot_code }} is Occupied. The Bayline app shows the ticket and the slot.
@@ -110,7 +116,6 @@
         <b>{{ \App\Support\Lot::stamp($session->entered_at) }}</b>
       </div>
       <div class="t-div"></div>
-      <div class="t-qr" data-qrcode="{{ $session->ticket_number }}"></div>
       <p class="foot">
         Keep this ticket. Pay at the booth before the exit gate. Lost ticket fee ₱100.
       </p>
@@ -137,7 +142,6 @@
       <div class="t-row"><span>Slot</span><b>{{ $session->slot_code }}</b></div>
       <div class="t-row"><span>Entry</span><b>{{ \App\Support\Lot::stamp($session->entered_at) }}</b></div>
       <div class="t-div"></div>
-      <div class="t-qr" data-qrcode="{{ $session->ticket_number }}"></div>
       <p class="foot">Keep this ticket. Pay at the booth before the exit gate. Lost ticket fee ₱100.</p>
     </div>
 

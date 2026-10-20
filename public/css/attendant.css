@@ -67,51 +67,109 @@
 
 /* Lot Status Summary Pills */
 .ba-pills{display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap}
-.ba-pill{font-size:13px;font-weight:700;padding:6px 14px;border-radius:99px;border:1px solid var(--line);background:var(--surface);display:inline-flex;align-items:center;gap:6px}
-.ba-pill.available{background:#E0F2FE;border-color:#38BDF8;color:#0369A1}
-.ba-pill.reserved{background:#FEF3C7;border-color:#F59E0B;color:#B45309}
-.ba-pill.occupied{background:#E2E8F0;border-color:#94A3B8;color:#334155}
-.ba-pill.pending{background:#FEF9C3;border-color:#EAB308;color:#A16207}
-.ba-pill.out{background:#F1F5F9;border-color:#CBD5E1;color:#64748B}
+/* Lot Status Summary Pills & Driver-Matched Legend */
+.ba-pills{display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;align-items:center}
+.ba-pill{font-size:13px;font-weight:700;padding:6px 14px;border-radius:99px;border:1.5px solid var(--line);background:var(--surface);display:inline-flex;align-items:center;gap:8px;color:var(--ink)}
+.ba-pill i{display:inline-block;width:12px;height:12px;border-radius:3px;border:1.5px solid var(--field);background:#fff;flex-shrink:0}
+.ba-pill i.r{background:#fff6d6;border:2px dashed #c99700}
+.ba-pill i.o{background:#1b2127;border:1.5px solid #1b2127}
+.ba-pill i.p{background:#f2b705;border:1.5px solid #c99700}
+.ba-pill i.x{background:repeating-linear-gradient(135deg,#e3e6e8 0 3px,#d3d8dc 3px 5px);border:1.5px solid #d3d8dc}
+
+.ba-pill.available{background:#ffffff;border-color:#8a949c;color:#1b2127}
+.ba-pill.reserved{background:#fff6d6;border:1.5px dashed #c99700;color:#78350f}
+.ba-pill.occupied{background:#1b2127;border-color:#1b2127;color:#ffffff}
+.ba-pill.pending{background:#f2b705;border-color:#c99700;color:#2b2200}
+.ba-pill.out{background:repeating-linear-gradient(135deg,#e3e6e8 0 4px,#d3d8dc 4px 6px);border-color:#d3d8dc;color:#55616b}
+
+/* Driver-Side Legend (.leg) */
+.leg{display:flex;flex-wrap:wrap;gap:8px 16px;font-size:13px;color:var(--muted);margin-top:10px;align-items:center}
+.leg span{display:inline-flex;align-items:center;font-weight:600}
+.leg i{display:inline-block;width:13px;height:13px;border-radius:3px;margin-right:6px;vertical-align:-1px;border:1.5px solid #8a949c;background:#ffffff;flex-shrink:0}
+.leg i.o{background:#1b2127;border-color:#1b2127}
+.leg i.r{background:#fff6d6;border:2px dashed #c99700}
+.leg i.p{background:#f2b705;border-color:#c99700}
+.leg i.x{background:repeating-linear-gradient(135deg,#e3e6e8 0 3px,#d3d8dc 3px 5px);border-color:#d3d8dc}
 
 /* Status Badges */
 .badge{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;padding:4px 8px;border-radius:4px;display:inline-block}
-.badge.available{background:#E0F2FE;color:#0369A1}
-.badge.reserved{background:#FEF3C7;color:#B45309}
-.badge.occupied{background:#334155;color:#fff}
-.badge.pending{background:#F59E0B;color:#fff}
-.badge.out{background:#94A3B8;color:#fff}
-.badge.paid{background:#DCFCE7;color:#166534}
-.badge.unpaid{background:#FEE2E2;color:#991B1B}
-.badge.completed{background:#E2E8F0;color:#475569}
+.badge.available{background:#ffffff;color:#1d6b3a;border:1.5px solid #8a949c}
+.badge.reserved{background:#fff6d6;color:#78350f;border:1.5px dashed #c99700}
+.badge.occupied{background:#1b2127;color:#ffffff;border:1.5px solid #1b2127}
+.badge.pending{background:#f2b705;color:#2b2200;border:1.5px solid #c99700}
+.badge.out{background:repeating-linear-gradient(135deg,#e3e6e8 0 3px,#d3d8dc 3px 5px);color:#55616b;border:1.5px solid #d3d8dc}
+.badge.paid{background:#DCFCE7;color:#166534;border:1.5px solid #86EFAC}
+.badge.unpaid{background:#FEE2E2;color:#991B1B;border:1.5px solid #FCA5A5}
+.badge.completed{background:#E2E8F0;color:#475569;border:1.5px solid #CBD5E1}
 
 /* Interactive Lot Map (BA-16, BA-51) */
-.ba-lot-map{background:#D1D5DB;border-radius:12px;padding:24px;margin-bottom:20px}
+.ba-lot-map{background:#CBD5E1;border-radius:12px;padding:24px;margin-bottom:20px}
 .ba-zone{margin-bottom:20px}
 .ba-zone-title{font-size:15px;font-weight:800;color:#1F2937;margin-bottom:12px}
 .ba-slot-grid{display:grid;grid-template-columns:repeat(8,1fr);gap:10px}
 .ba-slot-grid.zone-b{grid-template-columns:repeat(4,1fr) 2fr 2fr}
 
-.ba-slot{background:#fff;border:2px solid #E5E7EB;border-radius:8px;padding:12px 10px;text-align:center;cursor:pointer;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:92px;transition:all .15s}
+.ba-slot{background:#fff;border:1.5px solid #8a949c;border-radius:8px;padding:12px 10px;text-align:center;cursor:pointer;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:92px;transition:all .15s}
 .ba-slot b{font-size:18px;font-family:var(--f-d);font-weight:800}
 .ba-slot span.st{font-size:11px;font-weight:700;margin-top:4px}
 .ba-slot span.plt{font-size:11px;color:var(--muted);margin-top:2px;font-weight:600}
 .ba-slot span.pwd-tag{position:absolute;top:4px;right:6px;font-size:9px;font-weight:800;color:#2563EB;background:#DBEAFE;padding:2px 4px;border-radius:3px}
 
-.ba-slot.available{background:#EFF6FF;border-color:#BFDBFE;color:#1E40AF}
-.ba-slot.available:hover{border-color:#2563EB;transform:scale(1.02);box-shadow:0 4px 10px rgba(0,0,0,.1)}
-.ba-slot.available.selected{border-color:#F59E0B;background:#FFFBEB;box-shadow:0 0 0 3px #F59E0B}
+/* 1. AVAILABLE: White with subtle gray border (driver side match) */
+.ba-slot.available{background:#ffffff;border:1.5px solid #8a949c;color:#1b2127}
+.ba-slot.available span.st{color:#1d6b3a;font-weight:700}
+.ba-slot.available:hover{border-color:#1b2127;transform:scale(1.02);box-shadow:0 4px 10px rgba(0,0,0,.08)}
+.ba-slot.available.selected{border:3px solid #2563EB !important;box-shadow:0 0 0 3px rgba(37,99,235,0.25) !important}
 
-.ba-slot.occupied{background:#475569;border-color:#334155;color:#fff}
-.ba-slot.occupied span.st{color:#CBD5E1}
-.ba-slot.occupied span.plt{color:#F1F5F9}
+/* 2. OCCUPIED: Solid dark asphalt / charcoal (driver side match) */
+.ba-slot.occupied{background:#1b2127;border-color:#1b2127;color:#ffffff}
+.ba-slot.occupied span.st{color:#c5ccd1}
+.ba-slot.occupied span.plt{color:#ffffff;font-weight:700}
 
-.ba-slot.reserved{background:#FEF3C7;border-color:#FCD34D;color:#92400E;border-style:dashed}
-.ba-slot.pending_exit{background:#FBBF24;border-color:#F59E0B;color:#78350F}
-.ba-slot.out_of_service{background:#E2E8F0;border-color:#CBD5E1;color:#64748B;opacity:.7}
+/* 3. RESERVED: Warm cream with dashed gold border (driver side match) */
+.ba-slot.reserved{background:#fff6d6;border:2px dashed #c99700;color:#1b2127}
+.ba-slot.reserved span.st{color:#92400e;font-weight:700}
+.ba-slot.reserved span.plt{color:#78350f;font-weight:700}
 
-.ba-slot.dimmed{opacity:.4;cursor:not-allowed}
-.ba-facility{background:#9CA3AF;color:#fff;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px}
+/* 4. PENDING EXIT: Solid Road-Paint Yellow / Gold (driver side match) */
+.ba-slot.pending_exit{background:#f2b705;border:1.5px solid #c99700;color:#2b2200}
+.ba-slot.pending_exit span.st{color:#2b2200;font-weight:800}
+.ba-slot.pending_exit span.plt{color:#2b2200;font-weight:800}
+
+/* 5. OUT OF SERVICE: Diagonal striped hatch pattern (driver side match) */
+.ba-slot.out_of_service{background:repeating-linear-gradient(135deg,#e3e6e8 0 6px,#d3d8dc 6px 8px);border:1.5px solid #d3d8dc;color:#55616b;opacity:.9}
+.ba-slot.out_of_service span.st{color:#55616b;font-weight:700}
+.ba-slot.out_of_service span.plt{color:#55616b}
+
+/* PWD Glow Highlight when driver needs PWD */
+.ba-slot.pwd-highlight{
+  border: 3px solid #2563EB !important;
+  background: #EFF6FF !important;
+  color: #1D4ED8 !important;
+  box-shadow: 0 0 0 4px rgba(37,99,235,0.35) !important;
+  animation: pwdGlow 1.8s infinite;
+}
+.ba-slot.pwd-highlight span.st{
+  color: #1D4ED8 !important;
+}
+.ba-slot.pwd-highlight span.pwd-tag{
+  background: #2563EB !important;
+  color: #FFFFFF !important;
+  font-weight: 900 !important;
+  padding: 3px 6px !important;
+  box-shadow: 0 2px 5px rgba(0,0,0,.25);
+}
+.ba-slot.pwd-highlight.selected{
+  border-color: #F59E0B !important;
+  box-shadow: 0 0 0 4px #F59E0B, 0 0 12px rgba(37,99,235,0.4) !important;
+}
+@keyframes pwdGlow{
+  0%,100%{box-shadow:0 0 0 3px rgba(37,99,235,0.45)}
+  50%{box-shadow:0 0 0 7px rgba(37,99,235,0.18)}
+}
+
+.ba-slot.dimmed{opacity:.45;cursor:not-allowed}
+.ba-facility{background:#64748B;color:#fff;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px}
 
 /* Forms */
 .ba-form-group{margin-bottom:18px}

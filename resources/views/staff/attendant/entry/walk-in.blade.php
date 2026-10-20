@@ -16,6 +16,17 @@
   <span class="ba-step">5. Ticket</span>
 </div>
 
+@if ($errors->any())
+  <div style="background:#FEF2F2;border-left:5px solid #EF4444;border-radius:0 8px 8px 0;padding:14px 18px;margin-bottom:20px;color:#991B1B;">
+    <b style="font-size:15px;display:block;margin-bottom:4px;">Cannot create ticket &mdash; please check the details:</b>
+    <ul style="margin:0;padding-left:18px;font-size:13px;">
+      @foreach ($errors->all() as $err)
+        <li>{{ $err }}</li>
+      @endforeach
+    </ul>
+  </div>
+@endif
+
 <form id="walkin-form" method="POST" action="{{ route('attendant.entry.walk-in.store') }}">
   @csrf
   <input type="hidden" name="driver_id" id="hidden-driver-id" value="">
@@ -155,8 +166,28 @@
         @endif
 
         <div class="ba-card">
-          <h2>Lot map</h2>
-          <p style="font-size:13px;color:var(--muted);margin-bottom:14px;">Only Available slots can be picked. Other slots are dimmed.</p>
+          <!-- PWD Priority Banner -->
+          <div id="pwd-banner" style="display:none;background:#EFF6FF;border:1.5px solid #3B82F6;border-radius:8px;padding:12px 16px;margin-bottom:16px;color:#1E40AF;align-items:center;justify-content:space-between;gap:12px;">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <span style="font-size:22px;line-height:1;">♿</span>
+              <div>
+                <b style="font-size:14px;display:block;">PWD Priority Active</b>
+                <span style="font-size:12.5px;color:#2563EB;">Available accessible (PWD) slots are highlighted in glowing blue and prioritized.</span>
+              </div>
+            </div>
+            <button type="button" id="btn-toggle-pwd" class="btn sm ghost" style="border-color:#93C5FD;background:#DBEAFE;color:#1D4ED8;font-size:12px;padding:4px 10px;height:auto;min-height:28px;">Remove filter</button>
+          </div>
+
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px;">
+            <div>
+              <h2 style="margin:0 0 4px;">Lot map</h2>
+              <p style="font-size:13px;color:var(--muted);margin:0;">Only Available slots can be picked. Other slots are dimmed.</p>
+            </div>
+            <label style="display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;cursor:pointer;background:#F8FAFC;border:1px solid #CBD5E1;border-radius:6px;padding:6px 12px;">
+              <input type="checkbox" id="map-pwd-filter" style="width:16px;height:16px;">
+              <span>Highlight PWD slots</span>
+            </label>
+          </div>
 
           <div class="ba-lot-map">
             @foreach ($slots->groupBy('zone') as $zoneName => $zoneSlots)
@@ -182,13 +213,16 @@
             </div>
           </div>
 
-          <!-- Legend -->
-          <div class="ba-pills" style="margin-bottom:0;">
-            <span class="ba-pill available">Available</span>
-            <span class="ba-pill reserved">Reserved</span>
-            <span class="ba-pill occupied">Occupied</span>
-            <span class="ba-pill pending">Pending exit</span>
-            <span class="ba-pill out">Out of service</span>
+          <!-- Legend matching Driver App design -->
+          <div class="leg" style="margin-top:14px;background:#F8FAFC;border:1px solid #CBD5E1;border-radius:8px;padding:10px 14px;gap:10px 20px;">
+            <span><i></i>Available</span>
+            <span><i class="r"></i>Reserved</span>
+            <span><i class="o"></i>Occupied</span>
+            <span><i class="p"></i>Pending exit</span>
+            <span><i class="x"></i>Out of service</span>
+            <span style="display:inline-flex;align-items:center;gap:6px;">
+              <span style="font-size:10px;font-weight:900;background:#2563EB;color:#fff;border-radius:3px;padding:2px 5px;">♿ PWD</span> Priority
+            </span>
           </div>
         </div>
       </div>
@@ -290,18 +324,18 @@
 </form>
 
 <!-- POP-UP BA-21: Active Session Already Exists -->
-<dialog class="badlg" id="active-session-dlg">
+<dialog class="badlg {{ (session('error_modal') && session('error_modal')['type'] === 'active_session_exists') ? 'auto-open' : '' }}" id="active-session-dlg">
   <div class="in">
     <button class="x" type="button" data-close aria-label="Close">&times;</button>
     <h2 style="color:var(--stop);">This plate already has an active session</h2>
     
     <div style="background:#F8FAFC;border:1.5px dashed #94A3B8;border-radius:8px;padding:18px;margin-bottom:16px;font-family:'Courier New',Courier,monospace;">
       <div style="font-size:12px;color:var(--muted);margin-bottom:4px;">Ticket number</div>
-      <div style="font-size:24px;font-weight:800;" id="dup-ticket"></div>
+      <div style="font-size:24px;font-weight:800;" id="dup-ticket">{{ session('error_modal')['ticket'] ?? '' }}</div>
       <div style="margin-top:10px;font-size:14px;">
-        Plate: <b id="dup-plate"></b><br>
-        Slot: <b id="dup-slot"></b><br>
-        Entry: <span id="dup-entry"></span>
+        Plate: <b id="dup-plate">{{ session('error_modal')['plate'] ?? '' }}</b><br>
+        Slot: <b id="dup-slot">{{ session('error_modal')['slot'] ?? '' }}</b><br>
+        Entry: <span id="dup-entry">{{ session('error_modal')['entry'] ?? '' }}</span>
       </div>
     </div>
 
@@ -309,7 +343,7 @@
 
     <div class="actions">
       <button class="btn ghost" type="button" data-close>Back</button>
-      <a class="btn primary" id="dup-link" href="{{ route('attendant.exit.index') }}">Open in Exit and payment</a>
+      <a class="btn primary" id="dup-link" href="{{ isset(session('error_modal')['session_id']) ? url('staff/attendant/exit/session/' . session('error_modal')['session_id']) : route('attendant.exit.index') }}">Open in Exit and payment</a>
     </div>
   </div>
 </dialog>
@@ -492,9 +526,64 @@ function goToSlot() {
   document.getElementById('sum-phone').textContent = vehicleState.phone || '-';
 
   document.getElementById('hidden-driver-id').value = vehicleState.driverId || '';
+
+  // Synchronize and apply PWD highlight & auto-selection
+  const isPwd = document.getElementById('det-pwd').checked;
+  applyPwdFilter(isPwd, true);
+}
+
+function applyPwdFilter(isPwd, autoSelect = false) {
+  const detPwd = document.getElementById('det-pwd');
+  const mapPwd = document.getElementById('map-pwd-filter');
+  const banner = document.getElementById('pwd-banner');
+
+  if (detPwd) detPwd.checked = isPwd;
+  if (mapPwd) mapPwd.checked = isPwd;
+
+  if (isPwd) {
+    if (banner) banner.style.display = 'flex';
+    document.querySelectorAll('.ba-slot').forEach(s => {
+      if (s.dataset.type === 'PWD' && s.classList.contains('available')) {
+        s.classList.add('pwd-highlight');
+      } else {
+        s.classList.remove('pwd-highlight');
+      }
+    });
+
+    if (autoSelect) {
+      const firstAvailPwd = document.querySelector('.ba-slot.available[data-type="PWD"]');
+      if (firstAvailPwd) {
+        selectSlot(firstAvailPwd);
+      } else {
+        const firstAvail = document.querySelector('.ba-slot.available');
+        if (firstAvail) selectSlot(firstAvail);
+      }
+    }
+  } else {
+    if (banner) banner.style.display = 'none';
+    document.querySelectorAll('.ba-slot.pwd-highlight').forEach(s => s.classList.remove('pwd-highlight'));
+    if (autoSelect && (!selectedSlot || selectedSlot.type === 'PWD')) {
+      const firstAvail = document.querySelector('.ba-slot.available');
+      if (firstAvail) selectSlot(firstAvail);
+    }
+  }
 }
 
 document.getElementById('btn-to-slot').addEventListener('click', goToSlot);
+
+const mapPwdToggle = document.getElementById('map-pwd-filter');
+if (mapPwdToggle) {
+  mapPwdToggle.addEventListener('change', (e) => {
+    applyPwdFilter(e.target.checked, true);
+  });
+}
+
+const btnTogglePwd = document.getElementById('btn-toggle-pwd');
+if (btnTogglePwd) {
+  btnTogglePwd.addEventListener('click', () => {
+    applyPwdFilter(false, false);
+  });
+}
 
 document.getElementById('btn-back-to-details').addEventListener('click', () => {
   document.getElementById('section-slot').style.display = 'none';
@@ -509,6 +598,7 @@ document.getElementById('btn-back-to-details').addEventListener('click', () => {
 
 // Slot click selection
 window.selectSlot = function(el) {
+  if (!el || !el.classList.contains('available')) return;
   document.querySelectorAll('.ba-slot.selected').forEach(s => s.classList.remove('selected'));
   el.classList.add('selected');
 

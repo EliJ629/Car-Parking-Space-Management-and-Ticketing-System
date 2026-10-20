@@ -322,20 +322,62 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 200);
   };
 
-  // 7. QR Code Generation for tickets (sized for 58mm receipt paper)
-  document.querySelectorAll('[data-qrcode]').forEach(el => {
+  // 7. QR Code Generation for tickets & receipts (sized for 58mm thermal paper)
+  function renderBaQr(el) {
     const text = el.dataset.qrcode;
-    if (text && typeof QRCode !== 'undefined') {
-      new QRCode(el, {
-        text: text,
-        width: 110,
-        height: 110,
-        colorDark: "#000000",
-        colorLight: "#ffffff",
-        correctLevel: QRCode.CorrectLevel.M
-      });
+    if (!text) return;
+
+    // A. Use local qr.min.js generator (zero-latency, 100% offline)
+    if (typeof qrcode !== 'undefined') {
+      try {
+        const q = qrcode(0, 'M');
+        q.addData(text);
+        q.make();
+        el.innerHTML = q.createImgTag(3, 2);
+        const img = el.querySelector('img');
+        if (img) {
+          img.style.display = 'block';
+          img.style.margin = '6px auto';
+          img.style.width = '115px';
+          img.style.height = '115px';
+          img.style.imageRendering = 'pixelated';
+        }
+        return;
+      } catch (e) {
+        console.warn('Local qrcode render failed:', e);
+      }
     }
-  });
+
+    // B. Check for QRCode class if available
+    if (typeof QRCode !== 'undefined') {
+      try {
+        el.innerHTML = '';
+        new QRCode(el, {
+          text: text,
+          width: 115,
+          height: 115,
+          colorDark: "#000000",
+          colorLight: "#ffffff",
+          correctLevel: QRCode.CorrectLevel.M
+        });
+        return;
+      } catch (e) {}
+    }
+
+    // C. Network API fallback (qrserver.com)
+    const img = document.createElement('img');
+    img.src = `https://api.qrserver.com/v1/create-qr-code/?size=115x115&margin=1&data=${encodeURIComponent(text)}`;
+    img.alt = `QR code for ${text}`;
+    img.style.display = 'block';
+    img.style.margin = '6px auto';
+    img.style.width = '115px';
+    img.style.height = '115px';
+    el.innerHTML = '';
+    el.appendChild(img);
+  }
+
+  document.querySelectorAll('[data-qrcode]').forEach(el => renderBaQr(el));
+  window.renderBaQr = renderBaQr;
 
   // 8. Cash Tender Quick Calculation (BA-44, BA-45)
   const cashInput = document.getElementById('cash-received-input');
