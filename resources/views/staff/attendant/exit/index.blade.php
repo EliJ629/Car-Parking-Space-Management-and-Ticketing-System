@@ -26,10 +26,23 @@
       <form method="GET" action="{{ route('attendant.exit.index') }}">
         <div class="ba-form-group">
           <label class="ba-label" for="exit-q">Ticket number or plate number</label>
-          <input class="ba-input" id="exit-q" name="q" type="text" value="{{ $q }}"
-                 placeholder="PK-0016 or HJK 4471" style="font-size:20px;font-weight:700;text-transform:uppercase;"
-                 autocomplete="off" autofocus>
-          <p style="font-size:12px;color:var(--muted);margin-top:4px;">Type at least 3 characters.</p>
+
+          <div class="ba-predict-wrap">
+            <input class="ba-input ba-predict-ghost" id="exit-ghost" type="text" readonly tabindex="-1" aria-hidden="true" style="font-size:20px;font-weight:700;text-transform:uppercase;">
+            <input class="ba-input" id="exit-q" name="q" type="text" value="{{ $q }}"
+                   placeholder="PK-0016 or HJK 4471" style="font-size:20px;font-weight:700;text-transform:uppercase;"
+                   autocomplete="off" autofocus>
+          </div>
+
+          <!-- Active Customer Suggestions Chips -->
+          <div id="prediction-box" style="display:none;margin-top:10px;">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--muted);">
+              <span>Currently parked matches:</span>
+              <div id="prediction-chips" style="display:inline-flex;gap:6px;flex-wrap:wrap;"></div>
+            </div>
+          </div>
+
+          <p style="font-size:12px;color:var(--muted);margin-top:6px;">Type plate letters/numbers or PK to see live predictions from currently parked customers.</p>
         </div>
 
         <div class="ba-form-group">
@@ -137,42 +150,150 @@
 <script>
 document.addEventListener('DOMContentLoaded', () => {
   const exitInput = document.getElementById('exit-q');
-  if (!exitInput) return;
+  const exitGhost = document.getElementById('exit-ghost');
+  const predictionBox = document.getElementById('prediction-box');
+  const predictionChips = document.getElementById('prediction-chips');
 
+  if (!exitInput || !exitGhost) return;
+
+  const activeTargets = @json($activeTargets ?? []);
+
+  let currentPrediction = null;
   let isDeleting = false;
+
+  function updatePredictions() {
+    const rawVal = exitInput.value.toUpperCase();
+    const cleanVal = rawVal.replace(/[\s\-]/g, '');
+
+    if (!cleanVal || cleanVal.length < 1) {
+      exitGhost.value = '';
+      currentPrediction = null;
+      if (predictionBox) predictionBox.style.display = 'none';
+      return;
+    }
+
+    // Filter active targets matching plate or ticket
+    const matches = activeTargets.filter(t => {
+      const pClean = (t.raw_plate || '').replace(/[\s\-]/g, '').toUpperCase();
+      const pFmt = (t.plate || '').toUpperCase();
+      const tClean = (t.ticket || '').replace(/[\s\-]/g, '').toUpperCase();
+      const tFmt = (t.ticket || '').toUpperCase();
+
+      return pClean.startsWith(cleanVal) ||
+             pFmt.startsWith(rawVal) ||
+             pClean.includes(cleanVal) ||
+             tClean.startsWith(cleanVal) ||
+             tFmt.startsWith(rawVal);
+    });
+
+    // Prioritize prefix matches
+    matches.sort((a, b) => {
+      const aPClean = (a.raw_plate || '').replace(/[\s\-]/g, '').toUpperCase();
+      const bPClean = (b.raw_plate || '').replace(/[\s\-]/g, '').toUpperCase();
+      const aTClean = (a.ticket || '').replace(/[\s\-]/g, '').toUpperCase();
+      const bTClean = (b.ticket || '').replace(/[\s\-]/g, '').toUpperCase();
+
+      const aStarts = aPClean.startsWith(cleanVal) || aTClean.startsWith(cleanVal);
+      const bStarts = bPClean.startsWith(cleanVal) || bTClean.startsWith(cleanVal);
+
+      if (aStarts && !bStarts) return -1;
+      if (!aStarts && bStarts) return 1;
+      return 0;
+    });
+
+    if (matches.length === 0) {
+      exitGhost.value = '';
+      currentPrediction = null;
+      if (predictionBox) predictionBox.style.display = 'none';
+      return;
+    }
+
+    const top = matches[0];
+    const isTicket = rawVal.startsWith('P') || rawVal.startsWith('PK');
+    const targetString = isTicket ? top.ticket : top.plate;
+    currentPrediction = targetString;
+
+    // Show ghost text overlay
+    let ghostText = '';
+    if (targetString.toUpperCase().startsWith(rawVal)) {
+      ghostText = rawVal + targetString.slice(rawVal.length);
+    } else {
+      const tClean = targetString.replace(/[\s\-]/g, '').toUpperCase();
+      if (tClean.startsWith(cleanVal)) {
+        ghostText = targetString;
+      }
+    }
+    exitGhost.value = ghostText;
+
+    if (predictionBox && predictionChips) {
+      predictionChips.innerHTML = '';
+      matches.slice(0, 5).forEach((m, idx) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'ba-predict-chip' + (idx === 0 ? ' active' : '');
+        btn.innerHTML = `${m.plate} <small>(${m.ticket} • ${m.slot})</small>`;
+        btn.addEventListener('click', () => {
+          applyPrediction(isTicket ? m.ticket : m.plate);
+        });
+        predictionChips.appendChild(btn);
+      });
+      predictionBox.style.display = 'block';
+    }
+  }
+
+  function applyPrediction(val) {
+    if (!val) return;
+    exitInput.value = val;
+    exitGhost.value = '';
+    currentPrediction = null;
+    if (predictionBox) predictionBox.style.display = 'none';
+    exitInput.focus();
+  }
 
   exitInput.addEventListener('keydown', (e) => {
     isDeleting = (e.key === 'Backspace' || e.key === 'Delete');
+
+    // Tab or Right-Arrow (at the end of text) accepts the prediction
+    if (e.key === 'Tab' || (e.key === 'ArrowRight' && exitInput.selectionStart === exitInput.value.length)) {
+      if (currentPrediction && exitInput.value.toUpperCase() !== currentPrediction.toUpperCase()) {
+        e.preventDefault();
+        applyPrediction(currentPrediction);
+      }
+    } else if (e.key === 'Escape') {
+      exitGhost.value = '';
+      currentPrediction = null;
+      if (predictionBox) predictionBox.style.display = 'none';
+    }
   });
 
   exitInput.addEventListener('input', () => {
     let val = exitInput.value.toUpperCase();
 
-    // If backspacing and currently at "PK-", back up to "P"
-    if (isDeleting) {
-      if (val === 'PK-') {
-        exitInput.value = 'P';
+    // Auto-dash for PK
+    if (!isDeleting) {
+      if (/^PK-([A-Z])/i.test(val)) {
+        val = 'PK' + val.slice(3);
+        exitInput.value = val;
+      } else if (/^PK[0-9]/i.test(val)) {
+        val = 'PK-' + val.slice(2);
+        exitInput.value = val;
+      } else if (val === 'PK') {
+        val = 'PK-';
+        exitInput.value = val;
       }
-      return;
+    } else if (val === 'PK-') {
+      val = 'P';
+      exitInput.value = val;
     }
 
-    // If user types a third letter after "PK-" (e.g. plate PKR 1234), remove dash
-    if (/^PK-([A-Z])/i.test(val)) {
-      exitInput.value = 'PK' + val.slice(3);
-      return;
-    }
-
-    // If user typed/pasted "PK" followed by numbers without dash: "PK16" -> "PK-16"
-    if (/^PK[0-9]/i.test(val)) {
-      exitInput.value = 'PK-' + val.slice(2);
-      return;
-    }
-
-    // When "PK" is typed, automatically append dash: "PK" -> "PK-"
-    if (val === 'PK') {
-      exitInput.value = 'PK-';
-    }
+    updatePredictions();
   });
+
+  // Check on focus or if already has value
+  exitInput.addEventListener('focus', updatePredictions);
+  if (exitInput.value) {
+    updatePredictions();
+  }
 });
 </script>
 @endpush

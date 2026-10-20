@@ -46,6 +46,7 @@
         {{ \App\Support\Lot::now()->format('D, M j, Y') }} <b>{{ \App\Support\Lot::now()->format('g:i A') }}</b>
       </time>
       <span class="ba-chip">{{ $me->name }} <small>Booth attendant</small></span>
+      <button class="tt" id="theme" type="button" aria-label="Switch to dark mode" title="Switch to dark mode"><svg class="ico" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/><circle cx="16.6" cy="7.4" r="1.5"/><path d="M19.5 7.4L20.5 7.4M18.7 9.5L19.4 10.2M16.6 10.3L16.6 11.3M14.5 9.5L13.8 10.2M13.7 7.4L12.7 7.4M14.5 5.3L13.8 4.6M16.6 4.5L16.6 3.5M18.7 5.3L19.4 4.6"/></svg></button>
       <button class="ba-alertbtn" type="button" id="alert-btn" data-open="#alerts-dlg" aria-haspopup="dialog">
         Alerts <span class="ba-badge" id="alert-count" @if ($alertCount < 1) hidden @endif>{{ $alertCount }}</span>
       </button>
@@ -80,28 +81,25 @@
 <!-- Alerts Panel Modal (BA-65) -->
 <dialog class="badlg wide" id="alerts-dlg" aria-labelledby="alerts-t">
   <div class="in">
-    <button class="x" type="button" data-close aria-label="Close">&times;</button>
-    <div class="badlg-head">
-      <h2 id="alerts-t">Alerts</h2>
-      <button class="btn ghost sm" type="button" id="alerts-mark-read">Mark all as read</button>
-    </div>
-    <ul class="ba-alerts-list" id="alert-list">
+    <button class="x" type="button" data-close aria-label="Close">X</button>
+    <h2 id="alerts-t">Alerts</h2>
+    <ul class="ba-alerts" id="alert-list" data-keys="{{ $alertItems->pluck('key')->implode(',') }}">
       @forelse ($alertItems as $a)
         <li class="{{ $a['unread'] ? 'unread' : '' }}">
           <a href="{{ $a['url'] }}">
-            <span class="dot"></span>
-            <div class="meta">
-              <b>{{ $a['title'] }}</b>
-              <p>{{ $a['body'] }}</p>
-            </div>
-            <time>{{ $a['time'] }}</time>
+            <b>{{ $a['title'] }}</b>
+            <span>{{ $a['body'] }}</span>
+            <small>{{ $a['time'] }}</small>
           </a>
         </li>
       @empty
         <li class="none">No alerts right now.</li>
       @endforelse
     </ul>
-    <p class="ba-alert-foot">Alerts older than today are in the activity log.</p>
+    <div class="actions">
+      <button class="btn ghost sm" type="button" id="alerts-mark-read">Mark all as read</button>
+      <button class="btn sm" type="button" data-close>Close</button>
+    </div>
   </div>
 </dialog>
 

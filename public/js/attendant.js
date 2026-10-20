@@ -64,6 +64,35 @@ document.addEventListener('DOMContentLoaded', () => {
   const alertList = document.getElementById('alert-list');
   const markReadBtn = document.getElementById('alerts-mark-read');
 
+  const renderAlertItems = (items) => {
+    if (!alertList) return;
+    alertList.innerHTML = '';
+    if (!items || !items.length) {
+      const noneLi = document.createElement('li');
+      noneLi.className = 'none';
+      noneLi.textContent = 'No alerts right now.';
+      alertList.appendChild(noneLi);
+      return;
+    }
+    items.forEach(a => {
+      const li = document.createElement('li');
+      if (a.unread) li.className = 'unread';
+      const link = document.createElement('a');
+      link.href = a.url;
+      const b = document.createElement('b');
+      b.textContent = a.title;
+      const span = document.createElement('span');
+      span.textContent = a.body;
+      const small = document.createElement('small');
+      small.textContent = a.time;
+      link.appendChild(b);
+      link.appendChild(span);
+      link.appendChild(small);
+      li.appendChild(link);
+      alertList.appendChild(li);
+    });
+  };
+
   if (markReadBtn && alertsReadUrl) {
     markReadBtn.addEventListener('click', async () => {
       try {
@@ -75,7 +104,7 @@ document.addEventListener('DOMContentLoaded', () => {
           alertCount.hidden = true;
           alertCount.textContent = '0';
         }
-        document.querySelectorAll('.ba-alerts-list li.unread').forEach(li => li.classList.remove('unread'));
+        document.querySelectorAll('.ba-alerts li.unread').forEach(li => li.classList.remove('unread'));
       } catch (err) {
         console.error('Failed to mark alerts read', err);
       }
@@ -92,6 +121,9 @@ document.addEventListener('DOMContentLoaded', () => {
           if (alertCount) {
             alertCount.textContent = data.count;
             alertCount.hidden = data.count < 1;
+          }
+          if (data.items) {
+            renderAlertItems(data.items);
           }
         }
       } catch (e) {}
@@ -387,9 +419,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const cashErrorEl = document.getElementById('cash-error-msg');
 
   if (cashInput && dueAmountEl) {
-    const dueAmount = parseFloat(dueAmountEl.dataset.due || '0');
+    const getDueAmount = () => parseFloat(dueAmountEl.dataset.due || '0');
 
     const updateChange = (val) => {
+      const dueAmount = getDueAmount();
       const cash = parseFloat(val || '0');
       if (cash >= dueAmount) {
         const change = (cash - dueAmount).toFixed(2);
@@ -411,6 +444,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.querySelectorAll('[data-quick-cash]').forEach(btn => {
       btn.addEventListener('click', () => {
+        const dueAmount = getDueAmount();
         const amt = btn.dataset.quickCash === 'exact' ? dueAmount : parseFloat(btn.dataset.quickCash);
         cashInput.value = amt.toFixed(2);
         updateChange(amt);

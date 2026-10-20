@@ -41,9 +41,9 @@ class ActivityLog extends Model
     ): self {
         return static::create([
             'user_id' => $user?->id,
-            'action' => $action,
+            'action' => mb_substr($action, 0, 40),
             'subject' => $subject !== null ? mb_substr($subject, 0, 255) : null,
-            'area' => $area,
+            'area' => $area !== null ? mb_substr($area, 0, 50) : null,
             'ip_address' => $request?->ip(),
             'details' => $details,
         ]);

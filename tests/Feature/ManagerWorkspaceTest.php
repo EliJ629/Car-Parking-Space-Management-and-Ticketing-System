@@ -273,25 +273,26 @@ class ManagerWorkspaceTest extends TestCase
             'session_id' => $session->id,
         ]);
 
+        $date = \App\Support\Lot::now()->toDateString();
         $this->actingAs($manager)
-            ->get(route('manager.records.index', ['date' => today()->toDateString()]))
+            ->get(route('manager.records.index', ['date' => $date]))
             ->assertOk()->assertSee('PK-0001')->assertSee('ABC1234');
-        $this->get(route('manager.records.index', ['tab' => 'payments', 'date' => today()->toDateString()]))
+        $this->get(route('manager.records.index', ['tab' => 'payments', 'date' => $date]))
             ->assertOk()->assertSee('RC-0001')->assertSee('₱50.00');
-        $this->get(route('manager.records.index', ['tab' => 'reservations', 'date' => today()->toDateString()]))
+        $this->get(route('manager.records.index', ['tab' => 'reservations', 'date' => $date]))
             ->assertOk()->assertSee('RSV-0001');
         $this->get(route('manager.records.sessions.show', $session))->assertOk()->assertSee('RC-0001');
 
-        $this->get(route('manager.sales.index', ['from' => today()->toDateString(), 'to' => today()->toDateString()]))
+        $this->get(route('manager.sales.index', ['from' => $date, 'to' => $date]))
             ->assertOk()->assertSee('Sales and revenue')->assertSee('₱50.00');
-        $this->get(route('manager.reports.index', ['from' => today()->toDateString(), 'to' => today()->toDateString()]))
+        $this->get(route('manager.reports.index', ['from' => $date, 'to' => $date]))
             ->assertOk()->assertSee('Occupancy and activity');
 
-        $this->get(route('manager.records.export', ['tab' => 'sessions', 'date' => today()->toDateString()]))
+        $this->get(route('manager.records.export', ['tab' => 'sessions', 'date' => $date]))
             ->assertOk()->assertHeader('content-type', 'text/csv; charset=UTF-8');
-        $this->get(route('manager.sales.export', ['from' => today()->toDateString(), 'to' => today()->toDateString()]))
+        $this->get(route('manager.sales.export', ['from' => $date, 'to' => $date]))
             ->assertOk()->assertHeader('content-type', 'text/csv; charset=UTF-8');
-        $this->get(route('manager.reports.export', ['from' => today()->toDateString(), 'to' => today()->toDateString()]))
+        $this->get(route('manager.reports.export', ['from' => $date, 'to' => $date]))
             ->assertOk()->assertHeader('content-type', 'text/csv; charset=UTF-8');
     }
 

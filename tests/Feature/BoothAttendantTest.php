@@ -245,19 +245,51 @@ class BoothAttendantTest extends TestCase
             'status' => ParkingSession::STATUS_ACTIVE,
         ]);
 
-        // Wrong PIN
-        $wrongRes = $this->actingAs($attendant)->postJson(route('attendant.exit.verify-pin', $session), [
+        // Wrong PIN attempt 1 (2 left)
+        $wrong1 = $this->actingAs($attendant)->postJson(route('attendant.exit.verify-pin', $session), [
             'manager_id' => $manager->id,
             'pin' => '00000',
         ]);
-        $wrongRes->assertJson(['ok' => false]);
+        $wrong1->assertJson(['ok' => false, 'attempts_left' => 2]);
 
-        // Correct PIN
-        $correctRes = $this->actingAs($attendant)->postJson(route('attendant.exit.verify-pin', $session), [
+        // Wrong PIN attempt 2 (1 left)
+        $wrong2 = $this->actingAs($attendant)->postJson(route('attendant.exit.verify-pin', $session), [
+            'manager_id' => $manager->id,
+            'pin' => '00000',
+        ]);
+        $wrong2->assertJson(['ok' => false, 'attempts_left' => 1]);
+
+        // Wrong PIN attempt 3 (blocked)
+        $wrong3 = $this->actingAs($attendant)->postJson(route('attendant.exit.verify-pin', $session), [
+            'manager_id' => $manager->id,
+            'pin' => '00000',
+        ]);
+        $wrong3->assertJson(['ok' => false, 'blocked' => true, 'attempts_left' => 0]);
+        $this->assertDatabaseHas('activity_logs', ['action' => 'manager_pin_failed']);
+
+        // Session 2 for testing successful PIN verification
+        $session2 = ParkingSession::create([
+            'ticket_number' => 'PK-0017',
+            'slot_code' => 'A-03',
+            'plate_number' => 'XYZ9999',
+            'entered_at' => now()->subHours(1),
+            'status' => ParkingSession::STATUS_ACTIVE,
+        ]);
+
+        // Correct demo PIN
+        $correctRes = $this->actingAs($attendant)->postJson(route('attendant.exit.verify-pin', $session2), [
             'manager_id' => $manager->id,
             'pin' => '12345',
         ]);
         $correctRes->assertJson(['ok' => true]);
+
+        // Manager's configured 6-digit PIN
+        $manager->forceFill(['manager_pin_hash' => \Illuminate\Support\Facades\Hash::make('987654')])->save();
+        $configuredRes = $this->actingAs($attendant)->postJson(route('attendant.exit.verify-pin', $session2), [
+            'manager_id' => $manager->id,
+            'pin' => '987654',
+        ]);
+        $configuredRes->assertJson(['ok' => true]);
     }
 
     public function test_manual_slot_correction_with_reason(): void

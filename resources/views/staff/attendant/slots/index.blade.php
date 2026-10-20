@@ -7,6 +7,17 @@
 <h1 class="ba-page-title">Parking slots</h1>
 <p class="ba-sub">Click a slot to see its details or to correct its status.</p>
 
+@if ($errors->any())
+  <div style="background:#FEF2F2;border-left:5px solid #EF4444;border-radius:0 8px 8px 0;padding:14px 18px;margin-bottom:20px;color:#991B1B;">
+    <b style="font-size:15px;display:block;margin-bottom:4px;">Cannot update slot status:</b>
+    <ul style="margin:0;padding-left:18px;font-size:13px;">
+      @foreach ($errors->all() as $err)
+        <li>{{ $err }}</li>
+      @endforeach
+    </ul>
+  </div>
+@endif
+
 <div style="display:grid;grid-template-columns:1.8fr 1fr;gap:24px;align-items:start;">
   
   <!-- Left Column: Lot Slots Board (BA-51) -->
@@ -76,7 +87,7 @@
     @endforeach
 
     <!-- Legend matching Driver App design -->
-    <div class="leg" style="margin-top:14px;background:#F8FAFC;border:1px solid #CBD5E1;border-radius:8px;padding:10px 14px;gap:10px 20px;">
+    <div class="leg ba-detail-box" style="margin-top:14px;gap:10px 20px;">
       <span><i></i>Available</span>
       <span><i class="r"></i>Reserved</span>
       <span><i class="o"></i>Occupied</span>
@@ -114,10 +125,10 @@
 <!-- POP-UP BA-52: Slot Detail Modal -->
 <dialog class="badlg" id="slot-detail-dlg">
   <div class="in">
-    <button class="x" type="button" data-close aria-label="Close">&times;</button>
+    <button class="x" type="button" data-close aria-label="Close">X</button>
     <h2>Slot <span id="sd-code"></span></h2>
 
-    <div style="display:flex;flex-direction:column;gap:10px;font-size:14px;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;padding:16px;margin-bottom:18px;">
+    <div class="ba-detail-box" style="display:flex;flex-direction:column;gap:10px;font-size:14px;margin-bottom:18px;">
       <div style="display:flex;justify-content:space-between;"><span style="color:var(--muted);">Slot</span><b id="sd-full"></b></div>
       <div style="display:flex;justify-content:space-between;"><span style="color:var(--muted);">Type</span><b id="sd-type"></b></div>
       <div style="display:flex;justify-content:space-between;"><span style="color:var(--muted);">Status</span><b id="sd-status"></b></div>
@@ -155,10 +166,10 @@
 <dialog class="badlg" id="manual-correct-dlg">
   <form id="correct-form" class="in" method="POST" action="">
     @csrf
-    <button class="x" type="button" data-close aria-label="Close">&times;</button>
+    <button class="x" type="button" data-close aria-label="Close">X</button>
     <h2>Correct slot status</h2>
 
-    <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;padding:12px;margin-bottom:16px;font-size:14px;">
+    <div class="ba-detail-box" style="margin-bottom:16px;font-size:14px;">
       <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span style="color:var(--muted);">Slot</span><b id="mc-slot-full"></b></div>
       <div style="display:flex;justify-content:space-between;"><span style="color:var(--muted);">Current status</span><b id="mc-cur-status"></b></div>
     </div>
@@ -174,11 +185,14 @@
 
     <div class="ba-form-group">
       <label class="ba-label" for="mc-reason">Reason (required)</label>
-      <textarea class="ba-input" id="mc-reason" name="reason" rows="3" placeholder="Oil spill on the bay, needs cleaning before use" required style="resize:vertical;"></textarea>
-      <p style="font-size:12px;color:var(--muted);margin-top:4px;">At least 10 characters. Saved with your name and the time.</p>
+      <textarea class="ba-input" id="mc-reason" name="reason" rows="3" placeholder="Explain the reason (e.g. Oil spill on bay, needs maintenance)" required style="resize:vertical;"></textarea>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;">
+        <p style="font-size:12px;color:var(--muted);margin:0;">At least 10 characters. Saved with your name and the time.</p>
+        <span id="mc-char-count" style="font-size:12px;font-weight:700;color:var(--stop);">0 / 10 chars</span>
+      </div>
     </div>
 
-    <div style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:6px;padding:12px;font-size:13px;color:#92400E;margin-bottom:20px;">
+    <div style="background:var(--warn-bg);border:1px solid var(--paint-deep);border-radius:6px;padding:12px;font-size:13px;color:var(--ink);margin-bottom:20px;">
       <b>No ticket is created or closed</b><br>
       A status change only fixes the slot. Entries and exits go through New entry and Exit and payment.
     </div>
@@ -269,8 +283,40 @@ document.getElementById('sd-btn-correct').addEventListener('click', () => {
   document.getElementById('mc-slot-full').textContent = `${currentSelectedSlot.code}, ${currentSelectedSlot.zone}, ${currentSelectedSlot.type}`;
   document.getElementById('mc-cur-status').textContent = currentSelectedSlot.status_label.toUpperCase();
 
+  // Intelligent default: pick a different status than current
+  const selectEl = document.getElementById('mc-new-status');
+  if (currentSelectedSlot.status === 'available') {
+    selectEl.value = 'out_of_service';
+  } else {
+    selectEl.value = 'available';
+  }
+
+  const reasonEl = document.getElementById('mc-reason');
+  reasonEl.value = '';
+  updateCharCount();
+
   document.getElementById('manual-correct-dlg').showModal();
 });
+
+function updateCharCount() {
+  const reasonEl = document.getElementById('mc-reason');
+  const countSpan = document.getElementById('mc-char-count');
+  if (!reasonEl || !countSpan) return;
+
+  const len = reasonEl.value.trim().length;
+  if (len >= 10) {
+    countSpan.textContent = `${len} chars (valid)`;
+    countSpan.style.color = 'var(--ok)';
+  } else {
+    countSpan.textContent = `${len} / 10 chars minimum`;
+    countSpan.style.color = 'var(--stop)';
+  }
+}
+
+const reasonInput = document.getElementById('mc-reason');
+if (reasonInput) {
+  reasonInput.addEventListener('input', updateCharCount);
+}
 
 // Zone quick filter tabs
 document.querySelectorAll('.zone-tab-btn').forEach(btn => {
