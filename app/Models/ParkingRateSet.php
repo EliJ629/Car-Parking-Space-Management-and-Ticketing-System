@@ -36,6 +36,11 @@ class ParkingRateSet extends Model
         return $this->belongsTo(User::class, 'created_by');
     }
 
+    public static function current(): ?self
+    {
+        return static::effectiveAt(now());
+    }
+
     public static function effectiveAt(?Carbon $time = null): ?self
     {
         return static::query()

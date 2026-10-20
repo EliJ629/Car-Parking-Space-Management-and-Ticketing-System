@@ -63,9 +63,12 @@
         <input id="time-input" name="time" type="time" value="{{ $time }}" required>
       </div>
     </div>
+    <section class="dcard paint" style="margin-top:6px" aria-labelledby="ontime-1">
+      <p class="lab" id="ontime-1">Arrive on time</p>
+      <p style="margin:4px 0 0;font-size:14px">Your slot is held for only <b>{{ \App\Support\Lot::graceMinutes() }} minutes</b> after the arrival time you pick. If you have not checked in by then, the reservation expires and the slot is given to other drivers. Pick a time you can keep.</p>
+    </section>
     <ul class="checks">
       <li>Reservation is free. Pay the parking fee in cash at the booth.</li>
-      <li>Your slot is held for {{ \App\Support\Lot::graceMinutes() }} minutes after your arrival time.</li>
     </ul>
     <div class="actions"><button class="btn" type="submit">Choose a slot</button></div>
   </form>
@@ -79,6 +82,7 @@
     <input type="hidden" name="step" value="3">
     <input type="hidden" name="date" value="{{ $date }}">
     <input type="hidden" name="time" value="{{ $time }}">
+    <h2 class="f" style="font-size:15px;margin:4px 0 8px">1. Pick a slot <small style="font-weight:400;color:var(--muted)">({{ $zones->sum(fn ($group) => $group->where('state', 'available')->count()) }} free at this time)</small></h2>
     <div class="lot">
       @foreach ($zones as $zone => $slots)
         <div class="zl">{{ strtoupper($zone) }}</div>
@@ -95,8 +99,8 @@
       @include('driver.app.partials.legend')
     </div>
 
-    <fieldset class="fld" style="border:0;padding:0;margin:18px 0 0">
-      <legend class="f" style="font-size:13px;font-weight:600;margin-bottom:6px">Which vehicle?</legend>
+    <fieldset class="fld" style="border:0;padding:0;margin:22px 0 0">
+      <legend class="f" style="font-size:15px;font-weight:700;margin-bottom:8px">2. Pick the vehicle you will use</legend>
       @if ($noVehicle)
         <div class="alert">You have no saved vehicle. <a class="lnk" href="{{ route('driver.vehicles.create') }}">Add a vehicle</a></div>
       @else
@@ -107,19 +111,32 @@
         </div>
       @endif
     </fieldset>
+    <p class="fine" style="margin-top:12px">The next screen asks you to confirm that you will arrive on time.</p>
     <div class="actions"><button class="btn" type="submit">Review reservation</button></div>
   </form>
 
 @else
+  @if ($errors->has('understand'))
+    <div class="err-box" role="alert"><b>Confirm that you will arrive on time</b>{{ $errors->first('understand') }}</div>
+  @endif
   <section class="dcard">
     <p class="lab">Review</p>
     <h3>Slot {{ $slot->code }}</h3>
     <dl class="kv">
       <div><dt>Zone</dt><dd>{{ $slot->zone }}</dd></div>
       <div><dt>Arrival</dt><dd>{{ \App\Support\Lot::when($at) }}</dd></div>
-      <div><dt>Vehicle</dt><dd>{{ $vehicle->displayPlate() }}</dd></div>
+      <div><dt>Vehicle</dt><dd>{{ $vehicle->displayPlate() }}@if ($vehicle->describe()) <small style="color:var(--muted)">{{ $vehicle->describe() }}</small>@endif</dd></div>
       <div><dt>Cost</dt><dd>Free</dd></div>
     </dl>
+  </section>
+  <section class="dcard paint" style="margin-top:14px" aria-labelledby="ontime-3">
+    <p class="lab" id="ontime-3">Before you reserve: arrive on time</p>
+    <p style="margin:4px 0 10px;font-size:14px">Your slot is held only for a short grace period. If you do not check in at the booth in time, you lose both the reservation and the slot.</p>
+    <ul class="tl">
+      <li class="now"><b>Check in opens at {{ \App\Support\Lot::time($opens) }}</b><span>{{ \App\Support\Lot::earlyMinutes() }} minutes before your arrival time</span></li>
+      <li class="todo"><b>Arrival time {{ \App\Support\Lot::time($at) }}</b><span>The time you chose</span></li>
+      <li class="todo"><b>Last check in {{ \App\Support\Lot::time($holdEnds) }}</b><span>{{ \App\Support\Lot::graceMinutes() }} minutes of grace. After this the reservation expires and slot {{ $slot->code }} is released.</span></li>
+    </ul>
   </section>
   <ul class="checks" style="margin-top:16px">
     @foreach ($policies as $p)<li>{{ $p }}</li>@endforeach
@@ -140,6 +157,10 @@
       <button class="x" type="button" data-close aria-label="Close">X</button>
       <h2 id="cr-t">Reserve slot {{ $slot->code }}?</h2>
       <p class="sub" style="color:var(--ink)">{{ \App\Support\Lot::when($at) }} for {{ $vehicle->displayPlate() }}. The reservation is free.</p>
+      <label style="display:flex;gap:10px;align-items:flex-start;margin:12px 0;font-size:14px">
+        <input type="checkbox" name="understand" value="1" required style="margin-top:3px;flex:none">
+        <span>I will arrive by <b>{{ \App\Support\Lot::time($holdEnds) }}</b>. I understand that if I am not checked in by then, the reservation and the slot are no longer valid.</span>
+      </label>
       <div class="actions">
         <button class="btn" type="submit">Yes, reserve</button>
         <button class="btn ghost" type="button" data-close>Not yet</button>
