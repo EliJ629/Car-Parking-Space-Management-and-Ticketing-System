@@ -4,6 +4,23 @@ function eff(){var t=root.getAttribute('data-theme');if(t)return t;return matchM
 function lab(){if(!tb)return;var t=eff()==='dark'?'Switch to light mode':'Switch to dark mode';tb.setAttribute('title',t);if(!tb.textContent.trim())tb.setAttribute('aria-label',t)}
 try{var saved=localStorage.getItem(KEY);if(saved==='dark'||saved==='light')root.setAttribute('data-theme',saved)}catch(e){}
 if(tb){tb.addEventListener('click',function(){var n=eff()==='dark'?'light':'dark';root.setAttribute('data-theme',n);try{localStorage.setItem(KEY,n)}catch(e){}lab()});lab()}
+document.querySelectorAll('[data-open-dialog]').forEach(function(button){
+  button.addEventListener('click',function(){
+    var dialog=document.getElementById(button.getAttribute('data-open-dialog'));
+    if(dialog&&typeof dialog.showModal==='function'&&!dialog.open)dialog.showModal();
+  });
+});
+document.querySelectorAll('.manager-dialog[data-open-on-load]').forEach(function(dialog){
+  if(typeof dialog.showModal==='function'&&!dialog.open)dialog.showModal();
+});
+document.querySelectorAll('.manager-dialog').forEach(function(dialog){
+  dialog.addEventListener('click',function(event){
+    if(event.target===dialog)dialog.close();
+  });
+  dialog.querySelectorAll('[data-close-dialog]').forEach(function(button){
+    button.addEventListener('click',function(){dialog.close()});
+  });
+});
 /* Every password field gets an eye button that shows or hides what was typed */
 var EYE='<svg class="on" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>'
  +'<svg class="off" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9.9 5.2A10 10 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-3.2 4.1M6.1 6.6C3.6 8.3 2 12 2 12s3.6 7 10 7a9.6 9.6 0 0 0 4.2-1M9.9 9.9a3 3 0 0 0 4.2 4.2"/><path d="M3 3l18 18"/></svg>';

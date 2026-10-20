@@ -84,6 +84,7 @@ a{color:inherit}
 .row span:first-child{color:var(--muted)}.row span:last-child{font-weight:600;text-align:right}
 .badge{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.05em;padding:2px 8px;border-radius:3px;border:1.5px solid;text-transform:uppercase}
 .b-ok{color:var(--ok);background:var(--ok-bg);border-color:var(--ok)}
+.b-warn{color:var(--paint-ink);background:var(--warn-bg);border-color:var(--paint-deep)}
 .b-pend{color:var(--paint-ink);background:var(--paint);border-color:var(--paint-deep)}
 .b-done{color:var(--muted);background:var(--out-bg);border-color:var(--field)}
 .b-stop{color:var(--stop);background:var(--stop-bg);border-color:var(--stop)}

@@ -33,6 +33,8 @@ return Application::configure(basePath: dirname(__DIR__))
             : route('driver.home'));
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        $exceptions->dontFlash(['manager_pin', 'manager_pin_confirmation']);
+
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
         );

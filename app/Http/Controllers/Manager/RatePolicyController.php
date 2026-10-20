@@ -6,6 +6,7 @@ use App\Models\ActivityLog;
 use App\Models\ParkingDiscount;
 use App\Models\ParkingRateSet;
 use App\Models\SystemSetting;
+use App\Models\User;
 use App\Support\Lot;
 use App\Support\Rules;
 use Illuminate\Contracts\View\View;
@@ -13,16 +14,18 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 
 class RatePolicyController extends ManagerController
 {
-    public function index(): View
+    public function index(Request $request): View
     {
         return $this->managerPage('Rates and policies', 'rates', view('staff.manager.rates.index', [
             'currentRate' => ParkingRateSet::effectiveAt(),
             'upcomingRates' => ParkingRateSet::query()->where('effective_at', '>', now())->orderBy('effective_at')->get(),
             'discounts' => ParkingDiscount::query()->orderBy('name')->get(),
+            'managerPinIsSet' => $request->user()->hasManagerPin(),
             'history' => ActivityLog::query()->with('user')
                 ->where('action', 'rate_set_created')
                 ->latest('created_at')
@@ -30,6 +33,52 @@ class RatePolicyController extends ManagerController
                 ->get(),
             'settings' => SystemSetting::values(),
         ]));
+    }
+
+    public function saveManagerPin(Request $request): RedirectResponse
+    {
+        $manager = $request->user();
+        abort_unless($manager->role === User::ROLE_MANAGER, 404);
+
+        $data = $request->validate([
+            'manager_pin' => [
+                'required',
+                'string',
+                'regex:/^[0-9]{6}$/',
+                'confirmed',
+                function (string $attribute, mixed $value, \Closure $fail): void {
+                    $pin = (string) $value;
+                    $ascending = ['012345', '123456', '234567', '345678', '456789'];
+                    $descending = ['987654', '876543', '765432', '654321', '543210'];
+
+                    if (preg_match('/^([0-9])\\1{5}$/', $pin) === 1
+                        || in_array($pin, [...$ascending, ...$descending], true)) {
+                        $fail('Choose a less predictable six-digit PIN.');
+                    }
+                },
+            ],
+            'current_password' => ['required', 'string', 'max:255', 'current_password'],
+        ], [
+            'manager_pin.required' => 'Enter a six-digit manager PIN.',
+            'manager_pin.regex' => 'The manager PIN must contain exactly six digits.',
+            'manager_pin.confirmed' => 'The PIN entries do not match.',
+            'current_password.required' => 'Enter your current password to confirm this change.',
+            'current_password.current_password' => 'Your current password is incorrect.',
+        ]);
+
+        $wasSet = $manager->hasManagerPin();
+        $manager->forceFill(['manager_pin_hash' => Hash::make($data['manager_pin'])])->save();
+
+        ActivityLog::record(
+            $wasSet ? 'manager_pin_updated' : 'manager_pin_created',
+            $manager,
+            $request,
+            $manager->username ?? $manager->email,
+            'manager',
+        );
+
+        return redirect()->route('manager.rates.index')
+            ->with('status', $wasSet ? 'Your manager PIN was updated.' : 'Your manager PIN was created.');
     }
 
     public function storeRate(Request $request): RedirectResponse
