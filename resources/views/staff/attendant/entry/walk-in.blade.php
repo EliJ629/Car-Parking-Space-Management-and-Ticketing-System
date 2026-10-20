@@ -101,7 +101,7 @@
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
           <div class="ba-form-group">
             <label class="ba-label">Plate number</label>
-            <input class="ba-input" id="det-plate" type="text" readonly style="background:#F1F5F9;font-weight:700;">
+            <input class="ba-input" id="det-plate" type="text" readonly style="font-weight:700;">
           </div>
           <div class="ba-form-group">
             <label class="ba-label" for="det-phone">Phone number</label>
@@ -183,7 +183,7 @@
               <h2 style="margin:0 0 4px;">Lot map</h2>
               <p style="font-size:13px;color:var(--muted);margin:0;">Only Available slots can be picked. Other slots are dimmed.</p>
             </div>
-            <label style="display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;cursor:pointer;background:#F8FAFC;border:1px solid #CBD5E1;border-radius:6px;padding:6px 12px;">
+            <label style="display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;cursor:pointer;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:6px 12px;color:var(--ink);">
               <input type="checkbox" id="map-pwd-filter" style="width:16px;height:16px;">
               <span>Highlight PWD slots</span>
             </label>
@@ -199,7 +199,7 @@
                     <div class="ba-slot {{ $s->status }} @if(!$isAvail) dimmed @endif"
                          data-slot="{{ $s->code }}" data-zone="{{ $s->zone }}" data-type="{{ $s->type }}"
                          @if($isAvail) onclick="selectSlot(this)" @endif>
-                      @if($s->type === 'PWD')<span class="pwd-tag">PWD</span>@endif
+                       @if($s->type === 'PWD')<span class="pwd-tag">PWD</span>@endif
                       <b>{{ $s->code }}</b>
                       <span class="st">{{ $s->statusLabel() }}</span>
                     </div>
@@ -214,7 +214,7 @@
           </div>
 
           <!-- Legend matching Driver App design -->
-          <div class="leg" style="margin-top:14px;background:#F8FAFC;border:1px solid #CBD5E1;border-radius:8px;padding:10px 14px;gap:10px 20px;">
+          <div class="leg ba-detail-box" style="margin-top:14px;gap:10px 20px;">
             <span><i></i>Available</span>
             <span><i class="r"></i>Reserved</span>
             <span><i class="o"></i>Occupied</span>
@@ -527,12 +527,12 @@ function goToSlot() {
 
   document.getElementById('hidden-driver-id').value = vehicleState.driverId || '';
 
-  // Synchronize and apply PWD highlight & auto-selection
+  // Synchronize and apply PWD highlight (do NOT auto-select; attendant picks the slot)
   const isPwd = document.getElementById('det-pwd').checked;
-  applyPwdFilter(isPwd, true);
+  applyPwdFilter(isPwd);
 }
 
-function applyPwdFilter(isPwd, autoSelect = false) {
+function applyPwdFilter(isPwd) {
   const detPwd = document.getElementById('det-pwd');
   const mapPwd = document.getElementById('map-pwd-filter');
   const banner = document.getElementById('pwd-banner');
@@ -549,23 +549,9 @@ function applyPwdFilter(isPwd, autoSelect = false) {
         s.classList.remove('pwd-highlight');
       }
     });
-
-    if (autoSelect) {
-      const firstAvailPwd = document.querySelector('.ba-slot.available[data-type="PWD"]');
-      if (firstAvailPwd) {
-        selectSlot(firstAvailPwd);
-      } else {
-        const firstAvail = document.querySelector('.ba-slot.available');
-        if (firstAvail) selectSlot(firstAvail);
-      }
-    }
   } else {
     if (banner) banner.style.display = 'none';
     document.querySelectorAll('.ba-slot.pwd-highlight').forEach(s => s.classList.remove('pwd-highlight'));
-    if (autoSelect && (!selectedSlot || selectedSlot.type === 'PWD')) {
-      const firstAvail = document.querySelector('.ba-slot.available');
-      if (firstAvail) selectSlot(firstAvail);
-    }
   }
 }
 
@@ -574,7 +560,7 @@ document.getElementById('btn-to-slot').addEventListener('click', goToSlot);
 const mapPwdToggle = document.getElementById('map-pwd-filter');
 if (mapPwdToggle) {
   mapPwdToggle.addEventListener('change', (e) => {
-    applyPwdFilter(e.target.checked, true);
+    applyPwdFilter(e.target.checked);
   });
 }
 

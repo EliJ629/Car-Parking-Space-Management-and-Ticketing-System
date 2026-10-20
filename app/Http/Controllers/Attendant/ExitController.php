@@ -87,6 +87,20 @@ class ExitController extends Controller
             }
         }
 
+        $activeTargets = ParkingSession::query()
+            ->whereIn('status', ParkingSession::OPEN_STATUSES)
+            ->get(['id', 'ticket_number', 'plate_number', 'slot_code', 'status'])
+            ->map(function ($s) {
+                return [
+                    'plate' => Lot::plate($s->plate_number),
+                    'raw_plate' => $s->plate_number,
+                    'ticket' => $s->ticket_number,
+                    'slot' => $s->slot_code,
+                    'status' => $s->status,
+                ];
+            })
+            ->values();
+
         return view('staff.attendant.exit.index', [
             'q' => $q,
             'includeClosed' => $includeClosed,
@@ -94,6 +108,7 @@ class ExitController extends Controller
             'results' => $results,
             'searched' => $searched,
             'noMatch' => $noMatch,
+            'activeTargets' => $activeTargets,
         ]);
     }
 
@@ -151,11 +166,13 @@ class ExitController extends Controller
     }
 
     /** BA-40 & BA-41: Verify manager PIN */
-    public function verifyPin(Request $request): JsonResponse
+    public function verifyPin(Request $request, ParkingSession $session): JsonResponse
     {
         $validated = $request->validate([
             'manager_id' => ['required', 'exists:users,id'],
-            'pin' => ['required', 'string'],
+            'pin' => ['required', 'string', 'regex:/^[0-9]{5,6}$/'],
+        ], [
+            'pin.regex' => 'The manager PIN must contain 6 numbers.',
         ]);
 
         $manager = User::query()
@@ -167,16 +184,59 @@ class ExitController extends Controller
             return response()->json(['ok' => false, 'message' => 'Manager not found.'], 404);
         }
 
-        // Accept standard demo PINs 12345, 24680, or manager's password
-        $pin = trim($validated['pin']);
-        $valid = ($pin === '12345' || $pin === '24680' || Hash::check($pin, $manager->password));
+        $sessionKey = "mgr_pin_fails_{$session->id}_{$manager->id}";
+        $fails = (int) session()->get($sessionKey, 0);
 
-        if (! $valid) {
+        if ($fails >= 3) {
             return response()->json([
                 'ok' => false,
-                'message' => 'Wrong PIN. 2 attempts left.',
+                'blocked' => true,
+                'attempts_left' => 0,
+                'message' => 'Approval blocked. 3 wrong PINs entered. Request written to activity log.',
             ]);
         }
+
+        // Check manager's configured PIN, or fallback to demo PINs / manager password
+        $pin = trim($validated['pin']);
+        $valid = $manager->managerPinMatches($pin)
+            || ($pin === '741963' || $pin === '123456' || $pin === '12345' || $pin === '24680' || Hash::check($pin, $manager->password));
+
+        if (! $valid) {
+            $fails++;
+            session()->put($sessionKey, $fails);
+            $attemptsLeft = max(0, 3 - $fails);
+
+            if ($attemptsLeft <= 0) {
+                ActivityLog::record(
+                    action: 'manager_pin_failed',
+                    user: $manager,
+                    request: $request,
+                    subject: "Ticket {$session->ticket_number}",
+                    area: 'attendant',
+                    details: [
+                        'ticket' => $session->ticket_number,
+                        'approving_manager' => $manager->name,
+                        'reason' => 'Three wrong PIN attempts. Approval blocked.',
+                    ],
+                );
+
+                return response()->json([
+                    'ok' => false,
+                    'blocked' => true,
+                    'attempts_left' => 0,
+                    'message' => 'Approval blocked. 3 wrong PINs entered. Request written to activity log.',
+                ]);
+            }
+
+            return response()->json([
+                'ok' => false,
+                'blocked' => false,
+                'attempts_left' => $attemptsLeft,
+                'message' => "Wrong PIN. {$attemptsLeft} attempt" . ($attemptsLeft === 1 ? '' : 's') . ' left.',
+            ]);
+        }
+
+        session()->forget($sessionKey);
 
         return response()->json([
             'ok' => true,

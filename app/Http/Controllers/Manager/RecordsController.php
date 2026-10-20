@@ -46,7 +46,7 @@ class RecordsController extends ManagerController
             ->latest('entered_at')->paginate(15)->withQueryString();
 
         $payments = ParkingPayment::query()->with(['session.slot', 'attendant'])
-            ->whereDate('paid_at', $date)
+            ->whereBetween('paid_at', [$from, $to])
             ->when($search !== '', fn ($query) => $query->where(fn ($query) => $query
                 ->where('receipt_number', 'like', "%{$search}%")
                 ->orWhereHas('session', fn ($sessions) => $sessions
@@ -55,7 +55,7 @@ class RecordsController extends ManagerController
             ->latest('paid_at')->paginate(15)->withQueryString();
 
         $reservations = ParkingReservation::query()->with(['slot', 'driver'])
-            ->whereDate('scheduled_at', $date)
+            ->whereBetween('scheduled_at', [$from, $to])
             ->when($search !== '', fn ($query) => $query->where(fn ($query) => $query
                 ->where('code', 'like', "%{$search}%")
                 ->orWhere('plate_number', 'like', "%{$search}%")))

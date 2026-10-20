@@ -93,22 +93,25 @@
 
   <!-- Right: Alerts Widget -->
   <div class="ba-card">
-    <h2>Alerts</h2>
-    <div class="ba-list-group">
-      @forelse ($alertItems as $a)
-        <div class="ba-item" style="flex-direction:column;align-items:flex-start;">
-          <div style="display:flex;justify-content:space-between;width:100%;">
-            <b>{{ $a['title'] }}</b>
-            <span class="badge @if($a['type']==='reservation_expired') out @elseif($a['type']==='pending_exit') pending @else occupied @endif">
-              @if($a['type']==='reservation_expired') EXPIRED @elseif($a['type']==='pending_exit') PENDING @else OPEN @endif
-            </span>
-          </div>
-          <p style="margin:4px 0 0;font-size:13px;color:var(--muted);">{{ $a['body'] }}</p>
-        </div>
-      @empty
-        <p style="color:var(--muted);font-size:14px;margin:0;">No active alerts right now.</p>
-      @endforelse
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+      <h2 style="margin:0;">Alerts</h2>
+      <button type="button" data-open="#alerts-dlg" class="btn ghost sm" style="font-size:12px;padding:4px 10px;min-height:30px;">View all</button>
     </div>
+    <ul class="ba-alerts" style="margin:0;">
+      @forelse ($alertItems as $a)
+        <li class="{{ $a['unread'] ? 'unread' : '' }}">
+          <a href="{{ $a['url'] }}">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;">
+              <b>{{ $a['title'] }}</b>
+              <small>{{ $a['time'] }}</small>
+            </div>
+            <span>{{ $a['body'] }}</span>
+          </a>
+        </li>
+      @empty
+        <li class="none">No active alerts right now.</li>
+      @endforelse
+    </ul>
   </div>
 </div>
 @endsection

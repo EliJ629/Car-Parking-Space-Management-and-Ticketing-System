@@ -3,7 +3,10 @@
 .ba-skip{position:absolute;left:-999px;top:0;background:var(--ink);color:var(--bg);padding:10px 14px;z-index:100}
 .ba-skip:focus{left:8px;top:8px}
 
+.ba-shell{min-height:100vh;display:flex;flex-direction:column}
+.ba-shell > .ba-w{flex:1;display:flex;flex-direction:column}
 .ba-w{width:100%;max-width:1200px;margin-inline:auto;padding-inline:20px}
+main#main{padding-bottom:64px;outline:0;flex:1}
 
 /* Header */
 .ba-head{background:var(--bg);border-bottom:1px solid var(--line)}
@@ -20,6 +23,9 @@
 
 .ba-alertbtn{display:inline-flex;align-items:center;gap:8px;min-height:38px;padding:0 16px;border-radius:99px;background:var(--surface);color:var(--ink);border:1.5px solid var(--stop);font:600 13px var(--f-b);cursor:pointer;transition:background .15s}
 .ba-alertbtn:hover{background:var(--stop-bg)}
+
+.ba-head .tt{font:600 13px var(--f-b);background:var(--surface);color:var(--ink);border:1.5px solid var(--line);border-radius:99px;padding:0;width:38px;height:38px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;flex:none;transition:border-color .15s}
+.ba-head .tt:hover{border-color:var(--ink)}
 
 .ba-badge{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;border-radius:99px;background:var(--stop);color:#fff;font-size:11px;font-weight:700;padding:0 6px}
 .ba-badge[hidden]{display:none}
@@ -43,10 +49,8 @@
 
 /* Quick Actions Cards (BA-01) */
 .ba-actions{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:28px}
-.ba-action-card{background:var(--surface);border:1px solid var(--line);border-top:4px solid var(--paint);border-radius:8px;padding:18px;text-decoration:none;color:inherit;display:flex;flex-direction:column;transition:transform .15s,box-shadow .15s}
-.ba-action-card:hover{transform:translateY(-2px);box-shadow:0 6px 14px rgba(0,0,0,.06)}
-.ba-action-card h3{font-size:18px;font-weight:700;margin-bottom:6px}
-.ba-action-card p{font-size:13px;color:var(--muted);line-height:1.4;margin:0}
+.ba-action-card{background:var(--surface);border:1px solid var(--line);border-top:4px solid var(--paint);border-radius:8px;padding:18px;text-decoration:none;color:inherit;display:flex;flex-direction:column;transition:transform .15s,box-shadow .15s,border-color .15s}
+.ba-action-card:hover{transform:translateY(-2px);border-color:var(--paint);box-shadow:0 0 20px rgba(242,183,5,.3),0 6px 14px rgba(0,0,0,.08)}
 
 /* Split Columns (BA-01) */
 .ba-split{display:grid;grid-template-columns:1.6fr 1fr;gap:24px;align-items:start}
@@ -54,8 +58,12 @@
 .ba-card h2{font-size:20px;font-weight:700;margin-bottom:14px}
 .ba-card h3{font-size:14px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:16px 0 10px}
 
+/* Entry Choice Cards (Walk-in vs Reserved) with vibrant yellow glow on hover */
+.ba-entry-choice-card{border:2px solid var(--line);border-radius:10px;transition:transform .2s ease,border-color .2s ease,box-shadow .2s ease;cursor:pointer}
+.ba-entry-choice-card:hover{border-color:var(--paint) !important;transform:translateY(-3px);box-shadow:0 0 30px rgba(242,183,5,.4),0 10px 24px rgba(0,0,0,.15) !important}
+
 .ba-list-group{display:flex;flex-direction:column;gap:10px}
-.ba-item{display:flex;align-items:center;justify-content:space-between;padding:14px;border:1px solid var(--line);border-radius:8px;background:#fff;gap:14px}
+.ba-item{display:flex;align-items:center;justify-content:space-between;padding:14px;border:1px solid var(--line);border-radius:8px;background:var(--surface);gap:14px}
 .ba-item .details b{display:block;font-size:15px;color:var(--ink)}
 .ba-item .details p{font-size:13px;color:var(--muted);margin:3px 0 0}
 
@@ -66,8 +74,6 @@
 .ba-step.active::after{content:'';position:absolute;bottom:-17px;left:0;right:0;height:3px;background:var(--paint-deep)}
 
 /* Lot Status Summary Pills */
-.ba-pills{display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap}
-/* Lot Status Summary Pills & Driver-Matched Legend */
 .ba-pills{display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;align-items:center}
 .ba-pill{font-size:13px;font-weight:700;padding:6px 14px;border-radius:99px;border:1.5px solid var(--line);background:var(--surface);display:inline-flex;align-items:center;gap:8px;color:var(--ink)}
 .ba-pill i{display:inline-block;width:12px;height:12px;border-radius:3px;border:1.5px solid var(--field);background:#fff;flex-shrink:0}
@@ -103,9 +109,9 @@
 .badge.completed{background:#E2E8F0;color:#475569;border:1.5px solid #CBD5E1}
 
 /* Interactive Lot Map (BA-16, BA-51) */
-.ba-lot-map{background:#CBD5E1;border-radius:12px;padding:24px;margin-bottom:20px}
+.ba-lot-map{background:var(--out-bg);border:1px solid var(--line);border-radius:12px;padding:24px;margin-bottom:20px}
 .ba-zone{margin-bottom:20px}
-.ba-zone-title{font-size:15px;font-weight:800;color:#1F2937;margin-bottom:12px}
+.ba-zone-title{font-size:15px;font-weight:800;color:var(--ink);margin-bottom:12px}
 .ba-slot-grid{display:grid;grid-template-columns:repeat(8,1fr);gap:10px}
 .ba-slot-grid.zone-b{grid-template-columns:repeat(4,1fr) 2fr 2fr}
 
@@ -174,10 +180,22 @@
 /* Forms */
 .ba-form-group{margin-bottom:18px}
 .ba-label{display:block;font-size:13px;font-weight:700;margin-bottom:6px;color:var(--ink)}
-.ba-input{width:100%;min-height:44px;padding:8px 14px;border:1.5px solid var(--line);border-radius:6px;font-size:15px;font-family:inherit;background:#fff}
+.ba-input{width:100%;min-height:44px;padding:8px 14px;border:1.5px solid var(--line);border-radius:6px;font-size:15px;font-family:inherit;background:var(--surface);color:var(--ink)}
 .ba-input:focus{outline:0;border-color:var(--paint-deep);box-shadow:0 0 0 3px rgba(245,158,11,.2)}
 .ba-input.error{border-color:var(--stop);background:var(--stop-bg)}
 .ba-err-msg{color:var(--stop);font-size:12px;font-weight:600;margin-top:4px}
+select.ba-input option{background:var(--surface);color:var(--ink)}
+
+/* Predictive Plate & Ticket Autocomplete */
+.ba-predict-wrap{position:relative;width:100%}
+.ba-predict-wrap input.ba-predict-ghost{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:1;background:var(--surface);border-color:var(--line);color:var(--muted);opacity:0.45;box-sizing:border-box;letter-spacing:inherit}
+.ba-predict-wrap input#exit-q{position:relative;z-index:2;background:transparent}
+.ba-predict-chip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:6px;background:var(--surface);border:1.5px solid var(--line);font-size:12px;font-weight:700;color:var(--ink);cursor:pointer;transition:all .15s}
+.ba-predict-chip:hover,.ba-predict-chip.active{border-color:var(--paint);background:var(--warn-bg);box-shadow:0 0 10px rgba(242,183,5,.25)}
+.ba-predict-chip small{font-size:11px;color:var(--muted);font-weight:500}
+
+/* Reusable card sub-panels (avoids hardcoded #F8FAFC in dark mode) */
+.ba-detail-box{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:14px}
 
 /* Thermal Paper Ticket / Receipt Preview (BA-18, BA-19, BA-46, BA-47) - 58mm Thermal Size */
 .ba-thermal{background:#fff;border:1px dashed #94A3B8;border-radius:6px;padding:16px 14px;width:250px;max-width:250px;margin-inline:auto;font-family:'Consolas','Lucida Console','Courier New',monospace;color:#000;font-weight:700;box-shadow:0 4px 12px rgba(0,0,0,.08)}
@@ -192,28 +210,119 @@
 .ba-thermal .t-qr canvas,.ba-thermal .t-qr img{width:115px !important;height:115px !important;display:block;margin:0 auto;image-rendering:pixelated}
 .ba-thermal p.foot{font-size:10px;text-align:center;margin:8px 0 0;line-height:1.3;color:#000;font-weight:700}
 
-/* Modals / Dialogs */
-.badlg{border:0;border-radius:12px;padding:0;background:transparent;max-width:540px;width:90%;box-shadow:0 20px 40px rgba(0,0,0,.25)}
-.badlg::backdrop{background:rgba(15,23,42,.6);backdrop-filter:blur(3px)}
-.badlg .in{background:#fff;border-radius:12px;padding:28px;position:relative}
-.badlg.wide{max-width:680px}
-.badlg h2{font-size:24px;font-weight:800;margin:0 0 12px;font-family:var(--f-d)}
-.badlg p{font-size:14px;color:var(--muted);line-height:1.5;margin:0 0 18px}
-.badlg .x{position:absolute;top:18px;right:20px;background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted)}
-.badlg .actions{display:flex;gap:12px;justify-content:flex-end;margin-top:24px}
+/* Modals / Dialogs (Exact match to Guard & Manager console styles) */
+dialog.badlg{border:0;padding:0;border-radius:12px;width:min(520px,calc(100vw - 24px));background:var(--surface);color:var(--ink);box-shadow:0 20px 60px rgba(0,0,0,.4)}
+dialog.badlg.wide{width:min(620px,calc(100vw - 24px))}
+dialog.badlg::backdrop{background:rgba(10,14,18,.62);backdrop-filter:blur(3px)}
+dialog.badlg .in{padding:22px;border-top:5px solid var(--paint);border-radius:12px;display:block;background:var(--surface);color:var(--ink);position:relative}
+dialog.badlg.stop .in{border-top-color:var(--stop)}
+dialog.badlg h2{font-size:32px;font-family:var(--f-d);font-weight:800;margin:0 0 10px;line-height:1;color:var(--ink)}
+dialog.badlg p{font-size:14px;color:var(--muted);line-height:1.5;margin:0 0 16px}
+dialog.badlg .x{float:right;border:1.5px solid var(--line);background:var(--surface);color:var(--ink);border-radius:6px;width:40px;height:40px;font:700 14px var(--f-b);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:border-color .15s}
+dialog.badlg .x:hover{border-color:var(--ink)}
+dialog.badlg .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}
+dialog.badlg .actions .btn{min-height:44px}
 
-/* Alerts Panel (BA-65) */
-.ba-alerts-list{list-style:none;padding:0;margin:0 0 16px;max-height:380px;overflow-y:auto}
-.ba-alerts-list li{border-bottom:1px solid var(--line)}
-.ba-alerts-list li a{display:flex;align-items:flex-start;gap:12px;padding:12px 6px;text-decoration:none;color:inherit}
-.ba-alerts-list li.unread a{background:var(--warn-bg)}
-.ba-alerts-list .dot{width:8px;height:8px;border-radius:99px;background:var(--paint-deep);margin-top:6px;flex-shrink:0}
-.ba-alerts-list li:not(.unread) .dot{background:transparent}
-.ba-alerts-list .meta{flex:1}
-.ba-alerts-list .meta b{display:block;font-size:14px;color:var(--ink)}
-.ba-alerts-list .meta p{font-size:13px;color:var(--muted);margin:3px 0 0}
-.ba-alerts-list time{font-size:12px;color:var(--muted);white-space:nowrap}
-.ba-alert-foot{font-size:12px;color:var(--muted);margin-top:10px}
+/* Alerts List (Exact match to Guard alerts in BA-65 & Screenshot) */
+.ba-alerts{list-style:none;margin:12px 0;padding:0;display:grid;gap:8px;max-height:52vh;overflow-y:auto}
+.ba-alerts li a{display:block;padding:12px 14px;border:1px solid var(--line);border-radius:8px;text-decoration:none;background:var(--surface);color:var(--ink);transition:border-color .15s}
+.ba-alerts li a:hover{border-color:var(--ink)}
+.ba-alerts li.unread a{border-left:5px solid var(--stop);background:var(--warn-bg)}
+.ba-alerts li b{display:block;font-size:15px;color:var(--ink);font-weight:700}
+.ba-alerts li span{display:block;font-size:14px;margin-top:2px;color:var(--ink);line-height:1.35}
+.ba-alerts li small{display:block;color:var(--muted);font-size:12px;margin-top:4px}
+.ba-alerts li.none{color:var(--muted);padding:14px;text-align:center;border:1px dashed var(--line);border-radius:8px}
+
+/* Toasts (BA-56, BA-66) */
+.ba-toasts{position:fixed;top:20px;right:20px;z-index:999;display:flex;flex-direction:column;gap:10px}
+.ba-toast{background:#1E293B;color:#fff;border-radius:8px;padding:14px 18px;box-shadow:0 8px 20px rgba(0,0,0,.25);min-width:280px;max-width:380px;font-size:13px;animation:slideIn .25s ease-out}
+.ba-toast b{display:block;font-size:14px;margin-bottom:3px}
+@keyframes slideIn{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
+
+/* Fee Calculation Summary (BA-37, BA-38) */
+.ba-fee-card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:24px}
+.ba-fee-row{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line);font-size:14px}
+.ba-fee-row.total{border-top:2px solid var(--ink);border-bottom:none;margin-top:10px;padding-top:14px}
+.ba-fee-row.total b.amt{font-size:36px;font-family:var(--f-d);font-weight:800;color:var(--ink)}
+
+/* ==========================================================================
+   Dark Mode Support (matching Parking Manager console)
+   ========================================================================== */
+[data-theme="dark"] body{background:var(--bg);color:var(--ink)}
+[data-theme="dark"] .ba-head{background:var(--surface);border-bottom-color:var(--line)}
+[data-theme="dark"] .ba-chip{background:var(--surface);border-color:var(--line);color:var(--ink)}
+[data-theme="dark"] .ba-tabs a{background:var(--surface);border-color:var(--line);color:var(--ink)}
+[data-theme="dark"] .ba-tabs a:hover{border-color:var(--paint);box-shadow:0 0 12px rgba(242,183,5,.25)}
+[data-theme="dark"] .ba-tabs a[aria-current=page]{background:var(--paint);border-color:var(--paint-deep);color:var(--paint-ink);box-shadow:0 0 16px rgba(242,183,5,.35)}
+
+/* Cards, Tiles and Lists */
+[data-theme="dark"] .ba-card{background:var(--surface);border-color:var(--line)}
+[data-theme="dark"] .ba-tile{background:var(--surface);border-color:var(--line)}
+[data-theme="dark"] .ba-tile.warn{background:var(--warn-bg);border-color:var(--paint-deep)}
+[data-theme="dark"] .ba-action-card{background:var(--surface);border-color:var(--line);border-top-color:var(--paint)}
+[data-theme="dark"] .ba-action-card:hover{border-color:var(--paint) !important;box-shadow:0 0 25px rgba(242,183,5,.45),0 8px 20px rgba(0,0,0,.5) !important}
+[data-theme="dark"] .ba-entry-choice-card{border-color:var(--line)}
+[data-theme="dark"] .ba-entry-choice-card:hover{border-color:var(--paint) !important;transform:translateY(-3px);box-shadow:0 0 35px rgba(242,183,5,.55),0 0 10px rgba(242,183,5,.3),0 10px 28px rgba(0,0,0,.6) !important}
+[data-theme="dark"] .ba-item{background:var(--surface);border-color:var(--line)}
+[data-theme="dark"] .ba-fee-card{background:var(--surface);border-color:var(--line)}
+[data-theme="dark"] .ba-detail-box{background:var(--surface);border-color:var(--line)}
+
+/* Forms & Inputs */
+[data-theme="dark"] .ba-input{background:var(--surface);color:var(--ink);border-color:var(--line)}
+[data-theme="dark"] .ba-input:focus{border-color:var(--paint);box-shadow:0 0 0 3px rgba(242,183,5,.25),0 0 15px rgba(242,183,5,.2)}
+[data-theme="dark"] select.ba-input option{background:var(--surface);color:var(--ink)}
+[data-theme="dark"] input[type="date"].ba-input{color-scheme:dark}
+[data-theme="dark"] .ba-input:read-only,
+[data-theme="dark"] .ba-input[readonly]{background:var(--out-bg);color:var(--muted);border-color:var(--line)}
+
+/* Buttons in Dark Mode */
+[data-theme="dark"] .btn.ghost{background:var(--surface);border-color:var(--line);color:var(--ink)}
+[data-theme="dark"] .btn.ghost:hover{border-color:var(--paint);background:var(--bg);box-shadow:0 0 12px rgba(242,183,5,.25)}
+[data-theme="dark"] .btn.primary{background:var(--paint);border-color:var(--paint-deep);color:var(--paint-ink);box-shadow:0 0 14px rgba(242,183,5,.25)}
+[data-theme="dark"] .btn.primary:hover{background:#EAB308;box-shadow:0 0 24px rgba(242,183,5,.55)}
+
+/* Interactive Lot Map & Slots (Synchronized with Manager Dark Mode) */
+[data-theme="dark"] .ba-lot-map{background:var(--out-bg);border:1px solid var(--line)}
+[data-theme="dark"] .ba-zone-title{color:var(--ink)}
+[data-theme="dark"] .ba-slot.available{background:var(--surface);border-color:var(--field);color:var(--ink)}
+[data-theme="dark"] .ba-slot.available span.st{color:var(--ok)}
+[data-theme="dark"] .ba-slot.available:hover{border-color:var(--ink)}
+[data-theme="dark"] .ba-slot.occupied{background:var(--occ);border-color:var(--occ);color:var(--occ-ink)}
+[data-theme="dark"] .ba-slot.occupied span.st{color:var(--occ-ink)}
+[data-theme="dark"] .ba-slot.occupied span.plt{color:var(--occ-ink)}
+[data-theme="dark"] .ba-slot.reserved{background:var(--res-bg);border:2px dashed var(--paint-deep);color:var(--ink)}
+[data-theme="dark"] .ba-slot.reserved span.st{color:var(--paint-deep)}
+[data-theme="dark"] .ba-slot.reserved span.plt{color:var(--paint)}
+[data-theme="dark"] .ba-slot.pending_exit{background:var(--paint);border-color:var(--paint-deep);color:var(--paint-ink)}
+[data-theme="dark"] .ba-slot.pending_exit span.st{color:var(--paint-ink)}
+[data-theme="dark"] .ba-slot.pending_exit span.plt{color:var(--paint-ink)}
+[data-theme="dark"] .ba-slot.out_of_service{background:repeating-linear-gradient(135deg,var(--out-bg) 0 6px,var(--line) 6px 8px);border-color:var(--line);color:var(--muted)}
+[data-theme="dark"] .ba-slot.out_of_service span.st{color:var(--muted)}
+[data-theme="dark"] .ba-slot.out_of_service span.plt{color:var(--muted)}
+[data-theme="dark"] .ba-slot.pwd-highlight{border:3px solid #3B82F6 !important;background:rgba(37,99,235,0.18) !important;color:#60A5FA !important}
+[data-theme="dark"] .ba-slot.pwd-highlight span.st{color:#60A5FA !important}
+
+/* Legend & Pills in Dark Mode */
+[data-theme="dark"] .leg i{border-color:var(--field);background:var(--surface)}
+[data-theme="dark"] .leg i.o{background:var(--occ);border-color:var(--occ)}
+[data-theme="dark"] .leg i.r{background:var(--res-bg);border:2px dashed var(--paint-deep)}
+[data-theme="dark"] .leg i.p{background:var(--paint);border-color:var(--paint-deep)}
+[data-theme="dark"] .leg i.x{background:repeating-linear-gradient(135deg,var(--out-bg) 0 3px,var(--line) 3px 5px);border-color:var(--line)}
+
+[data-theme="dark"] .ba-pill.available{background:var(--surface);border-color:var(--field);color:var(--ink)}
+[data-theme="dark"] .ba-pill.reserved{background:var(--res-bg);border-color:var(--paint-deep);color:var(--paint)}
+[data-theme="dark"] .ba-pill.occupied{background:var(--occ);border-color:var(--occ);color:var(--occ-ink)}
+[data-theme="dark"] .ba-pill.pending{background:var(--paint);border-color:var(--paint-deep);color:var(--paint-ink)}
+[data-theme="dark"] .ba-pill.out{background:repeating-linear-gradient(135deg,var(--out-bg) 0 4px,var(--line) 4px 6px);border-color:var(--line);color:var(--muted)}
+
+/* Modals & Dialogs in Dark Mode */
+[data-theme="dark"] dialog.badlg .in{background:var(--surface);color:var(--ink)}
+[data-theme="dark"] dialog.badlg .x{background:var(--surface);color:var(--ink);border-color:var(--line)}
+[data-theme="dark"] .ba-alerts li a{background:var(--surface);border-color:var(--line);color:var(--ink)}
+[data-theme="dark"] .ba-alerts li.unread a{background:var(--warn-bg);border-left-color:var(--stop)}
+[data-theme="dark"] .ba-alerts li b{color:var(--ink)}
+[data-theme="dark"] .ba-alerts li span{color:var(--ink)}
+[data-theme="dark"] .ba-thermal{box-shadow:0 8px 30px rgba(0,0,0,.6)}
 
 /* Toasts (BA-56, BA-66) */
 .ba-toasts{position:fixed;top:20px;right:20px;z-index:999;display:flex;flex-direction:column;gap:10px}

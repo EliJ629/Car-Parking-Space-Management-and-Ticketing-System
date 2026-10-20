@@ -39,7 +39,7 @@
       <div class="ba-card">
         <!-- Switch tabs between Scan QR and Enter code -->
         <div style="display:flex;gap:8px;margin-bottom:20px;">
-          <button class="btn sm ghost" type="button" id="tab-scan" style="background:#F1F5F9;">Scan QR code</button>
+          <button class="btn sm ghost" type="button" id="tab-scan">Scan QR code</button>
           <button class="btn sm primary" type="button" id="tab-manual">Enter code</button>
         </div>
 
@@ -219,11 +219,11 @@
 
       <div class="ba-form-group">
         <label class="ba-label">Assigned slot</label>
-        <input class="ba-input" id="dlg-rsv-slot" type="text" readonly style="background:#F1F5F9;font-weight:700;">
+        <input class="ba-input" id="dlg-rsv-slot" type="text" readonly style="font-weight:700;">
         <p style="font-size:12px;color:var(--muted);margin-top:4px;">Pre-assigned when the driver booked.</p>
       </div>
 
-      <div style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:6px;padding:12px;font-size:13px;color:#92400E;margin-bottom:18px;">
+      <div style="background:var(--warn-bg);border:1px solid var(--paint-deep);border-radius:6px;padding:12px;font-size:13px;color:var(--ink);margin-bottom:18px;">
         <b>Slot cannot be changed</b><br>
         The attendant can change the slot only when this slot is Out of service.
       </div>
