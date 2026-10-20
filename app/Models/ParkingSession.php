@@ -79,6 +79,11 @@ class ParkingSession extends Model
         return $this->hasOne(ParkingPayment::class, 'session_id');
     }
 
+    public function reservation(): HasOne
+    {
+        return $this->hasOne(ParkingReservation::class, 'session_id');
+    }
+
     public function incidents(): HasMany
     {
         return $this->hasMany(Incident::class, 'session_id');

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\Lot;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -47,6 +48,19 @@ class ParkingSlot extends Model
         return $this->hasMany(ParkingReservation::class, 'slot_id');
     }
 
+    public function sessions(): HasMany
+    {
+        return $this->hasMany(ParkingSession::class, 'slot_id');
+    }
+
+    public function currentSession(): ?ParkingSession
+    {
+        return $this->sessions()
+            ->whereIn('status', ParkingSession::OPEN_STATUSES)
+            ->latest('id')
+            ->first();
+    }
+
     /** The next reservation that still holds this slot (booked, not yet used), on any day. */
     public function nextOpenBooking(): ?ParkingReservation
     {
@@ -73,7 +87,7 @@ class ParkingSlot extends Model
     public function blockedReason(): ?string
     {
         if ($booking = $this->nextOpenBooking()) {
-            return "{$this->code} has reservation {$booking->code} for ".\App\Support\Lot::whenText($booking->scheduled_at).'. Cancel it or let it finish first.';
+            return "{$this->code} has reservation {$booking->code} for ".Lot::whenText($booking->scheduled_at).'. Cancel it or let it finish first.';
         }
 
         if ($this->status !== self::STATUS_AVAILABLE && $this->status !== self::STATUS_OUT_OF_SERVICE) {
