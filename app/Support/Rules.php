@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Models\User;
 use App\Models\Vehicle;
 use Illuminate\Http\Request;
 
@@ -43,7 +44,21 @@ class Rules
         return [$required ? 'required' : 'nullable', 'regex:/^09\d{9}$/'];
     }
 
-    public const MOBILE_MESSAGE = 'Enter a mobile number like 0917 555 0142.';
+    public const MOBILE_MESSAGE = 'Enter an 11-digit mobile number starting with 09, for example 0917 555 0142.';
+
+    /**
+     * A normal email address with a real domain: a dot and a two-or-more-letter suffix.
+     * Local parts are checked by Laravel's RFC validator; this pattern refuses domains such as "example".
+     */
+    public const EMAIL_DOMAIN_PATTERN = '/^[^@\s]+@(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,}$/';
+
+    public const EMAIL_MESSAGE = 'Enter a valid email with a proper domain, for example name@example.com.';
+
+    /** @return array<int, string> */
+    public static function staffEmail(): array
+    {
+        return ['nullable', 'string', 'max:255', 'email:rfc', 'regex:'.self::EMAIL_DOMAIN_PATTERN];
+    }
 
     /**
      * Driver password, from the sign up and reset screens: at least 10 characters,
@@ -143,6 +158,7 @@ class Rules
             function (string $attribute, mixed $value, \Closure $fail) use ($ignoreUserId): void {
                 if (self::emailTaken((string) $value, $ignoreUserId)) {
                     $fail('This Gmail account is already registered. Try signing in.');
+
                     return;
                 }
 
@@ -203,7 +219,7 @@ class Rules
     {
         $key = self::emailKey($email);
 
-        return \App\Models\User::query()
+        return User::query()
             ->when($ignoreUserId, fn ($query) => $query->where('id', '!=', $ignoreUserId))
             ->where(fn ($query) => $query->where('email_key', $key)->orWhere('email', self::email($email))->orWhere('pending_email', self::email($email)))
             ->exists();
@@ -218,8 +234,8 @@ class Rules
     /** True when another driver account already has this name. */
     public static function driverNameTaken(string $name, ?int $ignoreUserId = null): bool
     {
-        return \App\Models\User::query()
-            ->where('role', \App\Models\User::ROLE_DRIVER)
+        return User::query()
+            ->where('role', User::ROLE_DRIVER)
             ->when($ignoreUserId, fn ($query) => $query->where('id', '!=', $ignoreUserId))
             ->where('name_key', self::nameKey($name))
             ->exists();

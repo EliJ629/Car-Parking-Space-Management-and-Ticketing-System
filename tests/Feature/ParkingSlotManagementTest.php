@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\ActivityLog;
 use App\Models\ParkingSlot;
+use App\Models\SystemSetting;
 use App\Models\User;
 use Database\Seeders\DatabaseSeeder;
 use Database\Seeders\ParkingSlotSeeder;
@@ -210,7 +211,8 @@ class ParkingSlotManagementTest extends TestCase
             ->assertOk()
             ->assertSee('A-01')
             ->assertDontSee('A-02')
-            ->assertSee('Filter');
+            ->assertSee('data-auto-filter', false)
+            ->assertDontSee('>Apply<', false);
 
         $this->get(route('manager.slots.edit', $available))
             ->assertOk()
@@ -220,6 +222,50 @@ class ParkingSlotManagementTest extends TestCase
         $this->get(route('manager.slots.service.edit', $available))
             ->assertOk()
             ->assertSee('Take A-01 out of service');
+    }
+
+    public function test_slot_and_zone_limits_are_enforced_on_creation_and_zone_moves(): void
+    {
+        $manager = User::factory()->create([
+            'role' => User::ROLE_MANAGER,
+            'status' => User::STATUS_ACTIVE,
+        ]);
+        SystemSetting::updateOrCreate(['key' => 'maximum_slots_per_zone'], ['value' => json_encode(2), 'group' => 'parking']);
+        SystemSetting::updateOrCreate(['key' => 'maximum_active_zones'], ['value' => json_encode(2), 'group' => 'parking']);
+
+        foreach (['A-01', 'A-02'] as $code) {
+            ParkingSlot::create([
+                'code' => $code,
+                'zone' => 'Zone A',
+                'type' => ParkingSlot::TYPE_STANDARD,
+                'status' => ParkingSlot::STATUS_AVAILABLE,
+            ]);
+        }
+
+        $this->actingAs($manager)
+            ->post(route('manager.slots.store'), ['code' => 'A-03', 'zone' => 'Zone A', 'type' => ParkingSlot::TYPE_STANDARD])
+            ->assertSessionHasErrors('zone');
+
+        ParkingSlot::create([
+            'code' => 'B-01',
+            'zone' => 'Zone B',
+            'type' => ParkingSlot::TYPE_STANDARD,
+            'status' => ParkingSlot::STATUS_AVAILABLE,
+        ]);
+
+        $this->post(route('manager.slots.store'), ['code' => 'C-01', 'zone' => 'Zone C', 'type' => ParkingSlot::TYPE_STANDARD])
+            ->assertSessionHasErrors('zone');
+
+        $zoneB = ParkingSlot::where('code', 'B-01')->firstOrFail();
+        $this->patch(route('manager.slots.update', $zoneB), ['zone' => 'Zone A', 'type' => ParkingSlot::TYPE_STANDARD])
+            ->assertSessionHasErrors('zone');
+
+        $this->flushSession();
+
+        $zoneA = ParkingSlot::where('code', 'A-01')->firstOrFail();
+        $this->patch(route('manager.slots.update', $zoneA), ['zone' => 'Zone A', 'type' => ParkingSlot::TYPE_STANDARD, 'notes' => 'Near lift'])
+            ->assertSessionHasNoErrors();
+        $this->assertSame('Near lift', $zoneA->fresh()->notes);
     }
 
     public function test_parking_slot_seeder_creates_ten_slots_per_zone_without_overwriting_existing_slots(): void

@@ -171,8 +171,20 @@ class Lot
 
     public static function advanceDays(): int
     {
-        // Drivers can reserve one or two days ahead. The Parking Manager picks which on the Settings screen.
-        return min(2, max(1, (int) self::setting('maximum_advance_booking_days', 2)));
+        // The Parking Manager sets how far ahead drivers may reserve on the Settings screen.
+        return max(1, (int) self::setting('maximum_advance_booking_days', 2));
+    }
+
+    /** The most slots a single zone may hold. */
+    public static function maxSlotsPerZone(): int
+    {
+        return max(1, (int) self::setting('maximum_slots_per_zone', 20));
+    }
+
+    /** The most zones that may contain slots at the same time. */
+    public static function maxActiveZones(): int
+    {
+        return max(1, (int) self::setting('maximum_active_zones', 26));
     }
 
     public static function exitWindowMinutes(): int

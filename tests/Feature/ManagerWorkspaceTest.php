@@ -12,6 +12,7 @@ use App\Models\ParkingSession;
 use App\Models\ParkingSlot;
 use App\Models\SystemSetting;
 use App\Models\User;
+use App\Support\Lot;
 use Database\Seeders\ManagerDefaultsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
@@ -76,6 +77,77 @@ class ManagerWorkspaceTest extends TestCase
 
         $this->delete(route('manager.discounts.destroy', $discount))->assertRedirect(route('manager.rates.index'));
         $this->assertDatabaseHas('activity_logs', ['action' => 'discount_deleted']);
+    }
+
+    public function test_discount_percent_accepts_the_full_zero_to_one_hundred_range(): void
+    {
+        $manager = $this->manager();
+        $this->seed(ManagerDefaultsSeeder::class);
+        $this->actingAs($manager);
+
+        foreach ([0, 100] as $percent) {
+            $this->post(route('manager.discounts.store'), [
+                'name' => "Range {$percent}",
+                'percent' => $percent,
+                'proof_label' => 'Validation card',
+            ])->assertSessionHasNoErrors();
+            $this->assertDatabaseHas('parking_discounts', ['name' => "Range {$percent}", 'percent' => $percent]);
+        }
+
+        $this->post(route('manager.discounts.store'), ['name' => 'Too high', 'percent' => 101, 'proof_label' => 'Validation card'])
+            ->assertSessionHasErrors('percent');
+        $this->post(route('manager.discounts.store'), ['name' => 'Too low', 'percent' => -1, 'proof_label' => 'Validation card'])
+            ->assertSessionHasErrors('percent');
+    }
+
+    public function test_temporary_rates_fall_back_to_the_normal_rate_and_can_be_canceled(): void
+    {
+        $manager = $this->manager();
+        $this->seed(ManagerDefaultsSeeder::class);
+        $this->actingAs($manager);
+
+        $normal = ParkingRateSet::effectiveAt();
+        $start = Lot::now()->addMinute()->startOfMinute();
+        $end = $start->copy()->addHours(2);
+
+        $this->post(route('manager.rates.store'), [
+            'first_hour_fee' => 45,
+            'additional_hour_fee' => 25,
+            'daily_maximum' => 300,
+            'lost_ticket_penalty' => 100,
+            'overstay_penalty' => 150,
+            'effective_at' => $start->format('Y-m-d H:i:s'),
+            'ends_at' => $end->format('Y-m-d H:i:s'),
+            'reason' => 'Event rate',
+        ])->assertSessionHasNoErrors();
+
+        $temporary = ParkingRateSet::latest('id')->firstOrFail();
+        $this->assertNotNull($temporary->ends_at);
+        $this->assertSame($temporary->id, ParkingRateSet::effectiveAt($temporary->effective_at->copy()->addMinutes(30))?->id);
+        $this->assertSame($normal->id, ParkingRateSet::effectiveAt($temporary->ends_at->copy()->addMinute())?->id);
+
+        $this->delete(route('manager.rates.destroy', $normal))->assertSessionHasErrors('rate');
+        $this->assertDatabaseHas('parking_rate_sets', ['id' => $normal->id]);
+
+        $this->delete(route('manager.rates.destroy', $temporary))->assertRedirect(route('manager.rates.index'));
+        $this->assertDatabaseMissing('parking_rate_sets', ['id' => $temporary->id]);
+        $this->assertSame($normal->id, ParkingRateSet::effectiveAt()?->id);
+    }
+
+    public function test_activity_log_date_range_filters_records_and_rejects_a_reversed_range(): void
+    {
+        $manager = $this->manager();
+        $early = ActivityLog::record('early_event', $manager, null, 'Early record', 'manager');
+        $early->forceFill(['created_at' => Lot::parse('2026-10-10', '10:00:00')])->save();
+        $late = ActivityLog::record('late_event', $manager, null, 'Late record', 'manager');
+        $late->forceFill(['created_at' => Lot::parse('2026-10-12', '10:00:00')])->save();
+
+        $this->actingAs($manager)
+            ->get(route('manager.activity.index', ['from' => '2026-10-11', 'to' => '2026-10-13']))
+            ->assertOk()->assertSee('Late record')->assertDontSee('Early record');
+
+        $this->get(route('manager.activity.index', ['from' => '2026-10-13', 'to' => '2026-10-11']))
+            ->assertSessionHasErrors('to');
     }
 
     public function test_manager_can_create_and_update_a_private_pin_after_confirming_password(): void
@@ -212,6 +284,8 @@ class ManagerWorkspaceTest extends TestCase
                 'reservation_grace_minutes' => 12,
                 'early_check_in_minutes' => 25,
                 'maximum_advance_booking_days' => 2,
+                'maximum_slots_per_zone' => 20,
+                'maximum_active_zones' => 26,
                 'exit_window_minutes' => 18,
                 'reservation_reminder_minutes' => 20,
                 'notify_reservation_confirmed' => '1',
@@ -232,7 +306,7 @@ class ManagerWorkspaceTest extends TestCase
     public function test_records_sales_reports_and_csv_exports_use_persisted_transactions(): void
     {
         // The Records screen opens on today's date in lot time (Manila); fix the clock to midday so the test does not depend on when it runs.
-        $this->travelTo(\App\Support\Lot::now()->setTime(12, 0));
+        $this->travelTo(Lot::now()->setTime(12, 0));
         $manager = $this->manager();
         $slot = ParkingSlot::create([
             'code' => 'A-01',
@@ -275,7 +349,7 @@ class ManagerWorkspaceTest extends TestCase
             'session_id' => $session->id,
         ]);
 
-        $date = \App\Support\Lot::now()->toDateString();
+        $date = Lot::now()->toDateString();
         $this->actingAs($manager)
             ->get(route('manager.records.index', ['date' => $date]))
             ->assertOk()->assertSee('PK-0001')->assertSee('ABC1234');
@@ -329,7 +403,10 @@ class ManagerWorkspaceTest extends TestCase
 
         $log = ActivityLog::where('action', 'incident_status_updated')->firstOrFail();
         $this->get(route('manager.activity.index'))->assertOk()->assertSee('incident_status_updated');
-        $this->get(route('manager.activity.show', $log))->assertOk()->assertSee('under_review');
+        $this->get(route('manager.activity.show', $log))->assertOk()
+            ->assertSee('under_review')
+            ->assertSee('Before')
+            ->assertSee('After');
         $this->assertDatabaseHas('activity_logs', ['action' => 'incident_reported']);
     }
 

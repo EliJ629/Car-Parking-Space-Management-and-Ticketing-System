@@ -9,7 +9,7 @@
   </div>
 </section>
 
-<form class="manager-filter-panel" method="GET" action="{{ route('manager.slots.index') }}">
+<form class="manager-filter-panel" method="GET" action="{{ route('manager.slots.index') }}" data-auto-filter>
   <div class="manager-filter-field">
     <label class="f" for="filter-status">Status</label>
     <select id="filter-status" name="status">
@@ -32,8 +32,7 @@
     <label class="f" for="filter-search">Search</label>
     <input id="filter-search" name="q" type="search" value="{{ $filters['q'] ?? '' }}" maxlength="100" placeholder="Slot, zone, or note">
   </div>
-  <button class="btn sm" type="submit">Filter</button>
-  @if ($filters !== [])
+  @if (array_filter($filters))
     <a class="manager-text-link" href="{{ route('manager.slots.index') }}">Clear</a>
   @endif
 </form>

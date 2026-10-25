@@ -21,6 +21,7 @@
         <option value="{{ $zone }}" @selected(old('zone', $slot->zone ?? 'Zone A') === $zone)>{{ $zone }}</option>
       @endforeach
     </select>
+    <p class="hint">Up to {{ \App\Support\Lot::maxSlotsPerZone() }} slots per zone and {{ \App\Support\Lot::maxActiveZones() }} zones. Change these limits in Settings.</p>
     @error('zone')<p class="err">{{ $message }}</p>@enderror
   </div>
 

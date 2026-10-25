@@ -7,7 +7,15 @@
   <div class="manager-field-wide"><span>Subject</span><strong>{{ $entry->subject ?? '—' }}</strong></div>
 </div>
   <h2 class="manager-subheading">Stored details</h2>
-  @if ($entry->details)
+  @if (is_array($entry->details) && $entry->details !== [])
+    <div class="manager-detail-section">
+      <div class="manager-detail-list">
+        @foreach ($entry->details as $label => $value)
+          @include('staff.manager.activity._detail-item', ['label' => $label, 'value' => $value])
+        @endforeach
+      </div>
+    </div>
+  @elseif ($entry->details)
     <pre class="manager-json">{{ json_encode($entry->details, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) }}</pre>
   @else
     <p class="manager-muted">This entry predates detailed change snapshots.</p>

@@ -3,7 +3,6 @@
 namespace Tests\Feature;
 
 use App\Models\Notice;
-use App\Models\ParkingPayment;
 use App\Models\ParkingReservation;
 use App\Models\ParkingSession;
 use App\Models\ParkingSlot;
@@ -14,6 +13,7 @@ use Database\Seeders\ManagerDefaultsSeeder;
 use Database\Seeders\ParkingSlotSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
@@ -56,7 +56,7 @@ class ReservationApprovalTest extends TestCase
     }
 
     /** @return array<string, mixed> */
-    private function form(User $driver, string $slotCode, ?\Illuminate\Support\Carbon $at = null): array
+    private function form(User $driver, string $slotCode, ?Carbon $at = null): array
     {
         $at ??= Lot::now()->addHours(3);
 
@@ -209,13 +209,13 @@ class ReservationApprovalTest extends TestCase
         $this->actingAs($driver)->get(route('driver.bookings.show', $reservation))->assertOk()->assertSee('Pending exit');
     }
 
-    public function test_advance_booking_is_one_or_two_days_as_the_manager_sets_it(): void
+    public function test_advance_booking_uses_the_manager_configured_limit(): void
     {
         $this->lot();
         $driver = $this->driver();
 
         SystemSetting::query()->where('key', 'maximum_advance_booking_days')->update(['value' => json_encode(9)]);
-        $this->assertSame(2, Lot::advanceDays(), 'A saved value above 2 is held at 2.');
+        $this->assertSame(9, Lot::advanceDays());
 
         SystemSetting::query()->where('key', 'maximum_advance_booking_days')->update(['value' => json_encode(1)]);
         $this->assertSame(1, Lot::advanceDays());

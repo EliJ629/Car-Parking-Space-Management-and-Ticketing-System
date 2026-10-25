@@ -9,6 +9,7 @@
     @endforeach
   </div>
   <h2 class="manager-subheading">Parking and reservations</h2>
+  <p class="hint" style="margin:0 0 10px">Zone limits apply when a manager adds a slot or moves a slot into another zone.</p>
   <div class="manager-form-grid">
     @foreach ($fields as $key => $field)
       @if ($field['group'] === 'parking')

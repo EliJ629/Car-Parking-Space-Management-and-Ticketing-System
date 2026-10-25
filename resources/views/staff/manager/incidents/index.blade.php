@@ -4,11 +4,14 @@
   <div class="manager-stat"><strong>{{ $autoOpenCount }}</strong><span>Automatic alerts open</span></div>
   <div class="manager-stat"><strong>{{ $weekCount }}</strong><span>Reported this week</span></div>
 </section>
-<form class="manager-filter-panel" method="GET" action="{{ route('manager.incidents.index') }}">
+<form class="manager-filter-panel" method="GET" action="{{ route('manager.incidents.index') }}" data-auto-filter>
   <div class="manager-filter-field"><label class="f" for="incident-status">Status</label><select id="incident-status" name="status"><option value="">All statuses</option>@foreach ($statuses as $value)<option value="{{ $value }}" @selected(($filters['status'] ?? '') === $value)>{{ strtoupper(str_replace('_', ' ', $value)) }}</option>@endforeach</select></div>
   <div class="manager-filter-field"><label class="f" for="incident-category">Category</label><select id="incident-category" name="category"><option value="">All categories</option>@foreach ($categories as $value)<option value="{{ $value }}" @selected(($filters['category'] ?? '') === $value)>{{ $value }}</option>@endforeach</select></div>
   <div class="manager-filter-field"><label class="f" for="incident-source">Source</label><select id="incident-source" name="source"><option value="">Auto and manual</option><option value="auto" @selected(($filters['source'] ?? '') === 'auto')>Automatic</option><option value="manual" @selected(($filters['source'] ?? '') === 'manual')>Manual</option></select></div>
-  <div class="manager-filter-field manager-search-field"><label class="f" for="incident-search">Search</label><input id="incident-search" name="q" value="{{ $filters['q'] ?? '' }}" maxlength="100" placeholder="ID, plate, or location"></div><button class="btn sm" type="submit">Filter</button>
+  <div class="manager-filter-field manager-search-field"><label class="f" for="incident-search">Search</label><input id="incident-search" name="q" value="{{ $filters['q'] ?? '' }}" maxlength="100" placeholder="ID, plate, or location"></div>
+  @if (array_filter($filters))
+    <a class="manager-text-link" href="{{ route('manager.incidents.index') }}">Clear</a>
+  @endif
 </form>
 <div class="manager-table-wrap"><table class="manager-table"><thead><tr><th>ID</th><th>Reported</th><th>Category</th><th>Source</th><th>Vehicle / location</th><th>By</th><th>Status</th></tr></thead><tbody>
 @forelse ($incidents as $incident)
