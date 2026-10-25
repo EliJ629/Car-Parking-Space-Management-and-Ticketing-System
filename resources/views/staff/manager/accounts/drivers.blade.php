@@ -2,9 +2,12 @@
   <p class="eyebrow">Accounts and roles</p><div class="manager-heading-row"><div><h1>Driver accounts</h1><p class="manager-page-lede">Review registered driver profiles and suspend accounts when needed.</p></div></div>
 </section>
 <nav class="manager-tabs" aria-label="Account type"><a href="{{ route('manager.accounts.index') }}">Staff accounts</a><a class="active" aria-current="page" href="{{ route('manager.drivers.index') }}">Driver accounts</a></nav>
-<form class="manager-filter-panel" method="GET" action="{{ route('manager.drivers.index') }}">
+<form class="manager-filter-panel" method="GET" action="{{ route('manager.drivers.index') }}" data-auto-filter>
   <div class="manager-filter-field"><label class="f" for="driver-status">Status</label><select id="driver-status" name="status"><option value="">All</option>@foreach (['active','suspended','inactive'] as $value)<option value="{{ $value }}" @selected(($filters['status'] ?? '') === $value)>{{ ucfirst($value) }}</option>@endforeach</select></div>
-  <div class="manager-filter-field manager-search-field"><label class="f" for="driver-q">Search</label><input id="driver-q" name="q" value="{{ $filters['q'] ?? '' }}" placeholder="Name or email"></div><button class="btn sm" type="submit">Filter</button>
+  <div class="manager-filter-field manager-search-field"><label class="f" for="driver-q">Search</label><input id="driver-q" name="q" value="{{ $filters['q'] ?? '' }}" placeholder="Name or email" maxlength="100"></div>
+  @if (array_filter($filters))
+    <a class="manager-text-link" href="{{ route('manager.drivers.index') }}">Clear</a>
+  @endif
 </form>
 <div class="manager-table-wrap"><table class="manager-table"><thead><tr><th>Name</th><th>Email</th><th>Mobile</th><th>Vehicles</th><th>Status</th><th>Actions</th></tr></thead><tbody>
 @forelse ($drivers as $driver)

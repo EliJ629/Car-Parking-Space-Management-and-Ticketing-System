@@ -23,11 +23,20 @@ class RatePolicyController extends ManagerController
     {
         return $this->managerPage('Rates and policies', 'rates', view('staff.manager.rates.index', [
             'currentRate' => ParkingRateSet::effectiveAt(),
-            'upcomingRates' => ParkingRateSet::query()->where('effective_at', '>', now())->orderBy('effective_at')->get(),
+            'upcomingRates' => ParkingRateSet::query()
+                ->whereNull('ends_at')
+                ->where('effective_at', '>', now())
+                ->orderBy('effective_at')
+                ->get(),
+            'temporaryRates' => ParkingRateSet::query()
+                ->whereNotNull('ends_at')
+                ->where('ends_at', '>', now())
+                ->orderBy('effective_at')
+                ->get(),
             'discounts' => ParkingDiscount::query()->orderBy('name')->get(),
             'managerPinIsSet' => $request->user()->hasManagerPin(),
             'history' => ActivityLog::query()->with('user')
-                ->where('action', 'rate_set_created')
+                ->whereIn('action', ['rate_set_created', 'rate_set_canceled'])
                 ->latest('created_at')
                 ->limit(10)
                 ->get(),
@@ -92,6 +101,7 @@ class RatePolicyController extends ManagerController
             'lost_ticket_penalty' => $money,
             'overstay_penalty' => $money,
             'effective_at' => ['required', 'date'],
+            'ends_at' => ['nullable', 'date'],
             'reason' => ['required', 'string', 'min:3', 'max:255'],
         ], [
             'first_hour_fee.required' => 'Enter the first hour fee.',
@@ -105,13 +115,17 @@ class RatePolicyController extends ManagerController
             '*.min' => 'The amount cannot be below 0.',
             '*.max' => 'The amount is too large.',
             'effective_at.required' => 'Choose when the new rates start.',
-            'effective_at.date' => 'Choose a valid date and time.',
+            'effective_at.date' => 'Choose a valid start date and time.',
+            'ends_at.date' => 'Choose a valid end date and time.',
             'reason.required' => 'Write the reason for this change.',
             'reason.min' => 'Write the reason for this change.',
         ]);
 
         // The manager types lot time (Asia/Manila). Rates are kept in UTC like every other time.
         $effective = Carbon::parse($data['effective_at'], Lot::TIMEZONE)->setTimezone('UTC');
+        $ends = ! empty($data['ends_at'])
+            ? Carbon::parse($data['ends_at'], Lot::TIMEZONE)->setTimezone('UTC')
+            : null;
 
         if ($effective->lessThan(now()->startOfMinute())) {
             return back()->withInput()->withErrors(['effective_at' => 'Choose a start time that is not in the past.']);
@@ -121,7 +135,16 @@ class RatePolicyController extends ManagerController
             return back()->withInput()->withErrors(['effective_at' => 'Choose a start time within the next 2 years.']);
         }
 
+        if ($ends !== null && $ends->lessThanOrEqualTo($effective)) {
+            return back()->withInput()->withErrors(['ends_at' => 'The end time must be later than the start time.']);
+        }
+
+        if ($ends !== null && $ends->greaterThan(now()->addYears(2))) {
+            return back()->withInput()->withErrors(['ends_at' => 'Choose an end time within the next 2 years.']);
+        }
+
         $data['effective_at'] = $effective;
+        $data['ends_at'] = $ends;
 
         $rate = DB::transaction(function () use ($data, $request): ParkingRateSet {
             $rate = ParkingRateSet::create($data + ['created_by' => $request->user()->id]);
@@ -139,6 +162,7 @@ class RatePolicyController extends ManagerController
                     'lost_ticket_penalty',
                     'overstay_penalty',
                     'effective_at',
+                    'ends_at',
                     'reason',
                 ])],
             );
@@ -149,12 +173,47 @@ class RatePolicyController extends ManagerController
         return redirect()->route('manager.rates.index')->with('status', "Rate set #{$rate->id} was scheduled.");
     }
 
+    public function destroyRate(Request $request, ParkingRateSet $rate): RedirectResponse
+    {
+        if (! $rate->canBeCanceled()) {
+            return back()->withErrors([
+                'rate' => 'The current normal rate cannot be removed. Schedule a replacement rate instead.',
+            ]);
+        }
+
+        $before = $rate->only([
+            'first_hour_fee',
+            'additional_hour_fee',
+            'daily_maximum',
+            'lost_ticket_penalty',
+            'overstay_penalty',
+            'effective_at',
+            'ends_at',
+            'reason',
+        ]);
+
+        DB::transaction(function () use ($rate, $request, $before): void {
+            ActivityLog::record(
+                'rate_set_canceled',
+                $request->user(),
+                $request,
+                $before['reason'],
+                'manager',
+                ['before' => $before],
+            );
+
+            $rate->delete();
+        });
+
+        return redirect()->route('manager.rates.index')->with('status', 'The rate change was canceled.');
+    }
+
     public function storeDiscount(Request $request): RedirectResponse
     {
         Rules::tidy($request, 'name', 'proof_label');
         $data = $request->validate([
             'name' => ['required', 'string', 'min:2', 'max:80', 'unique:parking_discounts,name'],
-            'percent' => ['required', 'integer', 'between:1,100'],
+            'percent' => ['required', 'integer', 'between:0,100'],
             'proof_label' => ['required', 'string', 'min:2', 'max:80'],
             'requires_manager_pin' => ['sometimes', 'boolean'],
         ], $this->discountMessages());
@@ -175,7 +234,7 @@ class RatePolicyController extends ManagerController
         Rules::tidy($request, 'name', 'proof_label');
         $data = $request->validate([
             'name' => ['required', 'string', 'min:2', 'max:80', Rule::unique('parking_discounts', 'name')->ignore($discount->id)],
-            'percent' => ['required', 'integer', 'between:1,100'],
+            'percent' => ['required', 'integer', 'between:0,100'],
             'proof_label' => ['required', 'string', 'min:2', 'max:80'],
             'requires_manager_pin' => ['sometimes', 'boolean'],
             'active' => ['sometimes', 'boolean'],
@@ -214,8 +273,8 @@ class RatePolicyController extends ManagerController
             'name.min' => 'Enter the discount name.',
             'name.unique' => 'A discount with this name already exists.',
             'percent.required' => 'Enter the discount percent.',
-            'percent.integer' => 'Enter a whole number from 1 to 100.',
-            'percent.between' => 'Enter a percent from 1 to 100.',
+            'percent.integer' => 'Enter a whole number from 0 to 100.',
+            'percent.between' => 'Enter a percent from 0 to 100.',
             'proof_label.required' => 'Enter the proof the attendant must see.',
             'proof_label.min' => 'Enter the proof the attendant must see.',
         ];

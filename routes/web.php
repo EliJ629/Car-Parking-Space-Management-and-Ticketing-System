@@ -69,6 +69,7 @@ Route::prefix('staff/manager')->name('manager.')->middleware(['area:staff', 'rol
 
     Route::get('rates', [RatePolicyController::class, 'index'])->name('rates.index');
     Route::post('rates', [RatePolicyController::class, 'storeRate'])->name('rates.store');
+    Route::delete('rates/{rate}', [RatePolicyController::class, 'destroyRate'])->name('rates.destroy');
     Route::put('rates/manager-pin', [RatePolicyController::class, 'saveManagerPin'])
         ->middleware('throttle:5,1')
         ->name('rates.manager-pin');

@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Incident;
 use App\Models\ParkingPayment;
+use App\Models\ParkingRateSet;
 use App\Models\ParkingReservation;
 use App\Models\ParkingSession;
 use App\Models\ParkingSlot;
@@ -15,7 +16,11 @@ use App\Support\Lot;
 use Database\Seeders\ManagerDefaultsSeeder;
 use Database\Seeders\ParkingSlotSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Routing\Middleware\ThrottleRequests;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
+use PHPUnit\Framework\AssertionFailedError;
 use Tests\TestCase;
 
 /** Input rules and lot-time behaviour found in the system audit. */
@@ -58,7 +63,7 @@ class AuditValidationTest extends TestCase
     public function test_sign_up_rejects_plates_names_phones_and_passwords_that_break_the_rules(): void
     {
         // The sign up route is rate limited; this test sends many bad forms in a row.
-        $this->withoutMiddleware(\Illuminate\Routing\Middleware\ThrottleRequests::class);
+        $this->withoutMiddleware(ThrottleRequests::class);
 
         foreach ([
             ['plate_number' => 'A12'],
@@ -83,7 +88,7 @@ class AuditValidationTest extends TestCase
             $response = $this->post(route('driver.register'), $this->signUp($bad));
             try {
                 $response->assertSessionHasErrors($key);
-            } catch (\PHPUnit\Framework\AssertionFailedError $e) {
+            } catch (AssertionFailedError $e) {
                 $this->fail('Not refused: '.json_encode($bad));
             }
         }
@@ -93,7 +98,7 @@ class AuditValidationTest extends TestCase
 
     public function test_sign_up_accepts_short_numeric_and_government_style_plates(): void
     {
-        $this->withoutMiddleware(\Illuminate\Routing\Middleware\ThrottleRequests::class);
+        $this->withoutMiddleware(ThrottleRequests::class);
 
         foreach (['7', '12', 'SENATE 5', 'PNP 1234', 'ABC 1234', '1234 AB'] as $i => $plate) {
             $this->post(route('driver.register'), $this->signUp([
@@ -195,6 +200,8 @@ class AuditValidationTest extends TestCase
         foreach ([
             ['name' => 'A1'], ['username' => 'ab'], ['username' => 'has space'], ['email' => 'bad'], ['phone' => '123'], ['role' => 'driver'],
             ['email' => '', 'phone' => ''],
+            ['email' => 'ana@example'], ['email' => 'ana@example.c'], ['email' => 'ana@example.123'],
+            ['phone' => '091711100001'], ['phone' => '08171110000'],
         ] as $bad) {
             $this->post(route('manager.accounts.store'), $bad + $good)->assertSessionHasErrors();
         }
@@ -238,10 +245,12 @@ class AuditValidationTest extends TestCase
         $this->post(route('manager.rates.store'), ['first_hour_fee' => -1] + $rate)->assertSessionHasErrors('first_hour_fee');
         $this->post(route('manager.rates.store'), ['first_hour_fee' => '12.345'] + $rate)->assertSessionHasErrors('first_hour_fee');
         $this->post(route('manager.rates.store'), ['effective_at' => Lot::now()->subDay()->format('Y-m-d H:i:s')] + $rate)->assertSessionHasErrors('effective_at');
+        $this->post(route('manager.rates.store'), ['ends_at' => $when->copy()->subMinute()->format('Y-m-d H:i:s')] + $rate)->assertSessionHasErrors('ends_at');
+        $this->post(route('manager.rates.store'), ['ends_at' => $when->format('Y-m-d H:i:s')] + $rate)->assertSessionHasErrors('ends_at');
         $this->post(route('manager.rates.store'), ['reason' => 'x'] + $rate)->assertSessionHasErrors('reason');
 
         $this->post(route('manager.rates.store'), $rate)->assertSessionHasNoErrors();
-        $stored = \App\Models\ParkingRateSet::latest('id')->firstOrFail();
+        $stored = ParkingRateSet::latest('id')->firstOrFail();
         $this->assertSame($when->copy()->setTimezone('UTC')->format('Y-m-d H:i'), $stored->effective_at->format('Y-m-d H:i'));
     }
 
@@ -303,8 +312,8 @@ class AuditValidationTest extends TestCase
     {
         $manager = $this->manager();
         // 17:00 UTC on Oct 15 is 01:00 on Oct 16 in Manila.
-        $this->makeSession('PK-LATE', \Illuminate\Support\Carbon::parse('2026-10-15 17:00:00', 'UTC'));
-        $this->makeSession('PK-EARLY', \Illuminate\Support\Carbon::parse('2026-10-15 15:00:00', 'UTC'), 'DEF5678');
+        $this->makeSession('PK-LATE', Carbon::parse('2026-10-15 17:00:00', 'UTC'));
+        $this->makeSession('PK-EARLY', Carbon::parse('2026-10-15 15:00:00', 'UTC'), 'DEF5678');
 
         $this->actingAs($manager)->get(route('manager.records.index', ['date' => '2026-10-16']))
             ->assertOk()->assertSee('PK-LATE')->assertDontSee('PK-EARLY');
@@ -319,7 +328,7 @@ class AuditValidationTest extends TestCase
     public function test_sales_totals_group_by_lot_day_and_refuse_unreasonable_ranges(): void
     {
         $manager = $this->manager();
-        $session = $this->makeSession('PK-5001', \Illuminate\Support\Carbon::parse('2026-10-15 16:00:00', 'UTC'));
+        $session = $this->makeSession('PK-5001', Carbon::parse('2026-10-15 16:00:00', 'UTC'));
         ParkingPayment::create([
             'receipt_number' => 'RC-5001', 'session_id' => $session->id, 'received_by' => $manager->id, 'base_fee' => 30, 'additional_fee' => 0,
             'penalty' => 0, 'discount' => 0, 'total' => 30, 'method' => 'cash', 'paid_at' => '2026-10-15 17:30:00',
@@ -342,7 +351,7 @@ class AuditValidationTest extends TestCase
         $this->assertSame('PK-0001', Csv::cell('PK-0001'));
 
         $manager = $this->manager();
-        $this->makeSession('=HYPERLINK("x")', \Illuminate\Support\Carbon::parse('2026-10-16 02:00:00', 'UTC'));
+        $this->makeSession('=HYPERLINK("x")', Carbon::parse('2026-10-16 02:00:00', 'UTC'));
 
         $csv = $this->actingAs($manager)->get(route('manager.records.export', ['tab' => 'sessions', 'date' => '2026-10-16']))->streamedContent();
         $this->assertStringContainsString("'=HYPERLINK", $csv);

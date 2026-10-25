@@ -116,6 +116,99 @@ document.querySelectorAll('input[data-live-gmail]').forEach(function(input){
   }
   input.addEventListener('input',run);run();
 });
+/* Filter panels update themselves: <form data-auto-filter>.
+   Selects and dates submit straight away; typed searches wait briefly so each key does not send a request.
+   Paired date inputs marked data-range-start / data-range-end validate the range before submitting. */
+document.querySelectorAll('form[data-auto-filter]').forEach(function(form){
+  var timer=null;
+  var starts=[].slice.call(form.querySelectorAll('[data-range-start]'));
+  var ends=[].slice.call(form.querySelectorAll('[data-range-end]'));
+
+  function checkRange(show){
+    var ok=true;
+    starts.forEach(function(start,index){
+      var end=ends[index];
+      if(!end)return;
+      if(start.value){end.min=start.value}else{end.removeAttribute('min')}
+      var message='';
+      if(start.value&&end.value&&end.value<start.value)message='The end date cannot be before the start date.';
+      end.setCustomValidity(message);
+      if(message){ok=false;if(show)end.reportValidity()}
+    });
+    return ok;
+  }
+
+  function submit(){
+    if(timer){clearTimeout(timer);timer=null}
+    if(!checkRange(true))return;
+    var page=form.querySelector('input[name=page]');if(page)page.value='1';
+    if(typeof form.requestSubmit==='function')form.requestSubmit();else form.submit();
+  }
+
+  starts.concat(ends).forEach(function(input){
+    input.addEventListener('change',function(){checkRange(false);submit()});
+  });
+
+  form.addEventListener('change',function(event){
+    var field=event.target;
+    if(!field.matches('select,input[type=date],input[type=checkbox],input[type=radio]'))return;
+    if(field.hasAttribute('data-range-start')||field.hasAttribute('data-range-end'))return;
+    submit();
+  });
+
+  form.addEventListener('input',function(event){
+    var field=event.target;
+    if(field.tagName!=='INPUT'||field.type==='hidden')return;
+    if(field.matches('[type=date],[type=checkbox],[type=radio]'))return;
+    if(timer)clearTimeout(timer);
+    timer=setTimeout(submit,450);
+  });
+
+  form.addEventListener('keydown',function(event){
+    if(event.key!=='Enter'||event.target.tagName!=='INPUT')return;
+    if(event.target.type==='hidden')return;
+    event.preventDefault();submit();
+  });
+
+  form.addEventListener('submit',function(event){
+    if(!checkRange(true))event.preventDefault();
+  });
+
+  checkRange(false);
+});
+/* A form that only needs a start/end check: <form data-range-check data-range-strict>.
+   Strict means the end must be later than the start, not merely the same day. */
+document.querySelectorAll('form[data-range-check]').forEach(function(form){
+  var starts=[].slice.call(form.querySelectorAll('[data-range-start]'));
+  var ends=[].slice.call(form.querySelectorAll('[data-range-end]'));
+  var strict=form.hasAttribute('data-range-strict');
+
+  function check(show){
+    var ok=true;
+    starts.forEach(function(start,index){
+      var end=ends[index];
+      if(!end)return;
+      if(!end.hasAttribute('data-base-min'))end.setAttribute('data-base-min',end.getAttribute('min')||'');
+      var base=end.getAttribute('data-base-min');
+      if(start.value){end.min=start.value}else if(base){end.min=base}else{end.removeAttribute('min')}
+      var message='';
+      if(start.value&&end.value){
+        if(end.value<start.value)message='The end time cannot be before the start time.';
+        else if(strict&&end.value===start.value)message='The end time must be later than the start time.';
+      }
+      end.setCustomValidity(message);
+      if(message){ok=false;if(show)end.reportValidity()}
+    });
+    return ok;
+  }
+
+  starts.concat(ends).forEach(function(input){
+    input.addEventListener('input',function(){check(false)});
+    input.addEventListener('change',function(){check(false)});
+  });
+  form.addEventListener('submit',function(event){if(!check(true))event.preventDefault()});
+  check(false);
+});
 })();
 window.LOT=[['A-01','av'],['A-02','occ'],['A-03','av'],['A-04','res'],['A-05','occ'],['A-06','av'],['A-07','pend'],['A-08','av'],['B-01','occ'],['B-02','av'],['B-03','res'],['B-04','out']];
 window.LBL={av:'Available',occ:'Occupied',res:'Reserved',pend:'Pending exit',out:'Out of service'};

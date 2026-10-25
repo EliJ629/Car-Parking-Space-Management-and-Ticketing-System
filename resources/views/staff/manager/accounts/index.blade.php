@@ -11,11 +11,13 @@
   <a href="{{ route('manager.drivers.index') }}">Driver accounts</a>
 </nav>
 
-<form class="manager-filter-panel" method="GET" action="{{ route('manager.accounts.index') }}">
+<form class="manager-filter-panel" method="GET" action="{{ route('manager.accounts.index') }}" data-auto-filter>
   <div class="manager-filter-field"><label class="f" for="account-role">Role</label><select id="account-role" name="role"><option value="">All roles</option>@foreach ($roles as $value => $label)<option value="{{ $value }}" @selected(($filters['role'] ?? '') === $value)>{{ $label }}</option>@endforeach</select></div>
   <div class="manager-filter-field"><label class="f" for="account-status">Status</label><select id="account-status" name="status"><option value="">All statuses</option>@foreach (['active','inactive','suspended'] as $value)<option value="{{ $value }}" @selected(($filters['status'] ?? '') === $value)>{{ ucfirst($value) }}</option>@endforeach</select></div>
   <div class="manager-filter-field manager-search-field"><label class="f" for="account-q">Search</label><input id="account-q" name="q" value="{{ $filters['q'] ?? '' }}" placeholder="Name or username" maxlength="100"></div>
-  <button class="btn sm" type="submit">Filter</button>
+  @if (array_filter($filters))
+    <a class="manager-text-link" href="{{ route('manager.accounts.index') }}">Clear</a>
+  @endif
 </form>
 
 <div class="manager-table-wrap">

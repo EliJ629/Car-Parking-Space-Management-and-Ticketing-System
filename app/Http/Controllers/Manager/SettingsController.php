@@ -21,7 +21,9 @@ class SettingsController extends ManagerController
         'long_parking_threshold_hours' => ['group' => 'parking', 'label' => 'Long-parking threshold (hours)', 'min' => 1, 'max' => 72],
         'reservation_grace_minutes' => ['group' => 'parking', 'label' => 'Reservation grace period (minutes)', 'min' => 0, 'max' => 240],
         'early_check_in_minutes' => ['group' => 'parking', 'label' => 'Early check-in window (minutes)', 'min' => 0, 'max' => 1440],
-        'maximum_advance_booking_days' => ['group' => 'parking', 'label' => 'Maximum advance booking (days, 1 or 2)', 'min' => 1, 'max' => 2],
+        'maximum_advance_booking_days' => ['group' => 'parking', 'label' => 'Maximum advance booking (days)', 'min' => 1, 'max' => 30],
+        'maximum_slots_per_zone' => ['group' => 'parking', 'label' => 'Maximum parking slots per zone', 'min' => 1, 'max' => 100, 'default' => 20],
+        'maximum_active_zones' => ['group' => 'parking', 'label' => 'Maximum active zones', 'min' => 1, 'max' => 26, 'default' => 26],
         'exit_window_minutes' => ['group' => 'parking', 'label' => 'Exit window after payment (minutes)', 'min' => 1, 'max' => 240],
         'reservation_reminder_minutes' => ['group' => 'notifications', 'label' => 'Reservation reminder before arrival (minutes)', 'min' => 0, 'max' => 1440],
         'lot_name' => ['group' => 'receipt', 'label' => 'Lot name', 'max_length' => 120],
@@ -38,7 +40,10 @@ class SettingsController extends ManagerController
 
     public function index(): View
     {
-        $settings = SystemSetting::values();
+        $defaults = collect(self::FIELDS)
+            ->mapWithKeys(fn (array $field, string $key): array => isset($field['default']) ? [$key => $field['default']] : [])
+            ->all();
+        $settings = array_merge($defaults, SystemSetting::values());
 
         return $this->managerPage('Settings', 'settings', view('staff.manager.settings.index', [
             'settings' => $settings,

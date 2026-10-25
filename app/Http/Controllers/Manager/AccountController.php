@@ -247,7 +247,7 @@ class AccountController extends ManagerController
         $rules = [
             'name' => Rules::personName(),
             'username' => ['required', 'string', 'min:4', 'max:40', 'regex:/^[A-Za-z0-9]+$/', $unique('username')],
-            'email' => ['nullable', 'email:rfc', 'max:255', $unique('email'), 'required_without:phone'],
+            'email' => [...Rules::staffEmail(), $unique('email'), 'required_without:phone'],
             'phone' => [...Rules::mobile(false), 'required_without:email'],
         ];
 
@@ -260,7 +260,8 @@ class AccountController extends ManagerController
             'username.min' => 'The username needs at least 4 letters or numbers.',
             'username.max' => 'The username can have up to 40 characters.',
             'username.regex' => 'Use letters and numbers only in the username, with no spaces.',
-            'email.email' => 'Enter a valid email, for example name@example.com.',
+            'email.email' => Rules::EMAIL_MESSAGE,
+            'email.regex' => Rules::EMAIL_MESSAGE,
             'email.max' => 'The email can have up to 255 characters.',
             'email.required_without' => 'Enter an email or a mobile number.',
             'phone.regex' => Rules::MOBILE_MESSAGE,

@@ -1,10 +1,13 @@
 <section class="manager-page-heading"><p class="eyebrow">Audit and accountability</p><h1>Activity log</h1><p class="manager-page-lede">Actions are recorded with their actor and time. Activity entries cannot be edited or deleted.</p></section>
-<form class="manager-filter-panel" method="GET" action="{{ route('manager.activity.index') }}">
-  <div class="manager-filter-field"><label class="f" for="activity-date">Date</label><input id="activity-date" name="date" type="date" value="{{ $filters['date'] ?? '' }}"></div>
+<form class="manager-filter-panel" method="GET" action="{{ route('manager.activity.index') }}" data-auto-filter>
+  <div class="manager-filter-field"><label class="f" for="activity-from">From</label><input id="activity-from" name="from" type="date" value="{{ $dateFrom ?? '' }}" data-range-start></div>
+  <div class="manager-filter-field"><label class="f" for="activity-to">To</label><input id="activity-to" name="to" type="date" value="{{ $filters['to'] ?? $dateFrom ?? '' }}" data-range-end></div>
   <div class="manager-filter-field"><label class="f" for="activity-user">User</label><select id="activity-user" name="user_id"><option value="">All users</option>@foreach ($users as $user)<option value="{{ $user->id }}" @selected((string) ($filters['user_id'] ?? '') === (string) $user->id)>{{ $user->name }}</option>@endforeach</select></div>
   <div class="manager-filter-field"><label class="f" for="activity-action">Action</label><select id="activity-action" name="action"><option value="">All actions</option>@foreach ($actions as $action)<option value="{{ $action }}" @selected(($filters['action'] ?? '') === $action)>{{ str_replace('_', ' ', ucfirst($action)) }}</option>@endforeach</select></div>
   <div class="manager-filter-field manager-search-field"><label class="f" for="activity-search">Search</label><input id="activity-search" name="q" value="{{ $filters['q'] ?? '' }}" maxlength="100" placeholder="Ticket, plate, slot, or action"></div>
-  <button class="btn sm" type="submit">Filter</button>
+  @if ($dateFrom)
+    <a class="manager-text-link" href="{{ route('manager.activity.index', collect($filters)->except(['from', 'to', 'date'])->filter()->all()) }}">Clear dates</a>
+  @endif
 </form>
 <div class="manager-table-wrap"><table class="manager-table"><thead><tr><th>Time</th><th>User</th><th>Area</th><th>Action</th><th>Subject / details</th><th></th></tr></thead><tbody>
 @forelse ($logs as $entry)

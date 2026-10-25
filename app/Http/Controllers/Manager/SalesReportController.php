@@ -170,8 +170,10 @@ class SalesReportController extends ManagerController
         return [
             'from.date_format' => 'Enter the start date as year-month-day.',
             'from.required' => 'Choose a start date.',
+            'from.regex' => 'Choose a start date between the years 2000 and 2099.',
             'to.date_format' => 'Enter the end date as year-month-day.',
             'to.required' => 'Choose an end date.',
+            'to.regex' => 'Choose an end date between the years 2000 and 2099.',
             'to.after_or_equal' => 'The end date cannot be before the start date.',
         ];
     }
@@ -184,8 +186,8 @@ class SalesReportController extends ManagerController
     private function range(Request $request, int $defaultDays = 0): array
     {
         $data = $request->validate([
-            'from' => ['nullable', 'date_format:Y-m-d', 'after:2000-01-01', 'before:2100-01-01'],
-            'to' => ['nullable', 'date_format:Y-m-d', 'after:2000-01-01', 'before:2100-01-01', 'after_or_equal:from'],
+            'from' => ['nullable', 'date_format:Y-m-d', 'after:2000-01-01', 'regex:/^20[0-9]{2}-[0-9]{2}-[0-9]{2}$/'],
+            'to' => ['nullable', 'date_format:Y-m-d', 'after:2000-01-01', 'regex:/^20[0-9]{2}-[0-9]{2}-[0-9]{2}$/', 'after_or_equal:from'],
         ], $this->rangeMessages());
         $today = Lot::now()->startOfDay();
         $from = isset($data['from']) ? Carbon::parse($data['from'], Lot::TIMEZONE)->startOfDay() : null;

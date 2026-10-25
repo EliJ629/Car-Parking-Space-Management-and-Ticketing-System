@@ -1,8 +1,7 @@
 <section class="manager-page-heading"><p class="eyebrow">Manager reports</p><h1>Sales and revenue</h1><p class="manager-page-lede">Figures are calculated from paid cash receipts and match the Payments records.</p></section>
-<form class="manager-filter-panel" method="GET" action="{{ route('manager.sales.index') }}">
-  <div class="manager-filter-field"><label class="f" for="sales-from">From</label><input id="sales-from" name="from" type="date" value="{{ $from }}" required></div>
-  <div class="manager-filter-field"><label class="f" for="sales-to">To</label><input id="sales-to" name="to" type="date" value="{{ $to }}" required></div>
-  <button class="btn sm" type="submit">Apply range</button>
+<form class="manager-filter-panel" method="GET" action="{{ route('manager.sales.index') }}" data-auto-filter>
+  <div class="manager-filter-field"><label class="f" for="sales-from">From</label><input id="sales-from" name="from" type="date" value="{{ $from }}" data-range-start required></div>
+  <div class="manager-filter-field"><label class="f" for="sales-to">To</label><input id="sales-to" name="to" type="date" value="{{ $to }}" data-range-end required></div>
   <a class="btn ghost sm" href="{{ route('manager.sales.export', ['from' => $from, 'to' => $to]) }}">Export CSV</a>
 </form>
 <section class="manager-stat-grid manager-sales-stats">

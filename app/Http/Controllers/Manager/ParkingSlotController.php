@@ -4,10 +4,12 @@ namespace App\Http\Controllers\Manager;
 
 use App\Models\ActivityLog;
 use App\Models\ParkingSlot;
+use App\Support\Lot;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class ParkingSlotController extends ManagerController
 {
@@ -81,6 +83,8 @@ class ParkingSlotController extends ManagerController
             'notes' => ['nullable', 'string', 'max:1000'],
         ], $this->messages());
 
+        $this->assertZoneLimits($validated['zone']);
+
         $slot = ParkingSlot::create($validated + [
             'status' => ParkingSlot::STATUS_AVAILABLE,
         ]);
@@ -122,6 +126,11 @@ class ParkingSlotController extends ManagerController
             'type' => ['required', Rule::in([ParkingSlot::TYPE_STANDARD, ParkingSlot::TYPE_PWD])],
             'notes' => ['nullable', 'string', 'max:1000'],
         ], $this->messages());
+
+        // Existing zones may predate a lower limit; only a move into another zone is checked.
+        if ($validated['zone'] !== $slot->zone) {
+            $this->assertZoneLimits($validated['zone'], $slot);
+        }
 
         $before = $slot->only(['code', 'zone', 'type', 'status', 'notes']);
         $slot->update($validated);
@@ -227,6 +236,41 @@ class ParkingSlotController extends ManagerController
         $slot->delete();
 
         return redirect()->route('manager.slots.index')->with('status', "{$slot->code} was removed.");
+    }
+
+    /**
+     * Keep new and edited slots inside the limits set on the Settings screen.
+     *
+     * @throws ValidationException
+     */
+    private function assertZoneLimits(string $zone, ?ParkingSlot $moving = null): void
+    {
+        $slotLimit = Lot::maxSlotsPerZone();
+        $zoneLimit = Lot::maxActiveZones();
+
+        $slotsInZone = ParkingSlot::query()
+            ->where('zone', $zone)
+            ->when($moving, fn ($query) => $query->where('id', '!=', $moving->id))
+            ->count();
+
+        if ($slotsInZone >= $slotLimit) {
+            throw ValidationException::withMessages([
+                'zone' => "{$zone} already has {$slotLimit} slots, the configured maximum per zone. Change the limit in Settings before adding more.",
+            ]);
+        }
+
+        $zonesAfterSave = ParkingSlot::query()
+            ->when($moving, fn ($query) => $query->where('id', '!=', $moving->id))
+            ->distinct()
+            ->pluck('zone')
+            ->push($zone)
+            ->unique();
+
+        if ($zonesAfterSave->count() > $zoneLimit) {
+            throw ValidationException::withMessages([
+                'zone' => "The configured maximum of {$zoneLimit} active zones is reached. Use an existing zone or change the limit in Settings.",
+            ]);
+        }
     }
 
     /**
