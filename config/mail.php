@@ -3,6 +3,12 @@
 return [
 
     /*
+    | Addresses that may register while the mail service only delivers to approved test addresses.
+    | A comma separated list in REGISTRATION_EMAIL_ALLOWLIST. Leave it empty to accept any Gmail address.
+    */
+    'registration_allowlist' => array_values(array_filter(array_map('trim', explode(',', (string) env('REGISTRATION_EMAIL_ALLOWLIST', ''))))),
+
+    /*
     |--------------------------------------------------------------------------
     | Default Mailer
     |--------------------------------------------------------------------------

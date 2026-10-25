@@ -211,7 +211,7 @@ class ManagerWorkspaceTest extends TestCase
                 'long_parking_threshold_hours' => 14,
                 'reservation_grace_minutes' => 12,
                 'early_check_in_minutes' => 25,
-                'maximum_advance_booking_days' => 5,
+                'maximum_advance_booking_days' => 2,
                 'exit_window_minutes' => 18,
                 'reservation_reminder_minutes' => 20,
                 'notify_reservation_confirmed' => '1',
@@ -231,6 +231,8 @@ class ManagerWorkspaceTest extends TestCase
 
     public function test_records_sales_reports_and_csv_exports_use_persisted_transactions(): void
     {
+        // The Records screen opens on today's date in lot time (Manila); fix the clock to midday so the test does not depend on when it runs.
+        $this->travelTo(\App\Support\Lot::now()->setTime(12, 0));
         $manager = $this->manager();
         $slot = ParkingSlot::create([
             'code' => 'A-01',

@@ -114,12 +114,16 @@ class Lot
         return max(0, intdiv(max(0, $to->getTimestamp() - $from->getTimestamp()), 60));
     }
 
-    /** "ABC1234" becomes "ABC 1234". */
+    /** "ABC1234" becomes "ABC 1234", "SENATE3" becomes "SENATE 3". Digits only, such as "5", stay as they are. */
     public static function plate(?string $plate): string
     {
         $plate = (string) $plate;
 
-        return strlen($plate) > 3 ? substr($plate, 0, 3).' '.substr($plate, 3) : $plate;
+        if (preg_match('/^([A-Z]+)([0-9]+)$/', $plate, $m) || preg_match('/^([0-9]+)([A-Z]+)$/', $plate, $m)) {
+            return $m[1].' '.$m[2];
+        }
+
+        return $plate;
     }
 
     /** "0917 555 0142" */
@@ -167,7 +171,8 @@ class Lot
 
     public static function advanceDays(): int
     {
-        return max(1, (int) self::setting('maximum_advance_booking_days', 7));
+        // Drivers can reserve one or two days ahead. The Parking Manager picks which on the Settings screen.
+        return min(2, max(1, (int) self::setting('maximum_advance_booking_days', 2)));
     }
 
     public static function exitWindowMinutes(): int

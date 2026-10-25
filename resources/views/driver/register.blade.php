@@ -36,9 +36,10 @@
         @error('name')<p class="err">{{ $message }}</p>@enderror
       </div>
       <div class="fld">
-        <label class="f" for="email">Email</label>
-        <input id="email" name="email" type="email" value="{{ old('email') }}" maxlength="255" inputmode="email" autocomplete="email" autocapitalize="none" spellcheck="false" required @error('email') aria-invalid="true" @enderror>
+        <label class="f" for="email">Gmail address</label>
+        <input id="email" name="email" type="email" value="{{ old('email') }}" maxlength="255" inputmode="email" autocomplete="email" autocapitalize="none" spellcheck="false" placeholder="maria.santos@gmail.com" data-live-gmail data-live-target="#email-note" required @error('email') aria-invalid="true" @enderror>
         @error('email')<p class="err">{{ $message }}</p>@enderror
+        <p class="hint" id="email-note">We send a 6 digit code to this Gmail address.</p>
       </div>
       <div class="fld">
         <label class="f" for="phone">Mobile number</label>
@@ -46,49 +47,26 @@
         @error('phone')<p class="err">{{ $message }}</p>@else<p class="hint">Used only to tell you about your reservation.</p>@enderror
       </div>
 
-      <h2 class="sec-t">Your car</h2>
-      <div class="grid2">
-        <div class="fld">
-          <label class="f" for="plate_number">Plate number</label>
-          <input id="plate_number" name="plate_number" type="text" class="tin" value="{{ old('plate_number') }}" placeholder="ABC 1234" maxlength="10" autocapitalize="characters" autocomplete="off" required @error('plate_number') aria-invalid="true" @enderror>
-          @error('plate_number')<p class="err">{{ $message }}</p>@enderror
-        </div>
-        <div class="fld">
-          <label class="f" for="vehicle_type">Vehicle type</label>
-          <select id="vehicle_type" name="vehicle_type" required @error('vehicle_type') aria-invalid="true" @enderror>
-            <option value="">Choose</option>
-            @foreach ($vehicleTypes as $type)
-              <option value="{{ $type }}" @selected(old('vehicle_type') === $type)>{{ $type }}</option>
-            @endforeach
-          </select>
-          @error('vehicle_type')<p class="err">{{ $message }}</p>@enderror
-        </div>
-      </div>
+      <h2 class="sec-t">Your vehicle</h2>
       <div class="fld">
-        <label class="f" for="make_model">Car model</label>
-        <input id="make_model" name="make_model" type="text" value="{{ old('make_model') }}" placeholder="Toyota Vios" maxlength="60" autocomplete="off" required @error('make_model') aria-invalid="true" @enderror>
-        @error('make_model')<p class="err">{{ $message }}</p>@else<p class="hint">Make and model, for example Toyota Vios.</p>@enderror
+        <label class="f" for="plate_number">Plate number</label>
+        <input id="plate_number" name="plate_number" type="text" class="tin" value="{{ old('plate_number') }}" placeholder="ABC 1234" maxlength="12" autocapitalize="characters" autocomplete="off" required @error('plate_number') aria-invalid="true" @enderror>
+        @error('plate_number')<p class="err">{{ $message }}</p>@else<p class="hint">Short plates of high offices, such as 5 or SENATE 3, are accepted.</p>@enderror
       </div>
-      <div class="fld">
-        <label class="f" for="color">Color</label>
-        <select id="color" name="color" required @error('color') aria-invalid="true" @enderror>
-          <option value="">Choose a color</option>
-          @foreach (\App\Models\Vehicle::COLORS as $c)
-            <option value="{{ $c }}" @selected(old('color') === $c)>{{ $c }}</option>
-          @endforeach
-        </select>
-        @error('color')<p class="err">{{ $message }}</p>@else<p class="hint">You can add more cars after you sign in.</p>@enderror
-      </div>
+      @include('partials.vehicle-fields', ['type' => old('vehicle_type')])
+      <p class="hint" style="margin:-4px 0 14px">You can add more vehicles after you sign in.</p>
 
       <h2 class="sec-t">Password</h2>
       <div class="fld">
         <label class="f" for="password">Password</label>
-        <input id="password" name="password" type="password" maxlength="64" autocomplete="new-password" required @error('password') aria-invalid="true" @enderror>
-        @error('password')<p class="err">{{ $message }}</p>@else<p class="hint">At least 10 characters, one number, one capital letter.</p>@enderror
+        <input id="password" name="password" type="password" maxlength="64" autocomplete="new-password" data-pwcheck="#pwrules" data-pwconfirm="#password_confirmation" data-pwmatch="#pw-match" required @error('password') aria-invalid="true" @enderror>
+        @error('password')<p class="err">{{ $message }}</p>@enderror
+        @include('partials.password-rules')
       </div>
       <div class="fld">
         <label class="f" for="password_confirmation">Confirm password</label>
         <input id="password_confirmation" name="password_confirmation" type="password" maxlength="64" autocomplete="new-password" required>
+        <p class="hint" id="pw-match" aria-live="polite"></p>
       </div>
 
       <button class="btn block" type="submit">Create account</button>
@@ -99,3 +77,7 @@
   </div>
 </div>
 @endsection
+
+@push('scripts')
+<script src="{{ asset('js/vehicle-form.js') }}?v={{ filemtime(public_path('js/vehicle-form.js')) }}"></script>
+@endpush

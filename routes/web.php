@@ -3,6 +3,7 @@
 use App\Http\Controllers\Driver\LoginController as DriverLoginController;
 use App\Http\Controllers\Driver\PasswordResetController;
 use App\Http\Controllers\Driver\RegisterController;
+use App\Http\Controllers\Driver\VerifyEmailController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\LandingController;
 use App\Http\Controllers\Manager\AccountController;
@@ -117,12 +118,21 @@ Route::prefix('driver')->name('driver.')->group(function () {
         Route::get('register', [RegisterController::class, 'create'])->name('register');
         Route::post('register', [RegisterController::class, 'store'])->middleware('throttle:10,1');
 
+        // The code step after sign up, and after a sign in with an email that was never confirmed.
+        Route::get('verify', [VerifyEmailController::class, 'show'])->name('verify');
+        Route::post('verify', [VerifyEmailController::class, 'check'])->middleware('throttle:15,1')->name('verify.check');
+        Route::post('verify/resend', [VerifyEmailController::class, 'resend'])->middleware('throttle:5,1')->name('verify.resend');
+        Route::post('verify/restart', [VerifyEmailController::class, 'restart'])->middleware('throttle:5,1')->name('verify.restart');
+
         Route::get('forgot-password', [PasswordResetController::class, 'request'])->name('password.request');
         Route::post('forgot-password', [PasswordResetController::class, 'email'])
             ->middleware('throttle:5,1')
             ->name('password.email');
         Route::post('reset-password', [PasswordResetController::class, 'update'])->middleware('throttle:10,1')->name('password.update');
     });
+
+    // The link in the email. Signed, so it works only as sent. Open to a signed in driver too (profile changes).
+    Route::get('verify-email/{user}/{hash}', [VerifyEmailController::class, 'link'])->middleware(['signed', 'throttle:20,1'])->name('verify.link');
 
     Route::middleware('area:driver')->group(function () {
         Route::get('home', [HomeController::class, 'driver'])->name('home');

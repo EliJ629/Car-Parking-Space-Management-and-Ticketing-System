@@ -3,6 +3,7 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Support\Rules;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -13,7 +14,7 @@ use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\Hash;
 
 #[Fillable(['name', 'username', 'email', 'phone', 'password', 'role', 'status', 'last_login_at', 'must_change_password'])]
-#[Hidden(['password', 'remember_token', 'manager_pin_hash'])]
+#[Hidden(['password', 'remember_token', 'manager_pin_hash', 'verification_code_hash'])]
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
@@ -51,9 +52,30 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'locked_until' => 'datetime',
             'last_login_at' => 'datetime',
+            'verification_code_expires_at' => 'datetime',
+            'verification_sent_at' => 'datetime',
             'must_change_password' => 'boolean',
             'password' => 'hashed',
         ];
+    }
+
+    protected static function booted(): void
+    {
+        // Keep the plain forms of the email and the name that the duplicate checks compare.
+        static::saving(function (User $user): void {
+            if ($user->isDirty('email') || ($user->email !== null && $user->email_key === null)) {
+                $user->email_key = $user->email ? Rules::emailKey($user->email) : null;
+            }
+
+            if ($user->isDirty('name') || $user->name_key === null) {
+                $user->name_key = Rules::nameKey($user->name);
+            }
+        });
+    }
+
+    public function hasVerifiedEmail(): bool
+    {
+        return $this->email_verified_at !== null;
     }
 
     public function vehicles(): HasMany

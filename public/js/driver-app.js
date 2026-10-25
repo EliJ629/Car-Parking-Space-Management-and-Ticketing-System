@@ -18,7 +18,6 @@
   document.querySelectorAll('dialog[data-autoopen]').forEach(openDialog);
   document.querySelectorAll('[data-print]').forEach(function (b) { b.addEventListener('click', function () { window.print(); }); });
   document.querySelectorAll('select[data-autosubmit]').forEach(function (s) { s.addEventListener('change', function () { s.form.submit(); }); });
-  document.querySelectorAll('.dtoast').forEach(function (t) { setTimeout(function () { t.hidden = true; }, 4500); });
 
   /* QR codes: <div data-qr="RSV-3H8P54"></div> */
   document.querySelectorAll('[data-qr]').forEach(function (el) {
@@ -32,7 +31,7 @@
     } catch (err) { /* the code is printed under the QR anyway */ }
   });
 
-  /* The bell: poll the unread count and show a banner for a new notification. */
+  /* The bell: poll the unread count and pop up a new notification. */
   var app = document.getElementById('dapp');
   if (app && app.getAttribute('data-count-url')) {
     var url = app.getAttribute('data-count-url');
@@ -44,11 +43,28 @@
     var first = parseInt(app.getAttribute('data-latest') || '0', 10);
     if (seen() < first) mark(first);
 
-    var banner = document.createElement('a');
-    banner.className = 'banner-app';
-    banner.hidden = true;
-    banner.setAttribute('role', 'status');
-    document.body.appendChild(banner);
+    var live = document.getElementById('notice-live');
+    var boxDlg = document.getElementById('notice-box');
+    var boxBody = document.getElementById('notice-box-body');
+
+    /* The bell opens the notifications box over the page. Without JavaScript it still links to the full page. */
+    var loadBox = function () {
+      boxBody.innerHTML = '<p class="sub">Loading</p>';
+      return fetch(bell.getAttribute('data-box'), { headers: { 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin' })
+        .then(function (r) { return r.ok ? r.text() : Promise.reject(); })
+        .then(function (html) { boxBody.innerHTML = html; })
+        .catch(function () { boxBody.innerHTML = '<p class="sub">Could not load your notifications. Check your connection and try again.</p>'; });
+    };
+    if (bell && boxDlg) {
+      bell.addEventListener('click', function (e) { e.preventDefault(); openDialog(boxDlg); loadBox(); });
+      boxBody.addEventListener('click', function (e) {
+        var rb = e.target.closest('[data-notices-read]');
+        if (!rb) return;
+        rb.disabled = true;
+        fetch(bell.getAttribute('data-read'), { method: 'POST', headers: { 'X-CSRF-TOKEN': bell.getAttribute('data-csrf'), 'Accept': 'application/json' }, credentials: 'same-origin' })
+          .then(function () { badge.hidden = true; badge.textContent = '0'; bell.setAttribute('aria-label', 'Notifications, 0 unread'); return loadBox(); });
+      });
+    }
 
     var tick = function () {
       if (document.hidden) return;
@@ -61,13 +77,13 @@
           if (bell) bell.setAttribute('aria-label', 'Notifications, ' + d.count + ' unread');
           if (d.latest && d.latest.id > seen()) {
             mark(d.latest.id);
-            banner.innerHTML = '';
-            var b = document.createElement('b'); b.textContent = d.latest.title;
-            var s = document.createElement('span'); s.textContent = d.latest.body;
-            banner.appendChild(b); banner.appendChild(s);
-            banner.href = d.latest.url;
-            banner.hidden = false;
-            setTimeout(function () { banner.hidden = true; }, 8000);
+            /* A pop-up, unless the driver is in the middle of another one. The bell still counts it. */
+            if (live && !document.querySelector('dialog[open]')) {
+              document.getElementById('nl-t').textContent = d.latest.title;
+              document.getElementById('nl-body').textContent = d.latest.body;
+              document.getElementById('nl-open').href = d.latest.url;
+              openDialog(live);
+            }
           }
         })
         .catch(function () { /* offline: try again next time */ });
@@ -116,6 +132,16 @@
       build();
     });
     build();
+  }
+
+  /* PWD ID photo: show a small preview of the chosen file. */
+  var idInput = document.getElementById('id_photo'), idPreview = document.getElementById('id-preview');
+  if (idInput && idPreview) {
+    idInput.addEventListener('change', function () {
+      var f = idInput.files && idInput.files[0];
+      if (!f || !/^image\//.test(f.type)) { idPreview.hidden = true; return; }
+      idPreview.src = URL.createObjectURL(f); idPreview.hidden = false;
+    });
   }
 
   /* Find parking: tap a slot to open its sheet. */

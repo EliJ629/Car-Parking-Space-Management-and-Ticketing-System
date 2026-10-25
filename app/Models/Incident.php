@@ -40,6 +40,27 @@ class Incident extends Model
         'Other',
     ];
 
+    /**
+     * What a report of each category must include. plate: required or optional. place: slot (an existing slot code),
+     * location (any place in the lot, typed), auto (taken from the parked vehicle), or optional.
+     * A plate that is given must belong to a vehicle that is parked now.
+     */
+    public const REQUIREMENTS = [
+        'Unauthorized parking' => ['plate' => 'required', 'place' => 'slot'],
+        'Unpaid vehicle attempting exit' => ['plate' => 'required', 'place' => 'auto'],
+        'Vehicle damage' => ['plate' => 'required', 'place' => 'slot'],
+        'Suspicious vehicle' => ['plate' => 'optional', 'place' => 'location'],
+        'Violation' => ['plate' => 'required', 'place' => 'slot'],
+        'Mismatched plate or details' => ['plate' => 'required', 'place' => 'slot'],
+        'Other' => ['plate' => 'optional', 'place' => 'optional'],
+    ];
+
+    /** @return array{plate:string,place:string} */
+    public static function requirements(?string $category): array
+    {
+        return self::REQUIREMENTS[(string) $category] ?? ['plate' => 'optional', 'place' => 'optional'];
+    }
+
     public const STATUSES = ['open', 'under_review', 'resolved'];
 
     /** What the Security Guard screens call a category, where the wording differs from the stored value. */

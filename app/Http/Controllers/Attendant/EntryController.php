@@ -322,6 +322,20 @@ class EntryController extends Controller
             ]);
         }
 
+        // Not approved yet, or turned down: no check in, and the QR code should not have been shown.
+        if ($rsv->status === ParkingReservation::STATUS_REJECTED || $rsv->isAwaitingApproval()) {
+            $rejected = $rsv->status === ParkingReservation::STATUS_REJECTED;
+
+            return response()->json([
+                'ok' => false,
+                'status' => $rejected ? 'rejected' : 'awaiting_approval',
+                'message' => $rejected
+                    ? "Reservation {$rsv->code} was not approved. The driver was told to choose a new slot."
+                    : "Reservation {$rsv->code} is not approved yet. Approve it first on the Reservations screen, then check the driver in.",
+                'url' => route('attendant.reservations.index'),
+            ]);
+        }
+
         // Already checked in or completed
         if (in_array($rsv->status, [ParkingReservation::STATUS_CHECKED_IN, ParkingReservation::STATUS_COMPLETED], true)) {
             return response()->json([
@@ -405,6 +419,15 @@ class EntryController extends Controller
             ->whereKey($validated['reservation_id'])
             ->with(['slot', 'driver', 'vehicle'])
             ->firstOrFail();
+
+        // The QR code only works for a reservation the booth attendant approved.
+        if (! $rsv->hasQr()) {
+            return back()->with('modal', [
+                'title' => 'This reservation is not approved',
+                'body' => "Reservation {$rsv->code} cannot be checked in until it is approved on the Reservations screen.",
+                'primary' => ['label' => 'Open reservations', 'url' => route('attendant.reservations.index')],
+            ]);
+        }
 
         // BA-28: Plate mismatch check
         if ($enteredPlate !== Vehicle::normalizePlate($rsv->plate_number)) {

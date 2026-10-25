@@ -159,7 +159,7 @@
     <div><span>Reservation fee</span><strong>Free</strong></div>
     <div><span>Reservation grace period</span><strong>{{ $settings['reservation_grace_minutes'] ?? 10 }} minutes</strong></div>
     <div><span>Early check-in</span><strong>{{ $settings['early_check_in_minutes'] ?? 30 }} minutes</strong></div>
-    <div><span>Advance booking</span><strong>{{ $settings['maximum_advance_booking_days'] ?? 7 }} days</strong></div>
+    <div><span>Advance booking</span><strong>{{ $settings['maximum_advance_booking_days'] ?? 2 }} days</strong></div>
     <div><span>Exit window after payment</span><strong>{{ $settings['exit_window_minutes'] ?? 15 }} minutes</strong></div>
     <div><span>Long-parking threshold</span><strong>{{ $settings['long_parking_threshold_hours'] ?? 12 }} hours</strong></div>
   </div>

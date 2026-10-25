@@ -49,6 +49,18 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  // Reject dialog: the text box shows only when "Other" is chosen.
+  document.querySelectorAll('[data-reject-reason]').forEach(select => {
+    const other = select.closest('form').querySelector('[data-reject-other]');
+    select.addEventListener('change', () => {
+      const show = select.value === 'other';
+      other.hidden = !show;
+      const input = other.querySelector('input');
+      input.required = show;
+      if (show) input.focus();
+    });
+  });
+
   // 3. Auto-dismiss toasts
   document.querySelectorAll('.ba-toast').forEach(toast => {
     setTimeout(() => {

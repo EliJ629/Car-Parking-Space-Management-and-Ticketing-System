@@ -6,14 +6,15 @@ use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
 use App\Models\User;
 use App\Models\Vehicle;
+use App\Services\EmailVerification;
 use App\Services\SignInService;
+use App\Services\VerificationMailFailed;
 use App\Support\Lot;
 use App\Support\Rules;
+use App\Support\VehicleCatalog;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
@@ -21,40 +22,44 @@ class RegisterController extends Controller
 {
     public function create(): View
     {
-        return view('driver.register', ['vehicleTypes' => Vehicle::TYPES]);
+        return view('driver.register', [
+            'vehicleTypes' => Vehicle::DRIVER_TYPES,
+            'catalog' => VehicleCatalog::forForm(),
+            'colors' => VehicleCatalog::colors(),
+            'form' => VehicleCatalog::formValues(null),
+        ]);
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request, EmailVerification $verification): RedirectResponse
     {
-        Rules::tidy($request, 'name', 'make_model');
+        $this->forgetStaleAccounts();
+
+        Rules::tidy($request, 'name');
         $request->merge([
             'email' => Rules::email($request->input('email')),
             'phone' => Lot::normalizePhone($request->input('phone')),
             'plate_number' => Vehicle::normalizePlate($request->input('plate_number')),
         ]);
 
-        $data = $request->validate([
-            'name' => Rules::personName(),
-            'email' => ['required', 'email:rfc', 'max:255', Rule::unique('users', 'email')],
+        $data = VehicleCatalog::validate($request, [
+            'name' => array_merge(Rules::personName(), [
+                fn (string $attribute, mixed $value, \Closure $fail) => Rules::driverNameTaken((string) $value)
+                    ? $fail('An account with this name already exists. If it is yours, sign in instead.')
+                    : null,
+            ]),
+            'email' => Rules::driverEmail(),
             'phone' => Rules::mobile(),
-            'plate_number' => Rules::plate(),
-            'vehicle_type' => ['required', Rule::in(Vehicle::TYPES)],
-            'make_model' => Rules::makeModel(),
-            'color' => ['required', Rule::in(Vehicle::COLORS)],
+            'plate_number' => array_merge(Rules::plate(), [
+                fn (string $attribute, mixed $value, \Closure $fail) => Vehicle::withTrashed()->where('plate_number', $value)->exists()
+                    ? $fail(Lot::plate((string) $value).' is already registered to an account. A plate can belong to one account only.')
+                    : null,
+            ]),
             'password' => Rules::driverPassword(),
-        ], Rules::personNameMessages() + Rules::makeModelMessages() + Rules::driverPasswordMessages() + [
-            'email.required' => 'Enter your email.',
-            'email.email' => 'Enter a valid email, for example maria@example.com.',
-            'email.max' => 'The email can have up to 255 characters.',
-            'email.unique' => 'This email is already registered. Try signing in.',
+        ], Rules::personNameMessages() + Rules::driverEmailMessages() + Rules::driverPasswordMessages() + [
             'phone.required' => 'Enter your mobile number.',
             'phone.regex' => Rules::MOBILE_MESSAGE,
             'plate_number.required' => 'Enter your plate number.',
             'plate_number.regex' => Rules::PLATE_MESSAGE,
-            'vehicle_type.required' => 'Choose your vehicle type.',
-            'vehicle_type.in' => 'Choose your vehicle type from the list.',
-            'color.required' => 'Choose your vehicle color.',
-            'color.in' => 'Choose a color from the list.',
         ]);
 
         $user = DB::transaction(function () use ($data) {
@@ -85,11 +90,38 @@ class RegisterController extends Controller
             return $user;
         });
 
+        try {
+            $verification->issue($user);
+        } catch (VerificationMailFailed) {
+            // The mail service did not take the address. Nothing is kept, so the person can try again.
+            Vehicle::withTrashed()->where('user_id', $user->id)->forceDelete();
+            $user->delete();
+
+            throw ValidationException::withMessages([
+                'email' => 'We could not send a code to '.$data['email'].'. Check that the Gmail address is spelled right and exists, then try again.',
+            ]);
+        }
+
         ActivityLog::record('driver_registered', $user, $request, null, SignInService::AREA_DRIVER);
+        $request->session()->put(VerifyEmailController::SESSION_KEY, $user->id);
 
-        Auth::login($user);
-        $request->session()->regenerate();
+        return redirect()->route('driver.verify')->with('status', 'We sent a 6 digit code to '.EmailVerification::mask($user->email).'.');
+    }
 
-        return redirect()->route('driver.home')->with('status', 'Your account is ready. Welcome to Bayline.');
+    /** An account that never confirmed its email holds a name, a Gmail address and a plate. After a day it lets them go. */
+    private function forgetStaleAccounts(): void
+    {
+        $stale = User::query()
+            ->where('role', User::ROLE_DRIVER)
+            ->whereNull('email_verified_at')
+            ->where('created_at', '<', now()->subDay())
+            ->pluck('id');
+
+        if ($stale->isEmpty()) {
+            return;
+        }
+
+        Vehicle::withTrashed()->whereIn('user_id', $stale)->forceDelete();
+        User::query()->whereIn('id', $stale)->delete();
     }
 }

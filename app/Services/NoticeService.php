@@ -24,6 +24,7 @@ class NoticeService
     /** Which Settings switch controls which kind of notice. Kinds not listed are always created. */
     private const SWITCHES = [
         'reservation_confirmed' => 'notify_reservation_confirmed',
+        'reservation_submitted' => 'notify_reservation_confirmed',
         'reservation_expired' => 'notify_reservation_expired',
         'long_parking' => 'notify_long_parking',
         'long_parking_report' => 'notify_long_parking',
@@ -62,17 +63,40 @@ class NoticeService
 
         return $this->toDriver($r->driver, 'N-01', 'reservation_confirmed', 'Reservation confirmed',
             "Reservation {$r->code} is confirmed for slot {$this->slotCode($r)} ".Lot::whenText($r->scheduled_at).'. '
-            .'Show the QR code to the booth attendant. You can check in from '.Lot::time($opens).' until '.Lot::time($ends).'.',
+            .'The booth attendant approved it. Show the QR code when you arrive. You can check in from '.Lot::time($opens).' until '.Lot::time($ends).'.',
             $r, ['code' => $r->code]);
+    }
+
+    /** The request is in and waits for the booth attendant. There is no QR code yet. */
+    public function reservationSubmitted(ParkingReservation $r): ?Notice
+    {
+        $id = $r->requires_id ? ' Your PWD ID photo was sent with it.' : '';
+
+        return $this->toDriver($r->driver, 'N-14', 'reservation_submitted', 'Reservation sent for approval',
+            "Reservation {$r->code} for slot {$this->slotCode($r)} ".Lot::whenText($r->scheduled_at).' is waiting for the booth attendant.'.$id
+            .' Your QR code appears once it is approved.',
+            $r, ['code' => $r->code]);
+    }
+
+    /** The attendant turned it down. The driver must choose a new slot. */
+    public function reservationRejected(ParkingReservation $r): ?Notice
+    {
+        $why = $r->rejection_reason ? ' Reason: '.rtrim($r->rejection_reason, '.').'.' : '';
+
+        return $this->toDriver($r->driver, 'N-15', 'reservation_rejected', 'Reservation not approved',
+            "Reservation {$r->code} for slot {$this->slotCode($r)} was not approved by the booth attendant.{$why} The slot was released. Please choose a new slot.",
+            $r, ['code' => $r->code, 'reason' => $r->rejection_reason]);
     }
 
     public function reservationExpired(ParkingReservation $r): ?Notice
     {
         $ends = $r->scheduled_at->copy()->addMinutes(Lot::graceMinutes());
+        $why = $r->approval_status === ParkingReservation::APPROVAL_PENDING
+            ? 'because the booth attendant did not approve it in time'
+            : 'because the vehicle did not check in within '.Lot::graceMinutes().' minutes';
 
         return $this->toDriver($r->driver, 'N-03', 'reservation_expired', 'Reservation expired',
-            "Reservation {$r->code} expired at ".Lot::time($ends).' because the vehicle did not check in within '
-            .Lot::graceMinutes().' minutes. The slot was released and the code no longer works.',
+            "Reservation {$r->code} expired at ".Lot::time($ends)." {$why}. The slot was released and the code no longer works.",
             $r);
     }
 
@@ -160,6 +184,15 @@ class NoticeService
     {
         $this->toRoles([User::ROLE_MANAGER], 'S-02', 'exit_request', 'Exit pending at the gate',
             Lot::plate($s->plate_number).' paid, waiting for the Guard.', $s, [], "s02-{$s->id}");
+    }
+
+    /** S-06. A new request is waiting for the booth attendant to approve or reject. */
+    public function staffReservationPending(ParkingReservation $r): void
+    {
+        $id = $r->requires_id ? ' PWD ID attached.' : '';
+
+        $this->toRoles([User::ROLE_ATTENDANT], 'S-06', 'reservation_pending', 'Reservation needs approval',
+            "{$r->code}, ".Lot::plate($r->plate_number).", slot {$this->slotCode($r)} ".Lot::whenText($r->scheduled_at).".{$id}", $r, [], "s06-{$r->id}");
     }
 
     public function staffReservationExpired(ParkingReservation $r): void

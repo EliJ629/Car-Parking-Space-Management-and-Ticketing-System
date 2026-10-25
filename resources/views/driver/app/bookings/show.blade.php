@@ -2,18 +2,19 @@
 
 @section('title', 'Reservation '.$reservation->code.' - Bayline')
 @section('tab', 'bookings')
-@section('heading', $fresh ? 'Reserved' : 'Reservation')
+@section('heading', $fresh ? 'Request sent' : 'Reservation')
 @section('back', route('driver.bookings'))
 
 @section('content')
 @php
     $r = $reservation;
-    $open = $r->status === 'booked';
+    $open = $r->hasQr();
+    $awaiting = $r->isAwaitingApproval();
     $slotCode = $r->slot?->code ?? $r->slot_code;
 @endphp
 
 @if ($fresh)
-  <div class="alert ok" role="status" style="margin-bottom:14px"><b>Your slot is reserved</b>Show this QR code to the booth attendant when you arrive. Check in by {{ \App\Support\Lot::time($holdEnds) }}, or the reservation expires and the slot is released.</div>
+  <div class="alert ok" role="status" style="margin-bottom:14px"><b>Request sent</b>The booth attendant will check your reservation. Your QR code appears here once it is approved, and we will notify you. Be there by {{ \App\Support\Lot::time($holdEnds) }}, or the reservation expires and the slot is released.</div>
 @endif
 @if (session('canceled'))
   <div class="alert" role="status" style="margin-bottom:14px"><b>Reservation canceled</b>Slot {{ $slotCode }} is free again.</div>
@@ -24,8 +25,13 @@
     <p class="lab" style="margin:0">Reservation code</p> @include('driver.app.partials.status', ['reservation' => $r])
   </div>
   <div class="qrbox {{ $open ? '' : 'void' }}" style="margin-top:12px">
-    <div data-qr="{{ $r->code }}" aria-hidden="false"></div>
+    @if ($open || in_array($r->status, ['checked_in', 'completed', 'expired', 'canceled'], true))
+      <div data-qr="{{ $r->code }}" aria-hidden="false"></div>
+    @else
+      <p class="fine" style="margin:30px 12px;text-align:center">{{ $awaiting ? 'QR code locked until the booth attendant approves.' : 'No QR code.' }}</p>
+    @endif
     <div class="rsv">{{ $r->code }}</div>
+    @if ($r->status === 'rejected')<span class="stamp">NOT APPROVED</span>@endif
     @if ($r->status === 'expired')<span class="stamp">EXPIRED</span>@endif
     @if ($r->status === 'canceled')<span class="stamp">CANCELED</span>@endif
     @if (in_array($r->status, ['checked_in', 'completed'], true))<span class="stamp used">USED</span>@endif
@@ -38,7 +44,14 @@
   </dl>
 </section>
 
-@if ($open)
+@if ($awaiting)
+  <section class="dcard paint" style="margin-top:14px">
+    <p class="lab">Waiting for approval</p>
+    <p style="margin:4px 0 0;font-size:14px">The booth attendant has to approve this reservation{{ $r->requires_id ? ' and check your PWD ID' : '' }}. Slot {{ $slotCode }} is held for you meanwhile. If it is not approved in time, the reservation expires.</p>
+  </section>
+@endif
+@if ($awaiting || $open)
+  @if ($open)
   <section class="dcard" style="margin-top:14px">
     <p class="lab">When to arrive</p>
     <ul class="tl">
@@ -47,6 +60,7 @@
       <li class="todo"><b>Slot released after {{ \App\Support\Lot::time($holdEnds) }}</b><span>{{ \App\Support\Lot::graceMinutes() }} minutes of grace, then the reservation expires</span></li>
     </ul>
   </section>
+  @endif
   <div class="actions"><button class="btn stop" type="button" data-open="#cancel-res">Cancel reservation</button></div>
 
   @push('dialogs')
@@ -63,6 +77,12 @@
     </form>
   </dialog>
   @endpush
+@elseif ($r->status === 'rejected')
+  <div class="alert stop" style="margin-top:14px"><b>This reservation was not approved</b>{{ $r->rejection_reason ? $r->rejection_reason.' ' : '' }}Slot {{ $slotCode }} was released. Please choose a new slot.</div>
+  <div class="actions"><a class="btn" href="{{ route('driver.reserve') }}">Choose a new slot</a></div>
+@elseif ($r->isPendingExit())
+  <div class="alert" style="margin-top:14px"><b>Pending exit</b>Your payment was received. Drive to the exit gate, where the guard will let you out.</div>
+  <div class="actions"><a class="btn" href="{{ route('driver.session') }}">View session</a></div>
 @elseif ($r->status === 'expired')
   <div class="alert stop" style="margin-top:14px"><b>This reservation expired</b>The vehicle did not check in within {{ \App\Support\Lot::graceMinutes() }} minutes of the arrival time, so the slot was released and the code no longer works.</div>
   <div class="actions"><a class="btn" href="{{ route('driver.reserve') }}">Reserve again</a></div>

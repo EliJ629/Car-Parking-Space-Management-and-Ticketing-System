@@ -28,6 +28,7 @@ Route::prefix('staff/guard')->name('guard.')->middleware(['area:staff', 'role:gu
     Route::get('incidents', [IncidentController::class, 'index'])->name('incidents');
     Route::get('incidents/create', [IncidentController::class, 'create'])->name('incidents.create');
     Route::post('incidents', [IncidentController::class, 'store'])->name('incidents.store');
+    Route::get('incidents/check-plate', [IncidentController::class, 'checkPlate'])->middleware('throttle:60,1')->name('incidents.check-plate');
     Route::get('incidents/long-parked', [IncidentController::class, 'longParked'])->name('incidents.long-parked');
     Route::post('incidents/long-parked', [IncidentController::class, 'storeLongParked'])->name('incidents.long-parked.store');
     Route::get('incidents/{incident}', [IncidentController::class, 'show'])->name('incidents.show');

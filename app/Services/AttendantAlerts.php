@@ -37,7 +37,7 @@ class AttendantAlerts
                     'time' => Lot::time($n->created_at),
                     'url' => match ($n->subject_type) {
                         'session' => route('attendant.exit.index', ['q' => ParkingSession::query()->whereKey($n->subject_id)->value('ticket_number')]),
-                        'reservation' => route('attendant.entry.reserved'),
+                        'reservation' => $n->kind === 'reservation_pending' ? route('attendant.reservations.index') : route('attendant.entry.reserved'),
                         default => route('attendant.home'),
                     },
                     'unread' => $n->isUnread(),
@@ -72,6 +72,7 @@ class AttendantAlerts
         $earlyWindowEnd = $now->copy()->addMinutes(Lot::earlyMinutes());
         $reservedSoon = ParkingReservation::query()
             ->where('status', ParkingReservation::STATUS_BOOKED)
+            ->where('approval_status', ParkingReservation::APPROVAL_APPROVED)
             ->whereBetween('scheduled_at', [$now->copy()->subMinutes(Lot::graceMinutes()), $earlyWindowEnd])
             ->with(['driver', 'slot'])
             ->get()
@@ -96,6 +97,15 @@ class AttendantAlerts
             ->unique('key')
             ->sortByDesc('sort')
             ->values();
+    }
+
+    /** Reservations waiting for the attendant to approve or reject. */
+    public function pendingApprovals(): int
+    {
+        return ParkingReservation::query()
+            ->where('status', ParkingReservation::STATUS_BOOKED)
+            ->where('approval_status', ParkingReservation::APPROVAL_PENDING)
+            ->count();
     }
 
     public function count(?Collection $items = null): int

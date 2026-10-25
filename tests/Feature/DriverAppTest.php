@@ -120,7 +120,7 @@ class DriverAppTest extends TestCase
         $this->actingAs($driver)->get(route('driver.bookings.show', $reservation))->assertOk()->assertSee($reservation->code)->assertSee('Cancel reservation');
         $this->actingAs($driver)->get(route('driver.bookings'))->assertOk()->assertSee($reservation->code);
         $this->actingAs($driver)->get(route('driver.home'))->assertOk()->assertSee('Your next reservation');
-        $this->assertTrue(Notice::where('user_id', $driver->id)->where('code', 'N-01')->exists());
+        $this->assertTrue(Notice::where('user_id', $driver->id)->where('code', 'N-14')->exists());
 
         $this->actingAs($driver)->post(route('driver.bookings.cancel', $reservation))->assertRedirect(route('driver.bookings.show', $reservation));
         $this->assertSame('canceled', $reservation->fresh()->status);
@@ -152,8 +152,8 @@ class DriverAppTest extends TestCase
         $at = Lot::now()->addHours(3);
         $q = ['date' => $at->format('Y-m-d'), 'time' => $at->format('H:i'), 'vehicle' => $vehicle->id];
 
-        $this->actingAs($driver)->post(route('driver.reserve.store'), $this->ack() + $q + ['slot' => ParkingSlot::where('code', 'A-01')->value('id')])->assertRedirect();
-        $this->actingAs($driver)->post(route('driver.reserve.store'), $this->ack() + $q + ['slot' => ParkingSlot::where('code', 'A-02')->value('id')])->assertSessionHas('modal');
+        $this->actingAs($driver)->post(route('driver.reserve.store'), $this->ack() + $q + ['slot' => ParkingSlot::where('code', 'A-07')->value('id')])->assertRedirect();
+        $this->actingAs($driver)->post(route('driver.reserve.store'), $this->ack() + $q + ['slot' => ParkingSlot::where('code', 'A-08')->value('id')])->assertSessionHas('modal');
         $this->assertStringContainsString('already have a reservation', session('modal')['title']);
 
         // A different day does not get around it, and a second vehicle does not either.
@@ -176,8 +176,8 @@ class DriverAppTest extends TestCase
         $at = Lot::now()->addHours(3);
         $q = ['date' => $at->format('Y-m-d'), 'time' => $at->format('H:i')];
 
-        $this->actingAs($first)->post(route('driver.reserve.store'), $this->ack() + $q + ['vehicle' => $first->vehicles()->first()->id, 'slot' => ParkingSlot::where('code', 'A-01')->value('id')])->assertRedirect();
-        $this->actingAs($second)->post(route('driver.reserve.store'), $this->ack() + $q + ['vehicle' => $second->vehicles()->first()->id, 'slot' => ParkingSlot::where('code', 'A-02')->value('id')])->assertRedirect();
+        $this->actingAs($first)->post(route('driver.reserve.store'), $this->ack() + $q + ['vehicle' => $first->vehicles()->first()->id, 'slot' => ParkingSlot::where('code', 'A-07')->value('id')])->assertRedirect();
+        $this->actingAs($second)->post(route('driver.reserve.store'), $this->ack() + $q + ['vehicle' => $second->vehicles()->first()->id, 'slot' => ParkingSlot::where('code', 'A-08')->value('id')])->assertRedirect();
         $this->assertSame(2, ParkingReservation::count());
         $this->assertSame(1, ParkingReservation::where('driver_id', $second->id)->count());
     }
@@ -190,9 +190,9 @@ class DriverAppTest extends TestCase
         $at = Lot::now()->addHours(3);
         $q = ['date' => $at->format('Y-m-d'), 'time' => $at->format('H:i'), 'vehicle' => $vehicle->id];
 
-        $this->actingAs($driver)->post(route('driver.reserve.store'), $this->ack() + $q + ['slot' => ParkingSlot::where('code', 'A-01')->value('id')]);
+        $this->actingAs($driver)->post(route('driver.reserve.store'), $this->ack() + $q + ['slot' => ParkingSlot::where('code', 'A-07')->value('id')]);
         $this->actingAs($driver)->post(route('driver.bookings.cancel', ParkingReservation::first()));
-        $this->actingAs($driver)->post(route('driver.reserve.store'), $this->ack() + $q + ['slot' => ParkingSlot::where('code', 'A-02')->value('id')])->assertRedirect();
+        $this->actingAs($driver)->post(route('driver.reserve.store'), $this->ack() + $q + ['slot' => ParkingSlot::where('code', 'A-08')->value('id')])->assertRedirect();
         $this->assertSame(2, ParkingReservation::count());
     }
 
@@ -230,18 +230,18 @@ class DriverAppTest extends TestCase
         $this->assertSame(2, ParkingReservation::where('driver_id', $driver->id)->count());
     }
 
-    public function test_the_car_model_is_required_when_a_driver_signs_up(): void
+    public function test_the_vehicle_model_is_required_when_a_driver_signs_up(): void
     {
         $base = [
-            'name' => 'Pedro Cruz', 'email' => 'pedro@example.com', 'phone' => '09171234567', 'plate_number' => 'KLM 4455',
-            'vehicle_type' => 'Car', 'color' => 'Black', 'password' => 'Driver123x', 'password_confirmation' => 'Driver123x',
+            'name' => 'Pedro Cruz', 'email' => 'pedro.cruz@gmail.com', 'phone' => '09171234567', 'plate_number' => 'KLM 4455',
+            'vehicle_type' => 'Car', 'color' => 'Black', 'password' => 'Driver123x!', 'password_confirmation' => 'Driver123x!',
         ];
 
-        $this->get(route('driver.register'))->assertOk()->assertSee('Car model');
+        $this->get(route('driver.register'))->assertOk()->assertSee('Vehicle model')->assertDontSee('Truck');
         $this->post(route('driver.register'), $base)->assertSessionHasErrors('make_model');
-        $this->assertSame(0, User::where('email', 'pedro@example.com')->count());
+        $this->assertSame(0, User::where('email', 'pedro.cruz@gmail.com')->count());
 
-        $this->post(route('driver.register'), $base + ['make_model' => 'Toyota Vios'])->assertRedirect(route('driver.home'));
+        $this->post(route('driver.register'), $base + ['make_model' => 'Toyota Vios'])->assertRedirect(route('driver.verify'));
         $this->assertSame('Toyota Vios', Vehicle::where('plate_number', 'KLM4455')->value('make_model'));
     }
 
@@ -269,7 +269,7 @@ class DriverAppTest extends TestCase
 
         $this->post(route('driver.reserve.store'), $this->ack() + $q + ['slot' => $slot->id, 'vehicle' => $vehicle->id])->assertRedirect();
         $this->assertSame(1, ParkingReservation::count());
-        $this->get(route('driver.bookings.show', [ParkingReservation::first(), 'new' => 1]))->assertOk()->assertSee('Check in by');
+        $this->get(route('driver.bookings.show', [ParkingReservation::first(), 'new' => 1]))->assertOk()->assertSee('Request sent')->assertDontSee('data-qr=', false);
     }
 
     public function test_a_date_too_far_ahead_is_refused(): void
@@ -347,7 +347,7 @@ class DriverAppTest extends TestCase
         $at = Lot::now()->addHours(3);
         $this->actingAs($owner)->post(route('driver.reserve.store'), $this->ack() + [
             'date' => $at->format('Y-m-d'), 'time' => $at->format('H:i'),
-            'slot' => ParkingSlot::where('code', 'A-01')->value('id'), 'vehicle' => $owner->vehicles()->first()->id,
+            'slot' => ParkingSlot::where('code', 'A-07')->value('id'), 'vehicle' => $owner->vehicles()->first()->id,
         ]);
         $reservation = ParkingReservation::first();
 
@@ -389,7 +389,7 @@ class DriverAppTest extends TestCase
         $at = Lot::now()->addHours(3);
         $this->actingAs($driver)->post(route('driver.reserve.store'), $this->ack() + [
             'date' => $at->format('Y-m-d'), 'time' => $at->format('H:i'),
-            'slot' => ParkingSlot::where('code', 'A-01')->value('id'), 'vehicle' => $vehicle->id,
+            'slot' => ParkingSlot::where('code', 'A-07')->value('id'), 'vehicle' => $vehicle->id,
         ]);
 
         $this->actingAs($driver)->delete(route('driver.vehicles.destroy', $vehicle))->assertSessionHas('modal');
@@ -414,17 +414,32 @@ class DriverAppTest extends TestCase
         $this->lot();
         $driver = $this->driver();
 
+        // The name is saved at once. A new phone number waits for the code that is emailed.
+        \Illuminate\Support\Facades\Mail::fake();
         $this->actingAs($driver)->put(route('driver.account.profile.update'), ['name' => 'Maria S. Santos', 'email' => 'maria@example.com', 'phone' => '0917 555 0199'])
-            ->assertRedirect(route('driver.account'));
-        $this->assertSame('09175550199', $driver->fresh()->phone);
+            ->assertRedirect(route('driver.account.confirm'));
+        $this->assertSame('Maria S. Santos', $driver->fresh()->name);
+        $this->assertSame('09175550142', $driver->fresh()->phone);
+        $this->assertSame('09175550199', $driver->fresh()->pending_phone);
 
-        $this->actingAs($driver)->put(route('driver.account.password.update'), ['current_password' => 'wrong', 'password' => 'Newpass123', 'password_confirmation' => 'Newpass123'])
+        $code = null;
+        \Illuminate\Support\Facades\Mail::assertSent(\App\Mail\VerifyEmailMail::class, function ($mail) use (&$code, $driver) {
+            $code = $mail->code;
+
+            return $mail->hasTo($driver->email) && $mail->purpose === 'change';
+        });
+        $this->actingAs($driver)->post(route('driver.account.confirm.check'), ['code' => $code === '000000' ? '111111' : '000000'])->assertSessionHasErrors('code');
+        $this->actingAs($driver)->post(route('driver.account.confirm.check'), ['code' => $code])->assertRedirect(route('driver.account'))->assertSessionHas('modal');
+        $this->assertSame('09175550199', $driver->fresh()->phone);
+        $this->assertNull($driver->fresh()->pending_phone);
+
+        $this->actingAs($driver)->put(route('driver.account.password.update'), ['current_password' => 'wrong', 'password' => 'Newpass123!', 'password_confirmation' => 'Newpass123!'])
             ->assertSessionHasErrors('current_password');
         $this->actingAs($driver)->put(route('driver.account.password.update'), ['current_password' => 'Driver123_', 'password' => 'Driver123_', 'password_confirmation' => 'Driver123_'])
             ->assertSessionHasErrors('password');
-        $this->actingAs($driver)->put(route('driver.account.password.update'), ['current_password' => 'Driver123_', 'password' => 'Newpass123', 'password_confirmation' => 'Newpass123'])
+        $this->actingAs($driver)->put(route('driver.account.password.update'), ['current_password' => 'Driver123_', 'password' => 'Newpass123!', 'password_confirmation' => 'Newpass123!'])
             ->assertRedirect(route('driver.account'));
-        $this->assertTrue(\Illuminate\Support\Facades\Hash::check('Newpass123', $driver->fresh()->password));
+        $this->assertTrue(\Illuminate\Support\Facades\Hash::check('Newpass123!', $driver->fresh()->password));
     }
 
     public function test_a_suspended_driver_only_sees_the_suspended_page(): void

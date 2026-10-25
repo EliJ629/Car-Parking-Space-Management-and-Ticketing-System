@@ -15,7 +15,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 class RecordsController extends ManagerController
 {
     /** Statuses a record can have, sessions and reservations together. */
-    public const STATUSES = ['active', 'paid', 'completed', 'booked', 'checked_in', 'expired', 'canceled'];
+    public const STATUSES = ['active', 'paid', 'completed', 'booked', 'checked_in', 'expired', 'canceled', 'rejected'];
 
     public function index(Request $request): View
     {

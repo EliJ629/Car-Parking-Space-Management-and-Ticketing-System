@@ -83,6 +83,7 @@
     <input type="hidden" name="date" value="{{ $date }}">
     <input type="hidden" name="time" value="{{ $time }}">
     <h2 class="f" style="font-size:15px;margin:4px 0 8px">1. Pick a slot <small style="font-weight:400;color:var(--muted)">({{ $zones->sum(fn ($group) => $group->where('state', 'available')->count()) }} free at this time)</small></h2>
+    <p class="fine" style="margin:0 0 10px">Only free slots can be picked. A slot marked <b>PWD</b> needs a photo of your PWD ID, which the booth attendant checks before approving.</p>
     <div class="lot">
       @foreach ($zones as $zone => $slots)
         <div class="zl">{{ strtoupper($zone) }}</div>
@@ -92,6 +93,7 @@
             <label class="sl pick {{ $cls[$slot->state] ?? '' }} {{ $free ? '' : 'off dim' }}">
               <input type="radio" name="slot" value="{{ $slot->id }}" @disabled(! $free) @checked($free && $slotId === $slot->id) aria-label="Slot {{ $slot->code }}, {{ $label[$slot->state] ?? $slot->state }}">
               <b>{{ $slot->code }}</b><span>{{ $label[$slot->state] ?? '' }}</span>
+              @if ($slot->type === 'PWD')<em class="pwdtag" title="PWD slot: needs a PWD ID photo">PWD</em>@endif
             </label>
           @endforeach
         </div>
@@ -119,6 +121,9 @@
   @if ($errors->has('understand'))
     <div class="err-box" role="alert"><b>Confirm that you will arrive on time</b>{{ $errors->first('understand') }}</div>
   @endif
+  @if ($errors->has('id_photo'))
+    <div class="err-box" role="alert"><b>PWD ID photo</b>{{ $errors->first('id_photo') }}</div>
+  @endif
   <section class="dcard">
     <p class="lab">Review</p>
     <h3>Slot {{ $slot->code }}</h3>
@@ -129,6 +134,11 @@
       <div><dt>Cost</dt><dd>Free</dd></div>
     </dl>
   </section>
+  @if ($slot->type === 'PWD')
+    <section class="dcard" style="margin-top:14px"><p class="lab">PWD slot</p>
+      <p style="margin:4px 0 0;font-size:14px">This is a PWD slot. You will upload a photo of your PWD ID on the next step. The booth attendant checks it. If it is not accepted, you are notified and must choose a new slot.</p>
+    </section>
+  @endif
   <section class="dcard paint" style="margin-top:14px" aria-labelledby="ontime-3">
     <p class="lab" id="ontime-3">Before you reserve: arrive on time</p>
     <p style="margin:4px 0 10px;font-size:14px">Your slot is held only for a short grace period. If you do not check in at the booth in time, you lose both the reservation and the slot.</p>
@@ -147,8 +157,8 @@
   </div>
 
   @push('dialogs')
-  <dialog class="dsheet" id="confirm-res" aria-labelledby="cr-t">
-    <form class="in" method="POST" action="{{ route('driver.reserve.store') }}" data-busy data-busy-label="Reserving">
+  <dialog class="dsheet" id="confirm-res" aria-labelledby="cr-t" @if ($errors->has('id_photo') || $errors->has('understand')) data-autoopen @endif>
+    <form class="in" method="POST" action="{{ route('driver.reserve.store') }}" enctype="multipart/form-data" data-busy data-busy-label="Sending">
       @csrf
       <input type="hidden" name="date" value="{{ $date }}">
       <input type="hidden" name="time" value="{{ $time }}">
@@ -156,13 +166,21 @@
       <input type="hidden" name="vehicle" value="{{ $vehicle->id }}">
       <button class="x" type="button" data-close aria-label="Close">X</button>
       <h2 id="cr-t">Reserve slot {{ $slot->code }}?</h2>
-      <p class="sub" style="color:var(--ink)">{{ \App\Support\Lot::when($at) }} for {{ $vehicle->displayPlate() }}. The reservation is free.</p>
+      <p class="sub" style="color:var(--ink)">{{ \App\Support\Lot::when($at) }} for {{ $vehicle->displayPlate() }}. The reservation is free. The booth attendant approves it before your QR code appears.</p>
+      @if ($slot->type === 'PWD')
+        <div class="fld">
+          <label class="f" for="id_photo">Photo of your PWD ID</label>
+          <input id="id_photo" name="id_photo" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" required @error('id_photo') aria-invalid="true" @enderror>
+          <p class="fine" style="margin-top:6px">A clear, readable photo (JPG, PNG or WEBP, up to 5 MB). Only the booth attendant sees it, and it is deleted if the request is turned down.</p>
+          <img id="id-preview" alt="Preview of your ID photo" hidden style="max-width:100%;max-height:180px;margin-top:8px;border-radius:6px">
+        </div>
+      @endif
       <label style="display:flex;gap:10px;align-items:flex-start;margin:12px 0;font-size:14px">
         <input type="checkbox" name="understand" value="1" required style="margin-top:3px;flex:none">
         <span>I will arrive by <b>{{ \App\Support\Lot::time($holdEnds) }}</b>. I understand that if I am not checked in by then, the reservation and the slot are no longer valid.</span>
       </label>
       <div class="actions">
-        <button class="btn" type="submit">Yes, reserve</button>
+        <button class="btn" type="submit">Send for approval</button>
         <button class="btn ghost" type="button" data-close>Not yet</button>
       </div>
     </form>

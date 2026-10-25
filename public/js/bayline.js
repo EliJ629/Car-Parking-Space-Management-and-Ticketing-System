@@ -13,7 +13,7 @@ document.querySelectorAll('[data-open-dialog]').forEach(function(button){
 document.querySelectorAll('.manager-dialog[data-open-on-load]').forEach(function(dialog){
   if(typeof dialog.showModal==='function'&&!dialog.open)dialog.showModal();
 });
-document.querySelectorAll('.manager-dialog').forEach(function(dialog){
+document.querySelectorAll('.manager-dialog,.vdlg').forEach(function(dialog){
   dialog.addEventListener('click',function(event){
     if(event.target===dialog)dialog.close();
   });
@@ -48,6 +48,42 @@ document.querySelectorAll('form[data-busy]').forEach(function(form){
     var b=form.querySelector('button[type=submit]');
     if(b){setTimeout(function(){b.disabled=true;b.textContent=b.getAttribute('data-busy-label')||'Please wait'},0)}
   });
+});
+
+/* Password rules tick off while typing: <input data-pwcheck="#rules" data-pwconfirm="#confirm" data-pwmatch="#match"> */
+document.querySelectorAll('input[data-pwcheck]').forEach(function(input){
+  var list=document.querySelector(input.getAttribute('data-pwcheck'));
+  var confirm=input.getAttribute('data-pwconfirm')?document.querySelector(input.getAttribute('data-pwconfirm')):null;
+  var match=input.getAttribute('data-pwmatch')?document.querySelector(input.getAttribute('data-pwmatch')):null;
+  if(!list)return;
+  var tests={len:function(v){return v.length>=10},num:function(v){return /[0-9]/.test(v)},upper:function(v){return /[A-Z]/.test(v)},special:function(v){return /[^A-Za-z0-9\s]/.test(v)}};
+  function run(){
+    var v=input.value;
+    list.querySelectorAll('[data-rule]').forEach(function(li){
+      var ok=tests[li.getAttribute('data-rule')](v);
+      li.classList.toggle('ok',ok);
+      var s=li.querySelector('.sr');if(s)s.textContent=ok?' (done)':' (not yet)';
+    });
+    if(confirm&&match){
+      if(!confirm.value){match.textContent='';match.className='hint'}
+      else if(confirm.value===v){match.textContent='Passwords match.';match.className='hint okline'}
+      else{match.textContent='Passwords do not match yet.';match.className='hint badline'}
+    }
+  }
+  input.addEventListener('input',run);if(confirm)confirm.addEventListener('input',run);run();
+});
+/* Gmail address check while typing: <input data-live-gmail data-live-target="#email-note"> */
+document.querySelectorAll('input[data-live-gmail]').forEach(function(input){
+  var note=document.querySelector(input.getAttribute('data-live-target'));
+  var re=/^(?=[^@]{6,30}@)[a-z0-9]+(?:\.[a-z0-9]+)*@gmail\.com$/;
+  function run(){
+    var v=input.value.trim().toLowerCase();
+    if(!note)return;
+    if(!v){note.textContent='We send a 6 digit code to this Gmail address.';note.className='hint';return}
+    if(re.test(v)){note.textContent='Looks like a Gmail address.';note.className='hint okline'}
+    else{note.textContent='Use a Gmail address, for example maria.santos@gmail.com.';note.className='hint badline'}
+  }
+  input.addEventListener('input',run);run();
 });
 })();
 window.LOT=[['A-01','av'],['A-02','occ'],['A-03','av'],['A-04','res'],['A-05','occ'],['A-06','av'],['A-07','pend'],['A-08','av'],['B-01','occ'],['B-02','av'],['B-03','res'],['B-04','out']];

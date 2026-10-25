@@ -8,6 +8,7 @@ use App\Models\Vehicle;
 use App\Services\DriverData;
 use App\Support\Lot;
 use App\Support\Rules;
+use App\Support\VehicleCatalog;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -15,8 +16,6 @@ use Illuminate\View\View;
 
 class VehicleController extends Controller
 {
-    public const COLORS = Vehicle::COLORS;
-
     public function index(Request $request, DriverData $data): View
     {
         $vehicles = $request->user()->vehicles()->orderBy('created_at')->get()
@@ -27,13 +26,9 @@ class VehicleController extends Controller
 
     public function create(Request $request): View
     {
-        return view('driver.app.vehicles.form', [
-            'vehicle' => new Vehicle(['contact_number' => $request->user()->phone]),
-            'colors' => self::COLORS,
-            'types' => Vehicle::TYPES,
-            'editing' => false,
-            'locked' => false,
-        ]);
+        $vehicle = new Vehicle(['contact_number' => $request->user()->phone]);
+
+        return view('driver.app.vehicles.form', $this->formData($vehicle) + ['editing' => false, 'locked' => false]);
     }
 
     public function store(Request $request): RedirectResponse
@@ -80,10 +75,7 @@ class VehicleController extends Controller
     {
         $this->own($request, $vehicle);
 
-        return view('driver.app.vehicles.form', [
-            'vehicle' => $vehicle,
-            'colors' => self::COLORS,
-            'types' => Vehicle::TYPES,
+        return view('driver.app.vehicles.form', $this->formData($vehicle) + [
             'editing' => true,
             'locked' => $data->vehicleUse($vehicle) !== null,
         ]);
@@ -147,27 +139,31 @@ class VehicleController extends Controller
     }
 
     /** @return array<string, mixed> */
+    private function formData(Vehicle $vehicle): array
+    {
+        return [
+            'vehicle' => $vehicle,
+            'vehicleTypes' => Vehicle::DRIVER_TYPES,
+            'catalog' => VehicleCatalog::forForm(),
+            'colors' => VehicleCatalog::colors(),
+            'form' => VehicleCatalog::formValues($vehicle),
+        ];
+    }
+
+    /** @return array<string, mixed> */
     private function validated(Request $request, ?Vehicle $vehicle = null): array
     {
-        Rules::tidy($request, 'make_model');
         $request->merge([
             'plate_number' => Vehicle::normalizePlate($request->input('plate_number')),
             'contact_number' => Lot::normalizePhone($request->input('contact_number')),
         ]);
 
-        return $request->validate([
+        return VehicleCatalog::validate($request, [
             'plate_number' => Rules::plate(),
-            'color' => ['required', Rule::in(self::COLORS)],
-            'vehicle_type' => ['required', Rule::in(Vehicle::TYPES)],
-            'make_model' => Rules::makeModel(),
             'contact_number' => Rules::mobile(false),
-        ], Rules::makeModelMessages() + [
+        ], [
             'plate_number.required' => 'Enter the plate number.',
             'plate_number.regex' => Rules::PLATE_MESSAGE,
-            'color.required' => 'Choose a color.',
-            'color.in' => 'Choose a color from the list.',
-            'vehicle_type.required' => 'Choose a vehicle type.',
-            'vehicle_type.in' => 'Choose a vehicle type from the list.',
             'contact_number.regex' => 'Enter 11 digits, for example 0917 555 0142.',
         ]);
     }

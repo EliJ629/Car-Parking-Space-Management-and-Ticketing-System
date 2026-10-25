@@ -21,7 +21,7 @@ class SettingsController extends ManagerController
         'long_parking_threshold_hours' => ['group' => 'parking', 'label' => 'Long-parking threshold (hours)', 'min' => 1, 'max' => 72],
         'reservation_grace_minutes' => ['group' => 'parking', 'label' => 'Reservation grace period (minutes)', 'min' => 0, 'max' => 240],
         'early_check_in_minutes' => ['group' => 'parking', 'label' => 'Early check-in window (minutes)', 'min' => 0, 'max' => 1440],
-        'maximum_advance_booking_days' => ['group' => 'parking', 'label' => 'Maximum advance booking (days)', 'min' => 1, 'max' => 365],
+        'maximum_advance_booking_days' => ['group' => 'parking', 'label' => 'Maximum advance booking (days, 1 or 2)', 'min' => 1, 'max' => 2],
         'exit_window_minutes' => ['group' => 'parking', 'label' => 'Exit window after payment (minutes)', 'min' => 1, 'max' => 240],
         'reservation_reminder_minutes' => ['group' => 'notifications', 'label' => 'Reservation reminder before arrival (minutes)', 'min' => 0, 'max' => 1440],
         'lot_name' => ['group' => 'receipt', 'label' => 'Lot name', 'max_length' => 120],

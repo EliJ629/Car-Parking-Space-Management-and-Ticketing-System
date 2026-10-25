@@ -42,7 +42,7 @@ class ManagerDefaultsSeeder extends Seeder
             'long_parking_threshold_hours' => ['group' => 'parking', 'value' => 12],
             'reservation_grace_minutes' => ['group' => 'parking', 'value' => 10],
             'early_check_in_minutes' => ['group' => 'parking', 'value' => 30],
-            'maximum_advance_booking_days' => ['group' => 'parking', 'value' => 7],
+            'maximum_advance_booking_days' => ['group' => 'parking', 'value' => 2],
             'exit_window_minutes' => ['group' => 'parking', 'value' => 15],
             'notify_reservation_confirmed' => ['group' => 'notifications', 'value' => true],
             'notify_reservation_expired' => ['group' => 'notifications', 'value' => true],

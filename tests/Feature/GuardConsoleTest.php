@@ -189,7 +189,7 @@ class GuardConsoleTest extends TestCase
         $this->actingAs($guard)->post(route('guard.incidents.store'), ['category' => '', 'description' => 'short'])->assertSessionHasErrors(['category', 'description']);
 
         $response = $this->actingAs($guard)->post(route('guard.incidents.store'), [
-            'category' => 'Vehicle damage', 'description' => 'Scratch along the left door.', 'plate_number' => 'hjk 4471',
+            'category' => 'Vehicle damage', 'description' => 'Scratch along the left door.', 'plate_number' => 'hjk 4471', 'location' => 'a-02',
             'photos' => [UploadedFile::fake()->create('a.jpg', 20, 'image/jpeg'), UploadedFile::fake()->create('b.png', 20, 'image/png')],
         ]);
 
@@ -213,12 +213,60 @@ class GuardConsoleTest extends TestCase
         ])->assertSessionHasErrors('photos');
     }
 
+    public function test_incident_plate_and_slot_follow_the_category_and_the_vehicle_must_be_parked_now(): void
+    {
+        $this->lot();
+        $guard = $this->guard();
+        $this->parked('PK-0020', 'HJK4471', 'A-02', 'active');
+        $this->parked('PK-0021', 'GON1111', 'A-03', 'completed');
+        $url = route('guard.incidents.store');
+        $base = ['category' => 'Vehicle damage', 'description' => 'Scratch along the left door.'];
+
+        $this->actingAs($guard)->post($url, $base)->assertSessionHasErrors(['plate_number', 'location']);
+        $this->actingAs($guard)->post($url, $base + ['plate_number' => 'HJK 4471'])->assertSessionHasErrors('location');
+        $this->actingAs($guard)->post($url, $base + ['plate_number' => 'HJK 4471', 'location' => 'ZZ-99'])->assertSessionHasErrors('location');
+        $this->actingAs($guard)->post($url, $base + ['plate_number' => 'HJK 4471', 'location' => 'A-05'])->assertSessionHasErrors('location');
+
+        // A vehicle that left, and one that was never here, cannot be reported.
+        $this->actingAs($guard)->post($url, $base + ['plate_number' => 'GON 1111', 'location' => 'A-03'])->assertSessionHasErrors('plate_number');
+        $this->actingAs($guard)->post($url, $base + ['plate_number' => 'NEW 9999', 'location' => 'A-03'])->assertSessionHasErrors('plate_number');
+        $this->assertSame(0, Incident::count());
+
+        // "a2" is read as A-02.
+        $this->actingAs($guard)->post($url, $base + ['plate_number' => 'HJK 4471', 'location' => 'a2'])->assertSessionHasNoErrors();
+        $this->assertSame('A-02', Incident::first()->location);
+
+        // The slot is filled in from the parked vehicle for an unpaid exit attempt.
+        $this->actingAs($guard)->post($url, ['category' => 'Unpaid vehicle attempting exit', 'description' => 'Tried to drive out without paying.', 'plate_number' => 'HJK4471'])->assertSessionHasNoErrors();
+        $this->assertSame('A-02', Incident::where('category', 'Unpaid vehicle attempting exit')->value('location'));
+        $this->actingAs($guard)->post($url, ['category' => 'Unpaid vehicle attempting exit', 'description' => 'Tried to drive out without paying.'])->assertSessionHasErrors('plate_number');
+
+        // Suspicious vehicle: a place is required, the plate is optional, but a plate that is given must be parked now.
+        $this->actingAs($guard)->post($url, ['category' => 'Suspicious vehicle', 'description' => 'Someone is looking into cars.'])->assertSessionHasErrors('location');
+        $this->actingAs($guard)->post($url, ['category' => 'Suspicious vehicle', 'description' => 'Someone is looking into cars.', 'location' => 'Zone A lane', 'plate_number' => 'NEW 9999'])->assertSessionHasErrors('plate_number');
+        $this->actingAs($guard)->post($url, ['category' => 'Other', 'description' => 'Gate arm is stuck halfway.'])->assertSessionHasNoErrors();
+    }
+
+    public function test_the_plate_check_says_whether_a_vehicle_is_parked_now(): void
+    {
+        $this->lot();
+        $guard = $this->guard();
+        $this->parked('PK-0020', 'HJK4471', 'A-02', 'active');
+        $this->parked('PK-0021', 'GON1111', 'A-03', 'completed');
+
+        $this->actingAs($guard)->getJson(route('guard.incidents.check-plate', ['plate' => 'hjk 4471']))->assertOk()->assertJson(['state' => 'parked', 'slot' => 'A-02']);
+        $this->actingAs($guard)->getJson(route('guard.incidents.check-plate', ['plate' => 'GON1111']))->assertOk()->assertJson(['state' => 'gone']);
+        $this->actingAs($guard)->getJson(route('guard.incidents.check-plate', ['plate' => 'NEW9999']))->assertOk()->assertJson(['state' => 'gone']);
+        $this->actingAs($guard)->getJson(route('guard.incidents.check-plate', ['plate' => '']))->assertOk()->assertJson(['state' => 'empty']);
+        $this->actingAs($guard)->getJson(route('guard.incidents.check-plate', ['plate' => '!!']))->assertOk()->assertJson(['state' => 'invalid']);
+    }
+
     public function test_incident_without_a_plate_has_no_driver_to_notify(): void
     {
         $this->lot();
         $guard = $this->guard();
 
-        $this->actingAs($guard)->post(route('guard.incidents.store'), ['category' => 'Suspicious vehicle', 'description' => 'Someone is looking into cars.', 'location' => 'Zone A lane']);
+        $this->actingAs($guard)->post(route('guard.incidents.store'), ['category' => 'Suspicious vehicle', 'description' => 'Someone is looking into cars.', 'location' => 'Zone A lane'])->assertSessionHasNoErrors();
         $incident = Incident::first();
         $this->assertFalse($incident->driver_notified);
         $this->assertStringContainsString('No plate', $incident->driver_notice_reason);

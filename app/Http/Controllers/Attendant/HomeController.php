@@ -43,6 +43,7 @@ class HomeController extends Controller
         $in30Mins = $now->copy()->addMinutes(Lot::earlyMinutes());
         $next30MinReservations = ParkingReservation::query()
             ->where('status', ParkingReservation::STATUS_BOOKED)
+            ->where('approval_status', ParkingReservation::APPROVAL_APPROVED)
             ->whereBetween('scheduled_at', [$now->copy()->subMinutes(Lot::graceMinutes()), $in30Mins])
             ->with(['driver', 'slot'])
             ->orderBy('scheduled_at')
@@ -51,6 +52,7 @@ class HomeController extends Controller
         // Later today
         $laterTodayReservations = ParkingReservation::query()
             ->where('status', ParkingReservation::STATUS_BOOKED)
+            ->where('approval_status', ParkingReservation::APPROVAL_APPROVED)
             ->where('scheduled_at', '>', $in30Mins)
             ->where('scheduled_at', '<=', Lot::dayEnd())
             ->with(['driver', 'slot'])

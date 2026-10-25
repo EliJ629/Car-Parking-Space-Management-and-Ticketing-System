@@ -1,1 +1,1 @@
-<span class="status-tag st-{{ $reservation->status }}">{{ $reservation->statusLabel() }}</span>
+<span class="status-tag st-{{ $reservation->statusKey() }}">{{ $reservation->statusLabel() }}</span>

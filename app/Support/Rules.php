@@ -47,19 +47,21 @@ class Rules
 
     /**
      * Driver password, from the sign up and reset screens: at least 10 characters,
-     * one number and one capital letter.
+     * one number, one capital letter and one special character.
      *
      * @return array<int, string>
      */
     public static function driverPassword(): array
     {
-        return ['required', 'string', 'min:10', 'max:'.self::PASSWORD_MAX, 'regex:/[A-Z]/', 'regex:/[0-9]/', 'confirmed'];
+        return ['required', 'string', 'min:10', 'max:'.self::PASSWORD_MAX, 'regex:/[A-Z]/', 'regex:/[0-9]/', 'regex:/[^A-Za-z0-9\s]/', 'confirmed'];
     }
+
+    public const DRIVER_PASSWORD_RULE = 'Use at least 10 characters with one number, one capital letter and one special character.';
 
     /** @return array<string, string> */
     public static function driverPasswordMessages(): array
     {
-        $rule = 'Use at least 10 characters with one number and one capital letter.';
+        $rule = self::DRIVER_PASSWORD_RULE;
 
         return [
             'password.required' => 'Choose a password.',
@@ -102,7 +104,7 @@ class Rules
         return [$required ? 'required' : 'nullable', 'regex:'.Vehicle::PLATE_PATTERN];
     }
 
-    public const PLATE_MESSAGE = 'Enter a plate like ABC 1234.';
+    public const PLATE_MESSAGE = 'Enter a plate like ABC 1234. Short plates of high offices, such as 5 or SENATE 3, are accepted too.';
 
     public static function makeModel(): array
     {
@@ -113,11 +115,114 @@ class Rules
     public static function makeModelMessages(): array
     {
         return [
-            'make_model.required' => 'Enter the car make and model, for example Toyota Vios.',
-            'make_model.min' => 'Enter the car make and model, for example Toyota Vios.',
-            'make_model.max' => 'The car model can have up to 60 characters.',
-            'make_model.regex' => 'Use letters and numbers for the car model, for example Toyota Vios.',
+            'make_model.required' => 'Enter the vehicle make and model, for example Toyota Vios.',
+            'make_model.min' => 'Enter the vehicle make and model, for example Toyota Vios.',
+            'make_model.max' => 'The vehicle model can have up to 60 characters.',
+            'make_model.regex' => 'Use letters and numbers for the vehicle model, for example Toyota Vios.',
         ];
+    }
+
+    /**
+     * A Gmail address as Google writes them: 6 to 30 letters, numbers and dots, no dot at either end or twice in a row.
+     * Plus tags such as maria+x@gmail.com are not Gmail usernames, so they are refused.
+     */
+    public const GMAIL_PATTERN = '/^(?=[^@]{6,30}@)[a-z0-9]+(?:\.[a-z0-9]+)*@gmail\.com$/';
+
+    public const GMAIL_MESSAGE = 'Use a real Gmail address, for example maria.santos@gmail.com.';
+
+    /**
+     * Rules for the email of a driver account: a Gmail address that is not taken. Gmail ignores dots, so
+     * maria.santos@gmail.com and mariasantos@gmail.com are one mailbox and count as one account.
+     *
+     * @return array<int, mixed>
+     */
+    public static function driverEmail(?int $ignoreUserId = null): array
+    {
+        return [
+            'required', 'string', 'max:255', 'email:rfc', 'regex:'.self::GMAIL_PATTERN,
+            function (string $attribute, mixed $value, \Closure $fail) use ($ignoreUserId): void {
+                if (self::emailTaken((string) $value, $ignoreUserId)) {
+                    $fail('This Gmail account is already registered. Try signing in.');
+                    return;
+                }
+
+                $allowed = self::registrationAllowlist();
+
+                if ($allowed !== [] && ! in_array(self::email($value), $allowed, true)) {
+                    $fail('This address cannot be used right now. Use the Gmail address your team added for testing.');
+                }
+            },
+        ];
+    }
+
+    /** @return array<string, string> */
+    public static function driverEmailMessages(): array
+    {
+        return [
+            'email.required' => 'Enter your Gmail address.',
+            'email.email' => self::GMAIL_MESSAGE,
+            'email.regex' => self::GMAIL_MESSAGE,
+            'email.max' => 'The email can have up to 255 characters.',
+        ];
+    }
+
+    /**
+     * Only these addresses may register, when the list is set (a comma separated list in REGISTRATION_EMAIL_ALLOWLIST).
+     * Useful while the mail service only delivers to approved test addresses. Empty means any Gmail address.
+     *
+     * @return list<string>
+     */
+    public static function registrationAllowlist(): array
+    {
+        return array_values(array_filter(array_map(
+            fn ($email) => self::email($email),
+            (array) config('mail.registration_allowlist', []),
+        )));
+    }
+
+    /** The same mailbox written the same way: Gmail dots are dropped. */
+    public static function emailKey(?string $email): string
+    {
+        $email = self::email($email);
+
+        if (! str_contains($email, '@')) {
+            return $email;
+        }
+
+        [$local, $domain] = explode('@', $email, 2);
+
+        if (in_array($domain, ['gmail.com', 'googlemail.com'], true)) {
+            return str_replace('.', '', explode('+', $local, 2)[0]).'@gmail.com';
+        }
+
+        return $email;
+    }
+
+    /** True when another account already uses this mailbox. */
+    public static function emailTaken(string $email, ?int $ignoreUserId = null): bool
+    {
+        $key = self::emailKey($email);
+
+        return \App\Models\User::query()
+            ->when($ignoreUserId, fn ($query) => $query->where('id', '!=', $ignoreUserId))
+            ->where(fn ($query) => $query->where('email_key', $key)->orWhere('email', self::email($email))->orWhere('pending_email', self::email($email)))
+            ->exists();
+    }
+
+    /** A name written the same way: lower case, with spaces, dots and hyphens removed. "Juan De La Cruz" and "juan dela cruz" match. */
+    public static function nameKey(?string $name): string
+    {
+        return (string) preg_replace('/[^\p{L}\p{N}]+/u', '', mb_strtolower((string) $name));
+    }
+
+    /** True when another driver account already has this name. */
+    public static function driverNameTaken(string $name, ?int $ignoreUserId = null): bool
+    {
+        return \App\Models\User::query()
+            ->where('role', \App\Models\User::ROLE_DRIVER)
+            ->when($ignoreUserId, fn ($query) => $query->where('id', '!=', $ignoreUserId))
+            ->where('name_key', self::nameKey($name))
+            ->exists();
     }
 
     /** Email as typed, lowercase and trimmed. */

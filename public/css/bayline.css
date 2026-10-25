@@ -217,3 +217,26 @@ input[aria-invalid="true"],select[aria-invalid="true"]{border-color:var(--stop);
 .vlist li{display:flex;gap:14px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px}
 
 footer .lnk-foot{color:var(--band-ink);font-weight:600;text-decoration:none;border-bottom:2px solid var(--paint);align-self:flex-start}
+
+/* Live rules under a field: ticks that turn green as the person types */
+[hidden]{display:none!important}
+.pwrules{list-style:none;margin:8px 0 0;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;font-size:13px;color:var(--muted)}
+.pwrules li{display:flex;align-items:center;gap:8px}
+.pwrules li::before{content:'';flex:none;width:12px;height:12px;border-radius:50%;border:2px solid var(--field)}
+.pwrules li.ok{color:var(--ok)}
+.pwrules li.ok::before{background:var(--ok);border-color:var(--ok)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.hint.okline{color:var(--ok)}
+.hint.badline{color:var(--stop)}
+@media (max-width:380px){.pwrules{grid-template-columns:1fr}}
+.codein{font-family:var(--f-d);font-weight:800;font-size:34px;letter-spacing:.35em;text-align:center}
+.verify-more{display:grid;gap:12px;margin-top:18px;text-align:center}
+.linkbtn{background:none;border:0;padding:8px;cursor:pointer;font:600 14px var(--f-b);color:var(--muted);text-decoration:underline}
+
+/* A small pop-up on the sign up pages (the page has no app shell, so it carries its own look). */
+dialog.vdlg{border:0;border-radius:12px;padding:0;width:min(92vw,420px);background:var(--surface);color:var(--ink);box-shadow:0 20px 60px rgba(0,0,0,.35)}
+dialog.vdlg::backdrop{background:rgba(10,14,18,.62)}
+dialog.vdlg .in{padding:22px;border-top:5px solid var(--stop)}
+dialog.vdlg h2{margin:0 0 8px;font-size:26px}
+dialog.vdlg p{margin:0 0 16px;color:var(--ink)}
+dialog.vdlg .row{display:grid;gap:10px}

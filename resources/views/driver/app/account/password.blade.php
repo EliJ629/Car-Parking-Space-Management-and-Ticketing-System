@@ -15,13 +15,15 @@
   </div>
   <div class="fld">
     <label class="f" for="password">New password</label>
-    <input id="password" name="password" type="password" maxlength="64" autocomplete="new-password" required @error('password') aria-invalid="true" @enderror>
-    <p class="fine" style="margin-top:6px">At least 10 characters, one number, one capital letter. Different from your last 3 passwords.</p>
+    <input id="password" name="password" type="password" maxlength="64" autocomplete="new-password" data-pwcheck="#pwrules" data-pwconfirm="#password_confirmation" data-pwmatch="#pw-match" required @error('password') aria-invalid="true" @enderror>
     @error('password')<p class="err">{{ $message }}</p>@enderror
+    @include('partials.password-rules')
+    <p class="fine" style="margin-top:6px">Different from your last 3 passwords.</p>
   </div>
   <div class="fld">
     <label class="f" for="password_confirmation">Confirm new password</label>
     <input id="password_confirmation" name="password_confirmation" type="password" maxlength="64" autocomplete="new-password" required>
+    <p class="hint" id="pw-match" aria-live="polite"></p>
   </div>
   <div class="actions"><button class="btn" type="submit">Update password</button><a class="btn ghost" href="{{ route('driver.account') }}">Cancel</a></div>
 </form>

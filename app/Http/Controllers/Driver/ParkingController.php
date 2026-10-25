@@ -128,6 +128,7 @@ class ParkingController extends Controller
             'holdEnds' => $at->copy()->addMinutes(Lot::graceMinutes()),
             'policies' => [
                 'Reservation is free. You pay the parking fee in cash at the booth when you leave.',
+                'The booth attendant approves your request first. Your QR code appears only after approval.',
                 'You can cancel any time before you check in.',
             ],
         ]);
@@ -148,13 +149,28 @@ class ParkingController extends Controller
 
         $problem = $this->checkWhen($data['date'], $data['time']);
         $back = ['date' => $data['date'], 'time' => $data['time'], 'slot' => $data['slot'], 'vehicle' => $data['vehicle']];
+        $slot = ParkingSlot::query()->find($data['slot']);
+        $idPhoto = null;
+
+        // A PWD slot needs a photo of the PWD ID, so the booth attendant can check it before approving.
+        if ($slot?->type === ParkingSlot::TYPE_PWD) {
+            $request->validate([
+                'id_photo' => ['required', 'file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+            ], [
+                'id_photo.required' => 'Upload a clear photo of your PWD ID. A PWD slot cannot be reserved without it.',
+                'id_photo.image' => 'The ID must be a photo (JPG, PNG or WEBP).',
+                'id_photo.mimes' => 'The ID must be a JPG, PNG or WEBP photo.',
+                'id_photo.max' => 'The photo is too large. Use one under 5 MB.',
+                'id_photo.uploaded' => 'The photo could not be uploaded. Try a smaller photo.',
+            ]);
+            $idPhoto = $request->file('id_photo');
+        }
 
         if ($problem) {
             return redirect()->route('driver.reserve', ['step' => 1] + $back)->withErrors(['when' => $problem['message']])->with('modal', $problem['modal'] ?? null);
         }
 
         $vehicle = Vehicle::query()->where('user_id', $user->id)->find($data['vehicle']);
-        $slot = ParkingSlot::query()->find($data['slot']);
 
         if (! $vehicle) {
             return redirect()->route('driver.reserve', ['step' => 2] + $back)->with('modal', $this->addVehicleModal());
@@ -165,7 +181,7 @@ class ParkingController extends Controller
         }
 
         try {
-            $reservation = $reservations->create($user, $vehicle, $slot, Lot::parse($data['date'], $data['time']), $request);
+            $reservation = $reservations->create($user, $vehicle, $slot, Lot::parse($data['date'], $data['time']), $request, $idPhoto);
         } catch (ReservationException $e) {
             return $this->failed($e, $back, $slot);
         }
@@ -213,6 +229,7 @@ class ParkingController extends Controller
                 'body' => 'Another driver reserved it a moment ago. Choose another slot for '.Lot::date(Lot::parse($back['date'], $back['time'])).' at '.Lot::time(Lot::parse($back['date'], $back['time'])).'.',
                 'primary' => ['label' => 'Choose another slot', 'close' => true],
             ]),
+            'id_required' => redirect()->route('driver.reserve', ['step' => 3] + $back)->withErrors(['id_photo' => $e->getMessage()]),
             'driver_busy' => redirect()->route('driver.reserve', $stepOne)->with('modal', $this->busyModal($e)),
             'vehicle_busy' => redirect()->route('driver.reserve', $stepOne)->with('modal', [
                 'title' => 'You already have a reservation',

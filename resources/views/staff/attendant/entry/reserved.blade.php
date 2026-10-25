@@ -305,6 +305,19 @@
   </div>
 </dialog>
 
+<!-- Not approved yet, or turned down -->
+<dialog class="badlg" id="rsv-appr-dlg">
+  <div class="in">
+    <button class="x" type="button" data-close aria-label="Close">&times;</button>
+    <h2 id="appr-title">Reservation is not approved yet</h2>
+    <p id="appr-msg"></p>
+    <div class="actions">
+      <button class="btn ghost" type="button" data-close>Close</button>
+      <a class="btn primary" id="appr-link" href="{{ route('attendant.reservations.index') }}">Open reservations</a>
+    </div>
+  </div>
+</dialog>
+
 <!-- POP-UP BA-31: Too Early to Check In -->
 <dialog class="badlg" id="rsv-early-dlg">
   <div class="in">

@@ -31,12 +31,14 @@
       </div>
       <div class="fld">
         <label class="f" for="password">New password</label>
-        <input id="password" name="password" type="password" maxlength="64" autocomplete="new-password" required @error('password') aria-invalid="true" @enderror>
-        @error('password')<p class="err">{{ $message }}</p>@else<p class="hint">At least 10 characters, one number, one capital letter. Different from your last 3 passwords.</p>@enderror
+        <input id="password" name="password" type="password" maxlength="64" autocomplete="new-password" data-pwcheck="#pwrules" data-pwconfirm="#password_confirmation" data-pwmatch="#pw-match" required @error('password') aria-invalid="true" @enderror>
+        @error('password')<p class="err">{{ $message }}</p>@else<p class="hint">Different from your last 3 passwords.</p>@enderror
+        @include('partials.password-rules')
       </div>
       <div class="fld">
         <label class="f" for="password_confirmation">Confirm new password</label>
         <input id="password_confirmation" name="password_confirmation" type="password" maxlength="64" autocomplete="new-password" required>
+        <p class="hint" id="pw-match" aria-live="polite"></p>
       </div>
       <button class="btn block" type="submit">Save new password</button>
     </form>

@@ -15,8 +15,15 @@ class Vehicle extends Model
 
     public const TYPES = ['Car', 'SUV', 'Van', 'Pickup', 'Motorcycle', 'Truck'];
 
-    /** Three letters then three or four digits, as normalizePlate writes it (ABC1234). */
-    public const PLATE_PATTERN = '/^[A-Z]{3}[0-9]{3,4}$/';
+    /** What a driver can pick. Trucks do not use the lot, so the driver app does not offer them. */
+    public const DRIVER_TYPES = ['Car', 'SUV', 'Van', 'Pickup', 'Motorcycle'];
+
+    /**
+     * A plate as normalizePlate writes it, without spaces. Four shapes are accepted:
+     * ABC1234 or ABC123 (cars and motorcycles), 1234ABC (older plates), AB12345, and the short
+     * plates of high offices and government (1 to 4 digits such as 5, or letters and a number such as SENATE3).
+     */
+    public const PLATE_PATTERN = '/^(?:[A-Z]{3}[0-9]{3,4}|[0-9]{3,4}[A-Z]{2,3}|[A-Z]{2}[0-9]{4,5}|[0-9]{1,4}|[A-Z]{2,8}[0-9]{1,4})$/';
 
     public const COLORS = ['White', 'Black', 'Gray', 'Silver', 'Red', 'Blue', 'Green', 'Yellow', 'Orange', 'Brown', 'Other'];
 
@@ -38,9 +45,7 @@ class Vehicle extends Model
      */
     public function displayPlate(): string
     {
-        $plate = $this->plate_number;
-
-        return strlen($plate) > 3 ? substr($plate, 0, 3).' '.substr($plate, 3) : $plate;
+        return \App\Support\Lot::plate($this->plate_number);
     }
 
     /** "Toyota Vios, white sedan" style line. */
