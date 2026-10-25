@@ -78,6 +78,31 @@ class ManagerWorkspaceTest extends TestCase
         $this->assertDatabaseHas('activity_logs', ['action' => 'discount_deleted']);
     }
 
+    public function test_discount_percent_cannot_exceed_100(): void
+    {
+        $manager = $this->manager();
+        $this->actingAs($manager);
+
+        $this->post(route('manager.discounts.store'), [
+            'name' => 'Invalid Discount',
+            'percent' => 101,
+            'proof_label' => 'VIP pass',
+        ])->assertSessionHasErrors(['percent']);
+
+        $discount = ParkingDiscount::create([
+            'name' => 'Valid Discount',
+            'percent' => 20,
+            'proof_label' => 'VIP card',
+            'created_by' => $manager->id,
+        ]);
+
+        $this->patch(route('manager.discounts.update', $discount), [
+            'name' => $discount->name,
+            'percent' => 150,
+            'proof_label' => $discount->proof_label,
+        ])->assertSessionHasErrors(['percent']);
+    }
+
     public function test_manager_can_create_and_update_a_private_pin_after_confirming_password(): void
     {
         $manager = $this->manager();
@@ -246,8 +271,8 @@ class ManagerWorkspaceTest extends TestCase
             'plate_number' => 'ABC1234',
             'vehicle_color' => 'White',
             'vehicle_type' => 'Car',
-            'entered_at' => now()->subHours(2),
-            'exited_at' => now()->subHour(),
+            'entered_at' => \App\Support\Lot::now()->startOfDay()->addMinutes(10),
+            'exited_at' => \App\Support\Lot::now()->startOfDay()->addMinutes(30),
             'status' => 'completed',
         ]);
         ParkingPayment::create([
@@ -260,7 +285,7 @@ class ManagerWorkspaceTest extends TestCase
             'discount' => 0,
             'total' => 50,
             'method' => 'cash',
-            'paid_at' => now(),
+            'paid_at' => \App\Support\Lot::now()->startOfDay()->addMinutes(25),
             'receipt_snapshot' => ['lot_name' => 'Bayline Central Lot'],
         ]);
         ParkingReservation::create([
@@ -268,7 +293,7 @@ class ManagerWorkspaceTest extends TestCase
             'slot_id' => $slot->id,
             'slot_code' => $slot->code,
             'plate_number' => 'ABC1234',
-            'scheduled_at' => now(),
+            'scheduled_at' => \App\Support\Lot::now()->startOfDay()->addMinutes(5),
             'status' => 'checked_in',
             'session_id' => $session->id,
         ]);

@@ -79,7 +79,7 @@ class EntryController extends Controller
         if (! preg_match(Vehicle::PLATE_PATTERN, $normPlate)) {
             return response()->json([
                 'ok' => false,
-                'error' => 'Enter a plate like ABC 1234.',
+                'error' => 'Enter a valid Philippine plate (e.g. ABC 1234, AB 12345, or 1).',
             ], 422);
         }
 
@@ -272,6 +272,12 @@ class EntryController extends Controller
     {
         $rawCode = strtoupper(trim((string) $request->input('code', '')));
 
+        if (preg_match('/^[A-Z0-9]{6}$/', $rawCode)) {
+            $rawCode = 'RSV-'.$rawCode;
+        } elseif (preg_match('/^RSV([A-Z0-9]{6})$/', $rawCode, $m)) {
+            $rawCode = 'RSV-'.$m[1];
+        }
+
         if (! preg_match('/^RSV-[A-Z0-9]{6}$/', $rawCode)) {
             return response()->json([
                 'ok' => false,
@@ -282,7 +288,7 @@ class EntryController extends Controller
 
         $rsv = ParkingReservation::query()
             ->where('code', $rawCode)
-            ->with(['driver', 'slot', 'vehicle'])
+            ->with(['driver', 'slot', 'vehicle', 'session'])
             ->first();
 
         if (! $rsv) {
@@ -322,12 +328,40 @@ class EntryController extends Controller
             ]);
         }
 
-        // Already checked in or completed
+        // Already checked in, pending exit, or completed (exited)
         if (in_array($rsv->status, [ParkingReservation::STATUS_CHECKED_IN, ParkingReservation::STATUS_COMPLETED], true)) {
+            $isCompleted = ($rsv->status === ParkingReservation::STATUS_COMPLETED);
+            $isPendingExit = (! $isCompleted && $rsv->session?->status === ParkingSession::STATUS_PAID);
+
+            $statusText = $isCompleted
+                ? 'COMPLETED (EXITED)'
+                : ($isPendingExit ? 'PAID (PENDING EXIT)' : 'ALREADY CHECKED IN');
+
+            $message = $isCompleted
+                ? "Reservation {$rsv->code} has already completed its stay and exited."
+                : ($isPendingExit
+                    ? "Reservation {$rsv->code} has already paid and is currently waiting to exit at the barrier gate."
+                    : "Reservation {$rsv->code} is already checked in and inside the parking lot.");
+
+            $details = $isCompleted
+                ? 'This driver has already completed parking and exited the lot. This QR cannot be used again.'
+                : ($isPendingExit
+                    ? 'This driver has already paid their fee and is in the 15-minute exit window heading to the barrier gate. Direct them to the exit barrier gate.'
+                    : 'This vehicle is currently parked inside the lot under an active ticket.');
+
             return response()->json([
                 'ok' => false,
                 'status' => 'already_used',
-                'message' => "Reservation {$rsv->code} has already been checked in.",
+                'message' => $message,
+                'reservation' => [
+                    'code' => $rsv->code,
+                    'status' => $statusText,
+                    'is_pending_exit' => $isPendingExit,
+                    'is_completed' => $isCompleted,
+                    'driver' => $rsv->driver?->name ?? 'Driver',
+                    'plate' => Lot::plate($rsv->plate_number),
+                    'details' => $details,
+                ],
             ]);
         }
 
@@ -403,8 +437,26 @@ class EntryController extends Controller
 
         $rsv = ParkingReservation::query()
             ->whereKey($validated['reservation_id'])
-            ->with(['slot', 'driver', 'vehicle'])
+            ->with(['slot', 'driver', 'vehicle', 'session'])
             ->firstOrFail();
+
+        // Cannot check in canceled, expired, already used, or completed reservations
+        if ($rsv->status !== ParkingReservation::STATUS_BOOKED) {
+            $isPendingExit = ($rsv->status === ParkingReservation::STATUS_CHECKED_IN && $rsv->session?->status === ParkingSession::STATUS_PAID);
+
+            return back()->with('error_modal', [
+                'type' => 'reservation_not_bookable',
+                'status' => $isPendingExit ? 'PAID (PENDING EXIT)' : $rsv->statusLabel(),
+                'code' => $rsv->code,
+                'message' => $rsv->status === ParkingReservation::STATUS_CANCELED
+                    ? "Reservation {$rsv->code} was canceled and cannot create a ticket."
+                    : ($rsv->status === ParkingReservation::STATUS_COMPLETED
+                        ? "Reservation {$rsv->code} has already completed its stay and exited."
+                        : ($isPendingExit
+                            ? "Reservation {$rsv->code} has already paid and is waiting to exit at the barrier gate."
+                            : "Reservation {$rsv->code} is {$rsv->statusLabel()} and cannot be checked in.")),
+            ]);
+        }
 
         // BA-28: Plate mismatch check
         if ($enteredPlate !== Vehicle::normalizePlate($rsv->plate_number)) {
@@ -459,15 +511,23 @@ class EntryController extends Controller
 
     private function generateNextTicketNumber(): string
     {
-        $last = ParkingSession::query()
+        $all = ParkingSession::query()
             ->where('ticket_number', 'like', 'PK-%')
-            ->orderByDesc('id')
-            ->value('ticket_number');
+            ->pluck('ticket_number');
 
-        if ($last && preg_match('/^PK-(\d+)$/', $last, $m)) {
-            $next = (int) $m[1] + 1;
-        } else {
-            $next = 1;
+        $max = 0;
+        foreach ($all as $tk) {
+            if (preg_match('/^PK-(\d+)$/', $tk, $m)) {
+                $num = (int) $m[1];
+                if ($num > $max) {
+                    $max = $num;
+                }
+            }
+        }
+
+        $next = $max + 1;
+        while (ParkingSession::where('ticket_number', 'PK-'.str_pad((string) $next, 4, '0', STR_PAD_LEFT))->exists()) {
+            $next++;
         }
 
         return 'PK-'.str_pad((string) $next, 4, '0', STR_PAD_LEFT);

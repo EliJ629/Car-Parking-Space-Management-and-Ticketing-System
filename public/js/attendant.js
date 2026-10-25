@@ -177,6 +177,28 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // Toast notification helper
+  window.baShowToast = function (title, message, isSuccess = true) {
+    let container = document.getElementById('ba-toasts');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'ba-toasts';
+      container.className = 'ba-toasts';
+      document.body.appendChild(container);
+    }
+    const toast = document.createElement('div');
+    toast.className = 'ba-toast';
+    toast.style.borderLeft = isSuccess ? '4px solid #22C55E' : '4px solid #EF4444';
+    toast.innerHTML = `<b style="display:flex;align-items:center;gap:6px;">${title}</b><span style="opacity:.9;">${message || ''}</span>`;
+    container.appendChild(toast);
+    setTimeout(() => {
+      toast.style.transition = 'opacity .35s ease, transform .35s ease';
+      toast.style.opacity = '0';
+      toast.style.transform = 'translateX(50px)';
+      setTimeout(() => toast.remove(), 350);
+    }, 4000);
+  };
+
   // 6. Thermal Print helper (Optimized for 58mm thermal printer roll)
   window.baPrint = function (selector) {
     const target = selector
@@ -188,11 +210,28 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    // Close preview modal if currently open so user returns to normal state
+    // Close preview modal if open so the attendant returns cleanly to the screen
     const openDialog = target.closest('dialog') || document.querySelector('dialog[open]');
     if (openDialog && typeof openDialog.close === 'function') {
       openDialog.close();
     }
+
+    const text = (target.innerText || selector || '').toLowerCase();
+    const isReceipt = text.includes('receipt') || text.includes('official');
+    const docName = isReceipt ? 'Official receipt' : 'Parking ticket';
+
+    // Show in-app toast notification
+    window.baShowToast(
+      `🖨️ Printing ${docName}...`,
+      `Sent to thermal printer queue.`
+    );
+
+    // Call page-specific callbacks to mark as printed
+    if (typeof markTicketPrinted === 'function') markTicketPrinted();
+    if (typeof markReceiptPrinted === 'function') markReceiptPrinted();
+
+    // Fire window event
+    window.dispatchEvent(new CustomEvent('ba:printed', { detail: { docName, isReceipt } }));
 
     // Clone element and preserve QR code canvases as images
     const clone = target.cloneNode(true);
@@ -342,7 +381,7 @@ document.addEventListener('DOMContentLoaded', () => {
 </html>`);
     frameDoc.close();
 
-    // Trigger print in iframe after render
+    // Trigger print in iframe after render so XP-58 prints physically
     setTimeout(() => {
       try {
         printFrame.contentWindow.focus();
@@ -351,7 +390,7 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error('Print iframe error', err);
         window.print();
       }
-    }, 200);
+    }, 250);
   };
 
   // 7. QR Code Generation for tickets & receipts (sized for 58mm thermal paper)

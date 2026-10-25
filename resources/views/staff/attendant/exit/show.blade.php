@@ -87,9 +87,9 @@
       </div>
 
       @if ($estimate['capped'])
-        <div class="ba-fee-row" style="color:var(--ok);">
-          <span>Daily maximum cap</span>
-          <b>-{{ \App\Support\Lot::peso(abs($estimate['cap_adjustment'])) }}</b>
+        <div class="ba-fee-row">
+          <span>Daily maximum adjustment <small style="color:var(--muted);display:block;">Capped by daily max rate (₱{{ number_format($estimate['daily_maximum'], 2) }}/day policy)</small></span>
+          <b style="color:var(--muted);">-{{ \App\Support\Lot::peso(abs($estimate['cap_adjustment'])) }}</b>
         </div>
       @endif
 
@@ -130,8 +130,9 @@
         </div>
       @endif
 
-      <div style="margin-top:16px;">
-        <button class="btn ghost sm" type="button" data-open="#add-penalty-dlg">Add penalty</button>
+      <div style="margin-top:16px;display:flex;gap:10px;align-items:center;" id="penalty-actions-wrap">
+        <button class="btn ghost sm" type="button" data-open="#add-penalty-dlg" id="btn-open-penalty-dlg">{{ ($estimate['penalties'] ?? 0) > 0 ? 'Change penalty' : 'Add penalty' }}</button>
+        <button class="btn ghost sm danger" type="button" id="btn-remove-penalty" style="{{ ($estimate['penalties'] ?? 0) > 0 ? '' : 'display:none;' }}">Remove penalty</button>
       </div>
     </div>
 
@@ -196,17 +197,19 @@
 
     <div class="ba-form-group">
       <label class="ba-label" for="disc-proof-input" id="disc-proof-label">ID number / Proof</label>
-      <input class="ba-input" id="disc-proof-input" type="text" placeholder="e.g. SC-0048215">
+      <input class="ba-input" id="disc-proof-input" type="text" placeholder="e.g. SC-0048215" autocomplete="off" oninput="this.value = this.value.toUpperCase().replace(/[^A-Z0-9\s\/-]/g, '')">
+      <p id="disc-proof-hint" style="font-size:12px;color:var(--muted);margin-top:4px;">OSCA ID card number, Senior Citizen card, or PhilSys PCN</p>
+      <div class="ba-err-msg" id="disc-proof-err" hidden style="margin-top:6px;font-size:13px;"></div>
     </div>
 
     <div class="ba-form-group">
       <label class="ba-label" for="disc-note-input">Note (optional)</label>
-      <input class="ba-input" id="disc-note-input" type="text" placeholder="Optional note (e.g. ID verified at booth)">
+      <input class="ba-input" id="disc-note-input" type="text" placeholder="Optional note (e.g. ID verified at booth)" oninput="this.value = this.value.replace(/[<>{}\`\\]/g, '')">
     </div>
 
     <div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:6px;padding:12px;margin-bottom:18px;font-size:13px;color:#166534;">
       <b style="display:block;font-size:14px;">New total <span id="dlg-disc-preview-total">₱0.00</span></b>
-      Discount of <span id="dlg-disc-amt">₱0.00</span> on ₱{{ number_format($estimate['parking_charge'], 2) }}. Rates are read from Rates and policies.
+      Discount of <span id="dlg-disc-amt">₱0.00</span> on <span id="dlg-disc-subtotal">₱{{ number_format($estimate['parking_charge'], 2) }}</span>. Rates are read from Rates and policies.
     </div>
 
     <div class="actions">
@@ -254,21 +257,23 @@
 
     <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:18px;">
       <label style="display:flex;align-items:center;gap:10px;padding:12px;border:1px solid var(--line);border-radius:6px;cursor:pointer;">
-        <input type="radio" name="penalty_choice" value="lost_ticket" data-amt="100" checked style="width:18px;height:18px;">
-        <div><b>Lost ticket ₱100.00</b></div>
+        <input type="radio" name="penalty_choice" value="lost_ticket" data-amt="{{ (float) ($currentRate?->lost_ticket_penalty ?? 100) }}" style="width:18px;height:18px;">
+        <div><b>Lost ticket ₱{{ number_format((float) ($currentRate?->lost_ticket_penalty ?? 100), 2) }}</b></div>
       </label>
       <label style="display:flex;align-items:center;gap:10px;padding:12px;border:1px solid var(--line);border-radius:6px;cursor:pointer;">
-        <input type="radio" name="penalty_choice" value="overstay" data-amt="150" style="width:18px;height:18px;">
-        <div><b>Overstay ₱150.00</b></div>
+        <input type="radio" name="penalty_choice" value="overstay" data-amt="{{ (float) ($currentRate?->overstay_penalty ?? 150) }}" style="width:18px;height:18px;">
+        <div><b>Overstay ₱{{ number_format((float) ($currentRate?->overstay_penalty ?? 150), 2) }}</b></div>
       </label>
     </div>
+
+    <div class="ba-err-msg" id="penalty-choice-err" hidden style="margin-bottom:14px;">Please select a penalty option.</div>
 
     <div class="ba-form-group">
       <label class="ba-label" for="penalty-note-input">Note (optional)</label>
-      <input class="ba-input" id="penalty-note-input" type="text" placeholder="Driver could not find the ticket. ID shown.">
+      <input class="ba-input" id="penalty-note-input" type="text" placeholder="Driver could not find the ticket. ID shown." oninput="this.value = this.value.replace(/[<>{}\`\\]/g, '')">
     </div>
 
-    <p style="font-size:12px;color:var(--muted);margin-bottom:16px;">Removing a penalty later needs the manager PIN.</p>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:16px;">You can remove or change the penalty before taking payment.</p>
 
     <div class="actions">
       <button class="btn ghost" type="button" data-close>Cancel</button>
@@ -298,9 +303,11 @@
 
     <div class="ba-form-group">
       <label class="ba-label" for="cash-received-input">Cash received</label>
-      <input class="ba-input" id="cash-received-input" name="cash_received" type="number" step="any"
+      <input class="ba-input" id="cash-received-input" name="cash_received" type="number" step="any" min="0"
              value="{{ $estimate['total'] }}"
-             style="font-size:24px;font-weight:800;" autofocus>
+             style="font-size:24px;font-weight:800;" autofocus
+             onkeydown="if(['-','+','e','E'].includes(event.key))event.preventDefault();"
+             oninput="if(parseFloat(this.value)<0)this.value=0;">
       <div class="ba-err-msg" id="cash-error-msg" hidden></div>
     </div>
 
@@ -326,22 +333,27 @@
 @push('scripts')
 <script>
 const baseCharge = {{ $estimate['parking_charge'] }};
-let currentPenalty = 0.0;
+let currentPenalty = {{ (float) ($estimate['penalties'] ?? 0.0) }};
 let penaltyType = null;
 let currentDiscount = null;
 const verifyPinUrl = "{{ route('attendant.exit.verify-pin', $session) }}";
 const exitCsrf = "{{ csrf_token() }}";
 
 function recalculateFinal() {
+  const subtotal = baseCharge + currentPenalty;
   let discAmt = 0.0;
   if (currentDiscount) {
-    discAmt = Math.round((baseCharge * currentDiscount.percent) / 100 * 100) / 100;
+    discAmt = Math.round((subtotal * currentDiscount.percent) / 100 * 100) / 100;
   }
-  const total = Math.max(0, baseCharge - discAmt + currentPenalty);
+  const total = Math.max(0, subtotal - discAmt);
 
   document.getElementById('lbl-discount-amt').textContent = discAmt > 0 ? `-\u20B1${discAmt.toFixed(2)}` : '\u20B10.00';
   document.getElementById('lbl-penalty-amt').textContent = currentPenalty > 0 ? `\u20B1${currentPenalty.toFixed(2)}` : '\u20B10.00';
   document.getElementById('final-amt-display').textContent = `\u20B1${total.toFixed(2)}`;
+
+  if (currentDiscount) {
+    document.getElementById('lbl-discount-desc').textContent = `${currentDiscount.name} ${currentDiscount.percent}% of \u20B1${subtotal.toFixed(2)}`;
+  }
 
   // Update modal due
   const dueVal = document.getElementById('due-amount-val');
@@ -374,23 +386,41 @@ function updateDiscountModalPreview() {
   if (!selectedRadio) return;
 
   const pct = parseFloat(selectedRadio.dataset.percent) || 0;
-  const discAmt = Math.round((baseCharge * pct) / 100 * 100) / 100;
-  const newTotal = Math.max(0, baseCharge - discAmt);
+  const subtotal = baseCharge + currentPenalty;
+  const discAmt = Math.round((subtotal * pct) / 100 * 100) / 100;
+  const newTotal = Math.max(0, subtotal - discAmt);
 
   const prevTotalEl = document.getElementById('dlg-disc-preview-total');
   const prevAmtEl = document.getElementById('dlg-disc-amt');
+  const prevSubtotalEl = document.getElementById('dlg-disc-subtotal');
   if (prevTotalEl) prevTotalEl.textContent = `\u20B1${newTotal.toFixed(2)}`;
   if (prevAmtEl) prevAmtEl.textContent = `\u20B1${discAmt.toFixed(2)}`;
+  if (prevSubtotalEl) prevSubtotalEl.textContent = `\u20B1${subtotal.toFixed(2)}`;
 
-  const proofLabel = selectedRadio.dataset.proofLabel || (selectedRadio.dataset.pin === '1' ? 'Stamp code / Tenant ID' : 'ID number');
+  const discName = (selectedRadio.dataset.name || '').toLowerCase();
   const proofLabelEl = document.getElementById('disc-proof-label');
   const proofInputEl = document.getElementById('disc-proof-input');
-  if (proofLabelEl) proofLabelEl.textContent = proofLabel;
-  if (proofInputEl) {
-    if (selectedRadio.dataset.pin === '1') {
+  const proofHintEl = document.getElementById('disc-proof-hint');
+  const proofErrEl = document.getElementById('disc-proof-err');
+  if (proofErrEl) proofErrEl.hidden = true;
+
+  if (proofInputEl && proofHintEl) {
+    if (discName.includes('senior')) {
+      if (proofLabelEl) proofLabelEl.textContent = 'Senior Citizen (OSCA) ID';
+      proofInputEl.placeholder = 'e.g. SC-0048215 or 12-3456-789';
+      proofHintEl.textContent = 'OSCA ID card number, Senior Citizen card, or PhilSys PCN';
+    } else if (discName.includes('pwd')) {
+      if (proofLabelEl) proofLabelEl.textContent = 'PWD ID number';
+      proofInputEl.placeholder = 'e.g. PWD-2024-00142 or 11-2402-001-0001234';
+      proofHintEl.textContent = 'NCDA standard or LGU-issued PWD ID card number';
+    } else if (selectedRadio.dataset.pin === '1') {
+      if (proofLabelEl) proofLabelEl.textContent = 'Stamp code / Tenant ID';
       proofInputEl.placeholder = 'e.g. STAMP-9214 or Tenant Name';
+      proofHintEl.textContent = 'Tenant validation code, stamp, or store name';
     } else {
-      proofInputEl.placeholder = 'e.g. SC-0048215';
+      if (proofLabelEl) proofLabelEl.textContent = selectedRadio.dataset.proofLabel || 'ID number';
+      proofInputEl.placeholder = 'e.g. ID-0012345';
+      proofHintEl.textContent = 'Valid identification number or verification reference';
     }
   }
 }
@@ -405,6 +435,8 @@ document.querySelectorAll('[data-open="#apply-discount-dlg"]').forEach(btn => {
   btn.addEventListener('click', () => {
     const proofInput = document.getElementById('disc-proof-input');
     const noteInput = document.getElementById('disc-note-input');
+    const proofErrEl = document.getElementById('disc-proof-err');
+    if (proofErrEl) proofErrEl.hidden = true;
     if (currentDiscount) {
       const targetRadio = document.querySelector(`input[name="modal_discount_id"][value="${currentDiscount.id}"]`);
       if (targetRadio) targetRadio.checked = true;
@@ -418,17 +450,72 @@ document.querySelectorAll('[data-open="#apply-discount-dlg"]').forEach(btn => {
   });
 });
 
+// Clear discount proof error when typing
+const proofInputElem = document.getElementById('disc-proof-input');
+if (proofInputElem) {
+  proofInputElem.addEventListener('input', () => {
+    const proofErrEl = document.getElementById('disc-proof-err');
+    if (proofErrEl) proofErrEl.hidden = true;
+  });
+}
+
 // Apply Discount Click
 document.getElementById('btn-submit-discount').addEventListener('click', () => {
   const selectedRadio = document.querySelector('input[name="modal_discount_id"]:checked');
   if (!selectedRadio) return;
+
+  const proofVal = document.getElementById('disc-proof-input').value.trim();
+  const discName = (selectedRadio.dataset.name || '').toLowerCase();
+  const proofErrEl = document.getElementById('disc-proof-err');
+
+  const seniorRegex = /^(?:(?:SC|OSCA|SR)[-\s]?[A-Z0-9-]{4,18}|[0-9]{2,4}[-\s]?[0-9]{4,10}|[0-9]{4}[-\s][0-9]{4}[-\s][0-9]{4}[-\s]?[0-9]{4}|[A-Z0-9-]{5,20})$/i;
+  const pwdRegex = /^(?:PWD[-\s]?[A-Z0-9-]{4,18}|[0-9]{2}[-\s][0-9]{4}[-\s][0-9]{3}[-\s]?[0-9]{4,7}|[0-9]{2,4}[-\s]?[0-9]{4,10}|[A-Z0-9-]{5,20})$/i;
+  const isDummy = /^(?:0+|12345|test|none|asdf|demo)$/i.test(proofVal);
+
+  if (!proofVal) {
+    if (proofErrEl) {
+      proofErrEl.textContent = 'Please enter the required ID number or proof.';
+      proofErrEl.hidden = false;
+    }
+    document.getElementById('disc-proof-input').focus();
+    return;
+  }
+
+  if (discName.includes('senior')) {
+    if (!seniorRegex.test(proofVal) || isDummy || proofVal.length < 5) {
+      if (proofErrEl) {
+        proofErrEl.textContent = 'Invalid OSCA ID format. Example: SC-0048215 or 12-3456-789';
+        proofErrEl.hidden = false;
+      }
+      document.getElementById('disc-proof-input').focus();
+      return;
+    }
+  } else if (discName.includes('pwd')) {
+    if (!pwdRegex.test(proofVal) || isDummy || proofVal.length < 5) {
+      if (proofErrEl) {
+        proofErrEl.textContent = 'Invalid PWD ID format. Example: PWD-2024-00142 or 11-2402-001-0001234';
+        proofErrEl.hidden = false;
+      }
+      document.getElementById('disc-proof-input').focus();
+      return;
+    }
+  } else if (proofVal.length < 3) {
+    if (proofErrEl) {
+      proofErrEl.textContent = 'Please enter a valid proof (at least 3 characters).';
+      proofErrEl.hidden = false;
+    }
+    document.getElementById('disc-proof-input').focus();
+    return;
+  }
+
+  if (proofErrEl) proofErrEl.hidden = true;
 
   const needsPin = selectedRadio.dataset.pin === '1';
   const disc = {
     id: selectedRadio.value,
     name: selectedRadio.dataset.name,
     percent: parseFloat(selectedRadio.dataset.percent),
-    proof: document.getElementById('disc-proof-input').value.trim(),
+    proof: proofVal,
     note: document.getElementById('disc-note-input').value.trim(),
   };
 
@@ -462,7 +549,8 @@ function applyDiscountDirectly(disc, managerName = null) {
   document.getElementById('app-disc-id').textContent = disc.proof || 'Verified';
   document.getElementById('app-disc-note').textContent = disc.note || 'ID checked at the booth';
 
-  document.getElementById('lbl-discount-desc').textContent = `${disc.name} ${disc.percent}% of \u20B1${baseCharge.toFixed(2)}`;
+  const subtotal = baseCharge + currentPenalty;
+  document.getElementById('lbl-discount-desc').textContent = `${disc.name} ${disc.percent}% of \u20B1${subtotal.toFixed(2)}`;
 
   // Set hidden payment fields
   document.getElementById('pay-hidden-disc-id').value = disc.id;
@@ -552,25 +640,78 @@ document.getElementById('btn-submit-pin').addEventListener('click', async () => 
   }
 });
 
+// Reset/sync penalty modal when opening
+document.querySelectorAll('[data-open="#add-penalty-dlg"]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('input[name="penalty_choice"]').forEach(r => {
+      r.checked = (penaltyType && r.value === penaltyType);
+    });
+    const errEl = document.getElementById('penalty-choice-err');
+    if (errEl) errEl.hidden = true;
+  });
+});
+
+document.querySelectorAll('input[name="penalty_choice"]').forEach(r => {
+  r.addEventListener('change', () => {
+    const errEl = document.getElementById('penalty-choice-err');
+    if (errEl) errEl.hidden = true;
+  });
+});
+
 // Submit Penalty (BA-42)
 document.getElementById('btn-submit-penalty').addEventListener('click', () => {
   const chosen = document.querySelector('input[name="penalty_choice"]:checked');
-  if (!chosen) return;
+  const errEl = document.getElementById('penalty-choice-err');
+  if (!chosen) {
+    if (errEl) {
+      errEl.textContent = 'Please select a penalty option.';
+      errEl.hidden = false;
+    }
+    return;
+  }
+  if (errEl) errEl.hidden = true;
 
   currentPenalty = parseFloat(chosen.dataset.amt);
   penaltyType = chosen.value;
 
   if (penaltyType === 'lost_ticket') {
-    document.getElementById('lbl-penalty-desc').textContent = 'Lost ticket penalty \u20B1100.00';
+    document.getElementById('lbl-penalty-desc').textContent = `Lost ticket penalty \u20B1${currentPenalty.toFixed(2)}`;
     document.getElementById('pay-hidden-lost').value = '1';
+    document.getElementById('pay-hidden-overstay').value = '0';
   } else {
-    document.getElementById('lbl-penalty-desc').textContent = 'Overstay penalty \u20B1150.00';
+    document.getElementById('lbl-penalty-desc').textContent = `Overstay penalty \u20B1${currentPenalty.toFixed(2)}`;
     document.getElementById('pay-hidden-overstay').value = '1';
+    document.getElementById('pay-hidden-lost').value = '0';
   }
+
+  const openBtn = document.getElementById('btn-open-penalty-dlg');
+  const rmBtn = document.getElementById('btn-remove-penalty');
+  if (openBtn) openBtn.textContent = 'Change penalty';
+  if (rmBtn) rmBtn.style.display = 'inline-flex';
 
   document.getElementById('add-penalty-dlg').close();
   recalculateFinal();
 });
+
+// Remove / Undo Penalty
+const removePenaltyBtn = document.getElementById('btn-remove-penalty');
+if (removePenaltyBtn) {
+  removePenaltyBtn.addEventListener('click', () => {
+    currentPenalty = 0.0;
+    penaltyType = null;
+
+    document.getElementById('lbl-penalty-desc').textContent = 'None';
+    document.getElementById('lbl-penalty-amt').textContent = '\u20B10.00';
+    document.getElementById('pay-hidden-lost').value = '0';
+    document.getElementById('pay-hidden-overstay').value = '0';
+
+    const openBtn = document.getElementById('btn-open-penalty-dlg');
+    if (openBtn) openBtn.textContent = 'Add penalty';
+    removePenaltyBtn.style.display = 'none';
+
+    recalculateFinal();
+  });
+}
 </script>
 @endpush
 @endsection

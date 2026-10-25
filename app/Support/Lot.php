@@ -114,11 +114,40 @@ class Lot
         return max(0, intdiv(max(0, $to->getTimestamp() - $from->getTimestamp()), 60));
     }
 
-    /** "ABC1234" becomes "ABC 1234". */
+    /** Format Philippine plates cleanly: "ABC1234" -> "ABC 1234", "AB12345" -> "AB 12345", "1" -> "1". */
     public static function plate(?string $plate): string
     {
         $plate = (string) $plate;
+        if ($plate === '') {
+            return '';
+        }
 
+        // 1. Current & Legacy Cars: LLL-DDDD or LLL-DDD (ABC1234 -> ABC 1234, ABC123 -> ABC 123)
+        if (preg_match('/^[A-Z]{3}[0-9]{3,4}$/', $plate)) {
+            return substr($plate, 0, 3).' '.substr($plate, 3);
+        }
+
+        // 2. Modern & Legacy Motorcycles: LL-DDDDD or LL-DDDD (AB12345 -> AB 12345, AB1234 -> AB 1234)
+        if (preg_match('/^[A-Z]{2}[0-9]{4,5}$/', $plate)) {
+            return substr($plate, 0, 2).' '.substr($plate, 2);
+        }
+
+        // 3. Regional Motorcycle: DDDD-LL (1234AB -> 1234 AB)
+        if (preg_match('/^[0-9]{4}[A-Z]{2}$/', $plate)) {
+            return substr($plate, 0, 4).' '.substr($plate, 4);
+        }
+
+        // 4. Vintage: L-DDD-LL (A123BC -> A-123-BC)
+        if (preg_match('/^[A-Z][0-9]{3}[A-Z]{2}$/', $plate)) {
+            return substr($plate, 0, 1).'-'.substr($plate, 1, 3).'-'.substr($plate, 4);
+        }
+
+        // 5. Vintage: DDD-LLL (123ABC -> 123 ABC)
+        if (preg_match('/^[0-9]{3}[A-Z]{3}$/', $plate)) {
+            return substr($plate, 0, 3).' '.substr($plate, 3);
+        }
+
+        // 6. Protocol (1 to 17) or other formats
         return strlen($plate) > 3 ? substr($plate, 0, 3).' '.substr($plate, 3) : $plate;
     }
 
@@ -173,5 +202,20 @@ class Lot
     public static function exitWindowMinutes(): int
     {
         return max(1, (int) self::setting('exit_window_minutes', 15));
+    }
+
+    public static function lotName(): string
+    {
+        return (string) self::setting('lot_name', 'Bayline');
+    }
+
+    public static function lotAddress(): string
+    {
+        return (string) self::setting('lot_address', '123 Commercial Ave, Metro Manila');
+    }
+
+    public static function receiptFooter(): string
+    {
+        return (string) self::setting('receipt_footer', "Exit gate approval is required before you leave.\nValid for 15 minutes.");
     }
 }

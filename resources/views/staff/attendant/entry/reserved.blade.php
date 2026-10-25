@@ -68,7 +68,8 @@
             <label class="ba-label" for="rsv-code-input">Reservation code</label>
             <input class="ba-input" id="rsv-code-input" type="text" placeholder="RSV-4F7K29"
                    value="{{ $code }}"
-                   style="font-size:24px;font-weight:800;letter-spacing:1px;text-transform:uppercase;" autocomplete="off" autofocus>
+                   style="font-size:24px;font-weight:800;letter-spacing:1px;text-transform:uppercase;" autocomplete="off" autofocus
+                   maxlength="10">
             <p style="font-size:12px;color:var(--muted);margin-top:4px;">RSV, a dash and 6 letters or numbers. Not case sensitive.</p>
             <div class="ba-err-msg" id="rsv-err" hidden></div>
           </div>
@@ -305,6 +306,58 @@
   </div>
 </dialog>
 
+<!-- POP-UP: Reservation Already Used, Exited, or Pending Exit -->
+<dialog class="badlg" id="rsv-used-dlg">
+  <div class="in">
+    <button class="x" type="button" data-close aria-label="Close">&times;</button>
+    <h2 style="color:var(--stop);" id="used-dlg-title">Reservation already used</h2>
+
+    <div style="background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;padding:16px;margin-bottom:16px;font-size:14px;" id="used-dlg-box">
+      <div style="display:flex;justify-content:space-between;margin-bottom:8px;"><span style="color:var(--muted);">Code</span><b id="used-code"></b></div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:8px;"><span style="color:var(--muted);">Status</span><b style="color:var(--stop);" id="used-st"></b></div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:8px;"><span style="color:var(--muted);">Driver</span><b id="used-driver"></b></div>
+      <div style="display:flex;flex-direction:column;gap:4px;margin-top:8px;border-top:1px dashed #FECACA;padding-top:8px;">
+        <span style="color:var(--muted);">Details:</span>
+        <span id="used-details" style="font-weight:600;color:#991B1B;"></span>
+      </div>
+    </div>
+
+    <p id="used-dlg-note">A reservation can only be checked in once. If the driver is re-entering after exiting, issue a new ticket through Walk-in entry.</p>
+
+    <div class="actions">
+      <button class="btn ghost" type="button" data-close>Back</button>
+      <a class="btn primary" href="{{ route('attendant.entry.walk-in') }}">Start walk-in entry</a>
+    </div>
+  </div>
+</dialog>
+
+<!-- POP-UP: Reservation Not Bookable Server Redirect -->
+<dialog class="badlg {{ (session('error_modal') && session('error_modal')['type'] === 'reservation_not_bookable') ? 'auto-open' : '' }}" id="rsv-not-bookable-dlg">
+  <div class="in">
+    <button class="x" type="button" data-close aria-label="Close">&times;</button>
+    <h2 style="color:var(--stop);">Cannot check in reservation</h2>
+
+    <div style="background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;padding:16px;margin-bottom:16px;font-size:14px;">
+      <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
+        <span style="color:var(--muted);">Reservation code</span>
+        <b>{{ session('error_modal')['code'] ?? '' }}</b>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
+        <span style="color:var(--muted);">Status</span>
+        <b style="color:var(--stop);">{{ session('error_modal')['status'] ?? '' }}</b>
+      </div>
+      <p style="margin:8px 0 0;color:#991B1B;">{{ session('error_modal')['message'] ?? '' }}</p>
+    </div>
+
+    <p>A reservation can only be checked in once while confirmed. If this driver wishes to enter, please process them as a walk-in entry.</p>
+
+    <div class="actions">
+      <button class="btn ghost" type="button" data-close>Back</button>
+      <a class="btn primary" href="{{ route('attendant.entry.walk-in') }}">Start walk-in entry</a>
+    </div>
+  </div>
+</dialog>
+
 <!-- POP-UP BA-31: Too Early to Check In -->
 <dialog class="badlg" id="rsv-early-dlg">
   <div class="in">
@@ -394,14 +447,20 @@ async function startCamera(deviceId = null) {
       config,
       (decodedText) => {
         playScanBeep();
-        if (statusEl) statusEl.textContent = `Scanned: ${decodedText}! Finding reservation...`;
+        let scannedCode = decodedText.trim().toUpperCase();
+        const codeMatch = scannedCode.match(/RSV-[A-Z0-9]{6}/);
+        if (codeMatch) {
+          scannedCode = codeMatch[0];
+        }
+
+        if (statusEl) statusEl.textContent = `Scanned: ${scannedCode}! Finding reservation...`;
 
         // Stop camera after successful detection
         html5QrScanner.stop().catch(() => {});
         html5QrScanner = null;
 
         // Switch to code view and execute lookup
-        document.getElementById('rsv-code-input').value = decodedText.trim().toUpperCase();
+        document.getElementById('rsv-code-input').value = scannedCode;
         document.getElementById('viewfinder-box').style.display = 'none';
         document.getElementById('manual-code-box').style.display = 'block';
         document.getElementById('tab-manual').classList.replace('ghost', 'primary');
@@ -466,6 +525,15 @@ async function doRsvLookup() {
   const errEl = document.getElementById('rsv-err');
   errEl.hidden = true;
 
+  // Clear any existing active reservation state
+  activeReservation = null;
+  document.getElementById('hidden-rsv-id').value = '';
+  document.getElementById('hidden-rsv-plate').value = '';
+  document.getElementById('section-rsv-verify').style.display = 'none';
+  document.getElementById('section-rsv-lookup').style.display = 'block';
+  document.getElementById('step-rsv-code').classList.add('active');
+  document.getElementById('step-rsv-verify').classList.remove('active');
+
   if (!code) {
     errEl.textContent = 'Enter the reservation code.';
     errEl.hidden = false;
@@ -503,6 +571,36 @@ async function doRsvLookup() {
       return;
     }
 
+    if (data.status === 'already_used') {
+      const isPending = data.reservation.is_pending_exit;
+      const titleEl = document.getElementById('used-dlg-title');
+      const stEl = document.getElementById('used-st');
+      const detailsEl = document.getElementById('used-details');
+      const noteEl = document.getElementById('used-dlg-note');
+
+      if (titleEl) {
+        titleEl.textContent = isPending ? 'Vehicle pending exit' : 'Reservation already used';
+        titleEl.style.color = isPending ? '#D97706' : 'var(--stop)';
+      }
+      document.getElementById('used-code').textContent = data.reservation.code;
+      if (stEl) {
+        stEl.textContent = data.reservation.status;
+        stEl.style.color = isPending ? '#D97706' : 'var(--stop)';
+      }
+      document.getElementById('used-driver').textContent = `${data.reservation.driver}, ${data.reservation.plate}`;
+      if (detailsEl) {
+        detailsEl.textContent = data.reservation.details;
+        detailsEl.style.color = isPending ? '#92400E' : '#991B1B';
+      }
+      if (noteEl) {
+        noteEl.textContent = isPending
+          ? 'This vehicle is cleared for exit at the barrier gate. If the driver has already left and is returning, issue a new ticket through Walk-in entry.'
+          : 'A reservation can only be checked in once. If the driver is re-entering after exiting, issue a new ticket through Walk-in entry.';
+      }
+      document.getElementById('rsv-used-dlg').showModal();
+      return;
+    }
+
     if (data.status === 'too_early') {
       document.getElementById('early-driver').textContent = `${data.reservation.driver}, ${data.reservation.plate}`;
       document.getElementById('early-sched').textContent = data.reservation.scheduled;
@@ -522,12 +620,48 @@ async function doRsvLookup() {
 }
 
 document.getElementById('btn-find-rsv').addEventListener('click', doRsvLookup);
-document.getElementById('rsv-code-input').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') { e.preventDefault(); doRsvLookup(); }
-});
+const rsvCodeInput = document.getElementById('rsv-code-input');
+if (rsvCodeInput) {
+  rsvCodeInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); doRsvLookup(); }
+  });
+
+  // Auto-dash after RSV as user types
+  rsvCodeInput.addEventListener('input', (e) => {
+    let val = rsvCodeInput.value.toUpperCase().replace(/[^A-Z0-9-]/g, '');
+
+    // Allow deleting the dash cleanly
+    if (e.inputType === 'deleteContentBackward') {
+      if (val === 'RSV-') {
+        rsvCodeInput.value = 'RSV';
+        return;
+      }
+      rsvCodeInput.value = val.slice(0, 10);
+      return;
+    }
+
+    let clean = val.replace(/-/g, '');
+    if (clean.startsWith('RSV')) {
+      if (clean.length >= 3) {
+        rsvCodeInput.value = 'RSV-' + clean.slice(3, 9);
+      } else {
+        rsvCodeInput.value = clean;
+      }
+    } else {
+      rsvCodeInput.value = val.slice(0, 10);
+    }
+  });
+
+  rsvCodeInput.addEventListener('blur', () => {
+    let clean = rsvCodeInput.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (clean.length === 6 && !clean.startsWith('RSV')) {
+      rsvCodeInput.value = 'RSV-' + clean;
+    }
+  });
+}
 
 // Auto-lookup if code prefilled
-if (document.getElementById('rsv-code-input').value.trim() !== '') {
+if (rsvCodeInput && rsvCodeInput.value.trim() !== '') {
   doRsvLookup();
 }
 

@@ -96,13 +96,13 @@ class Rules
         ];
     }
 
-    /** Three letters then three or four digits, written without spaces: ABC1234. */
+    /** Valid Philippine vehicle plate (standard, legacy, vintage, or protocol). */
     public static function plate(bool $required = true): array
     {
         return [$required ? 'required' : 'nullable', 'regex:'.Vehicle::PLATE_PATTERN];
     }
 
-    public const PLATE_MESSAGE = 'Enter a plate like ABC 1234.';
+    public const PLATE_MESSAGE = 'Enter a valid Philippine plate (e.g. ABC 1234, AB 12345, or protocol plate 1).';
 
     public static function makeModel(): array
     {

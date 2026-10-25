@@ -15,8 +15,14 @@ class Vehicle extends Model
 
     public const TYPES = ['Car', 'SUV', 'Van', 'Pickup', 'Motorcycle', 'Truck'];
 
-    /** Three letters then three or four digits, as normalizePlate writes it (ABC1234). */
-    public const PLATE_PATTERN = '/^[A-Z]{3}[0-9]{3,4}$/';
+    /**
+     * Philippine LTO formats supported:
+     * - Current standard: LLL-DDDD (car) and LL-DDDDD (motorcycle)
+     * - Legacy (1981-2014): LLL-DDD (car), LL-DDDD (motorcycle), DDDD-LL (regional motorcycle)
+     * - Vintage (pre-1981): L-DDD-LL, DDD-LLL
+     * - Official Protocol plates: 1 (President) through 17 (Trial Judges)
+     */
+    public const PLATE_PATTERN = '/^(?:[A-Z]{3}[0-9]{3,4}|[A-Z]{2}[0-9]{4,5}|[0-9]{4}[A-Z]{2}|[A-Z][0-9]{3}[A-Z]{2}|[0-9]{3}[A-Z]{3}|[1-9]|1[0-7])$/';
 
     public const COLORS = ['White', 'Black', 'Gray', 'Silver', 'Red', 'Blue', 'Green', 'Yellow', 'Orange', 'Brown', 'Other'];
 
@@ -34,13 +40,11 @@ class Vehicle extends Model
     }
 
     /**
-     * "ABC 1234" for display. Plates of seven characters or fewer split after three.
+     * Nicely formatted plate for display (e.g. "ABC 1234", "AB 12345", "1").
      */
     public function displayPlate(): string
     {
-        $plate = $this->plate_number;
-
-        return strlen($plate) > 3 ? substr($plate, 0, 3).' '.substr($plate, 3) : $plate;
+        return \App\Support\Lot::plate($this->plate_number);
     }
 
     /** "Toyota Vios, white sedan" style line. */

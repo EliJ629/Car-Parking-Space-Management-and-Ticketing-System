@@ -71,7 +71,7 @@
               <form method="POST" action="{{ route('manager.discounts.update', $discount) }}" class="manager-inline-form">
                 @csrf @method('PATCH')
                 <label class="f">Name<input name="name" maxlength="80" value="{{ $discount->name }}" required></label>
-                <label class="f">Percent<input name="percent" type="number" min="1" max="100" value="{{ $discount->percent }}" required></label>
+                <label class="f">Percent<input name="percent" type="number" min="1" max="100" value="{{ $discount->percent }}" required oninput="if(parseInt(this.value,10)>100)this.value=100;if(parseInt(this.value,10)<0)this.value=0;"></label>
                 <label class="f">Proof<input name="proof_label" maxlength="80" value="{{ $discount->proof_label }}" required></label>
                 <label class="ck"><input type="checkbox" name="requires_manager_pin" value="1" @checked($discount->requires_manager_pin)>Manager PIN required</label>
                 <label class="ck"><input type="checkbox" name="active" value="1" @checked($discount->active)>Active</label>
@@ -97,10 +97,13 @@
     @csrf
     <div class="manager-form-grid">
       <div class="manager-field"><label class="f" for="discount-name">Name</label><input id="discount-name" name="name" maxlength="80" value="{{ old('name') }}" required></div>
-      <div class="manager-field"><label class="f" for="discount-percent">Percent</label><input id="discount-percent" name="percent" type="number" min="1" max="100" value="{{ old('percent') }}" required></div>
+      <div class="manager-field"><label class="f" for="discount-percent">Percent</label><input id="discount-percent" name="percent" type="number" min="1" max="100" value="{{ old('percent') }}" required oninput="if(parseInt(this.value,10)>100)this.value=100;if(parseInt(this.value,10)<0)this.value=0;"></div>
       <div class="manager-field"><label class="f" for="proof-label">Proof required</label><input id="proof-label" name="proof_label" maxlength="80" value="{{ old('proof_label') }}" required></div>
       <div class="manager-field"><label class="ck"><input type="checkbox" name="requires_manager_pin" value="1">Require manager PIN</label></div>
     </div>
+    @foreach (['name','percent','proof_label','requires_manager_pin'] as $field)
+      @error($field)<p class="err">{{ $message }}</p>@enderror
+    @endforeach
     <div class="manager-form-actions"><button class="btn sm" type="submit">Add discount</button></div>
   </form>
 </section>
@@ -175,3 +178,16 @@
   @endforelse
   <a class="manager-text-link" href="{{ route('manager.activity.index', ['action' => 'rate_set_created']) }}">View full change log</a>
 </section>
+
+<script>
+document.querySelectorAll('input[name="percent"]').forEach(function (el) {
+  el.addEventListener('input', function () {
+    var val = parseInt(this.value, 10);
+    if (!isNaN(val)) {
+      if (val > 100) this.value = 100;
+      if (val < 0) this.value = 0;
+    }
+  });
+});
+</script>
+
