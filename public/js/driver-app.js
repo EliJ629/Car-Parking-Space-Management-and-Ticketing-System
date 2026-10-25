@@ -134,12 +134,31 @@
     build();
   }
 
-  /* PWD ID photo: show a small preview of the chosen file. */
+  /* PWD ID photo: preview the chosen file. A file over the size limit is refused here, with the reason
+     shown inside the pop-up, so the driver does not upload a huge photo only to be turned away. */
   var idInput = document.getElementById('id_photo'), idPreview = document.getElementById('id-preview');
+  var idWarn = document.getElementById('id-photo-warning');
+  function warnPhoto(text) {
+    if (!idWarn) return;
+    var t = idWarn.querySelector('[data-text]');
+    if (t) t.textContent = text || '';
+    idWarn.hidden = !text;
+    if (text) idInput.setAttribute('aria-invalid', 'true'); else idInput.removeAttribute('aria-invalid');
+  }
   if (idInput && idPreview) {
     idInput.addEventListener('change', function () {
       var f = idInput.files && idInput.files[0];
-      if (!f || !/^image\//.test(f.type)) { idPreview.hidden = true; return; }
+      var max = parseInt(idInput.getAttribute('data-max-bytes'), 10) || 0;
+      idPreview.hidden = true;
+      if (!f) { return; }
+      if (max && f.size > max) {
+        var mb = (f.size / 1048576).toFixed(1).replace(/\.0$/, '');
+        warnPhoto('Your PWD ID photo was not accepted because the file is too large (' + mb + ' MB). The limit is ' + (idInput.getAttribute('data-max-label') || 'smaller') + '. Choose a smaller photo, or take it again at a lower quality.');
+        idInput.value = '';
+        return;
+      }
+      warnPhoto('');
+      if (!/^image\//.test(f.type)) { return; }
       idPreview.src = URL.createObjectURL(f); idPreview.hidden = false;
     });
   }

@@ -136,12 +136,12 @@ class Lot
             : $phone;
     }
 
-    /** 0917 123 4567, 0917-123-4567 and +63 917 123 4567 all become 09171234567. */
+    /** +639171234567 becomes 09171234567. Anything else is returned as typed (trimmed), so the phone rule can refuse it. */
     public static function normalizePhone(?string $phone): string
     {
-        $phone = preg_replace('/[\s()\-]+/', '', (string) $phone);
+        $phone = trim((string) $phone);
 
-        if (preg_match('/^\+?63(9\d{9})$/', $phone, $matches)) {
+        if (preg_match('/^\+63(9\d{9})$/', $phone, $matches)) {
             return '0'.$matches[1];
         }
 

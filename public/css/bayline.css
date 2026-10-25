@@ -27,8 +27,9 @@ a{color:inherit}
 .nav nav a{text-decoration:none;font-size:14px;font-weight:600;color:var(--muted)}
 .nav nav a:hover{color:var(--ink)}
 .nav .sp{flex:1}
-.tt{font:600 13px var(--f-b);background:transparent;color:var(--ink);border:1.5px solid var(--line);border-radius:6px;padding:0;width:44px;height:44px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;flex:none}
+.tt{font:600 13px var(--f-b);background:transparent;color:var(--ink);border:0;border-radius:10px;padding:0;width:44px;height:44px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;flex:none}
 .tt .ico{display:block}
+.tt:hover{background:rgba(127,127,127,.16)}
 .tt:focus-visible,.pw-eye:focus-visible{outline:3px solid var(--paint-deep);outline-offset:2px}
 /* Password field with a show/hide eye inside it (added by bayline.js) */
 .pw{position:relative;display:block}
@@ -192,6 +193,11 @@ input[aria-invalid="true"],select[aria-invalid="true"]{border-color:var(--stop);
 .findbox h2{font-size:34px;display:flex;align-items:center;gap:10px}
 .findbox .ic{width:38px;height:38px;border-radius:8px;background:var(--ink);color:var(--surface);display:inline-flex;align-items:center;justify-content:center;flex:none}
 .findbox p.lede{margin:10px 0 16px;font-size:14.5px;color:var(--muted)}
+/* The theme icon sits inside the card, in its bottom-right corner. */
+.cardfoot{display:flex;justify-content:flex-end;margin-top:10px}
+.appcard>.cardfoot{padding:0 10px 10px;margin-top:0}
+body:has(.appcard){padding-top:24px}
+.backico{margin:0 0 14px;text-decoration:none}
 .back{font-size:14px;font-weight:600;color:var(--muted);text-decoration:none}
 .back:hover{color:var(--ink)}
 
@@ -240,3 +246,10 @@ dialog.vdlg .in{padding:22px;border-top:5px solid var(--stop)}
 dialog.vdlg h2{margin:0 0 8px;font-size:26px}
 dialog.vdlg p{margin:0 0 16px;color:var(--ink)}
 dialog.vdlg .row{display:grid;gap:10px}
+/* Continue to Google Sign-in */
+.or-split{display:flex;align-items:center;gap:12px;margin:18px 0 14px;color:var(--muted);font-size:13px;font-weight:600}
+.or-split::before,.or-split::after{content:"";flex:1;border-top:1px solid var(--line)}
+.btn.gbtn{background:#fff;color:#1f1f1f;border:1.5px solid #747775;border-bottom-width:1.5px;font-weight:600}
+.btn.gbtn:hover{background:#f4f6fb}
+.btn.gbtn:focus-visible{outline:3px solid var(--paint);outline-offset:2px}
+input[readonly]{background:var(--out-bg);color:var(--muted);cursor:default}

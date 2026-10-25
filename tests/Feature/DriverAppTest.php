@@ -120,7 +120,9 @@ class DriverAppTest extends TestCase
         $this->actingAs($driver)->get(route('driver.bookings.show', $reservation))->assertOk()->assertSee($reservation->code)->assertSee('Cancel reservation');
         $this->actingAs($driver)->get(route('driver.bookings'))->assertOk()->assertSee($reservation->code);
         $this->actingAs($driver)->get(route('driver.home'))->assertOk()->assertSee('Your next reservation');
-        $this->assertTrue(Notice::where('user_id', $driver->id)->where('code', 'N-14')->exists());
+        // A standard slot needs no approval, so the driver gets the confirmation straight away.
+        $this->assertTrue(Notice::where('user_id', $driver->id)->where('code', 'N-01')->exists());
+        $this->assertFalse(Notice::where('user_id', $driver->id)->where('code', 'N-14')->exists());
 
         $this->actingAs($driver)->post(route('driver.bookings.cancel', $reservation))->assertRedirect(route('driver.bookings.show', $reservation));
         $this->assertSame('canceled', $reservation->fresh()->status);
@@ -241,7 +243,9 @@ class DriverAppTest extends TestCase
         $this->post(route('driver.register'), $base)->assertSessionHasErrors('make_model');
         $this->assertSame(0, User::where('email', 'pedro.cruz@gmail.com')->count());
 
-        $this->post(route('driver.register'), $base + ['make_model' => 'Toyota Vios'])->assertRedirect(route('driver.verify'));
+        \Illuminate\Support\Facades\Mail::fake();
+        $this->post(route('driver.register'), $base + ['make_model' => 'Toyota Vios'])->assertRedirect(route('driver.register.sent'));
+        \Illuminate\Support\Facades\Mail::assertSent(\App\Mail\ConfirmRegistrationMail::class, fn ($mail) => $this->get($mail->link)->assertRedirect(route('driver.login')) !== null);
         $this->assertSame('Toyota Vios', Vehicle::where('plate_number', 'KLM4455')->value('make_model'));
     }
 
@@ -269,7 +273,7 @@ class DriverAppTest extends TestCase
 
         $this->post(route('driver.reserve.store'), $this->ack() + $q + ['slot' => $slot->id, 'vehicle' => $vehicle->id])->assertRedirect();
         $this->assertSame(1, ParkingReservation::count());
-        $this->get(route('driver.bookings.show', [ParkingReservation::first(), 'new' => 1]))->assertOk()->assertSee('Request sent')->assertDontSee('data-qr=', false);
+        $this->get(route('driver.bookings.show', [ParkingReservation::first(), 'new' => 1]))->assertOk()->assertSee('Reservation confirmed')->assertSee('data-qr=', false);
     }
 
     public function test_a_date_too_far_ahead_is_refused(): void
@@ -361,7 +365,7 @@ class DriverAppTest extends TestCase
         $driver = $this->driver('maria@example.com', null);
         $other = $this->driver('other@example.com', 'ZZZ1111');
 
-        $this->actingAs($driver)->post(route('driver.vehicles.store'), ['plate_number' => 'abc 1234', 'color' => 'Blue', 'vehicle_type' => 'SUV', 'make_model' => 'Honda CR-V', 'contact_number' => '0917 555 0142'])
+        $this->actingAs($driver)->post(route('driver.vehicles.store'), ['plate_number' => 'abc 1234', 'color' => 'Blue', 'vehicle_type' => 'SUV', 'make_model' => 'Honda CR-V', 'contact_number' => '09175550142'])
             ->assertRedirect(route('driver.vehicles'));
         $vehicle = Vehicle::where('plate_number', 'ABC1234')->first();
         $this->assertNotNull($vehicle);
@@ -416,7 +420,7 @@ class DriverAppTest extends TestCase
 
         // The name is saved at once. A new phone number waits for the code that is emailed.
         \Illuminate\Support\Facades\Mail::fake();
-        $this->actingAs($driver)->put(route('driver.account.profile.update'), ['name' => 'Maria S. Santos', 'email' => 'maria@example.com', 'phone' => '0917 555 0199'])
+        $this->actingAs($driver)->put(route('driver.account.profile.update'), ['name' => 'Maria S. Santos', 'email' => 'maria@example.com', 'phone' => '09175550199'])
             ->assertRedirect(route('driver.account.confirm'));
         $this->assertSame('Maria S. Santos', $driver->fresh()->name);
         $this->assertSame('09175550142', $driver->fresh()->phone);

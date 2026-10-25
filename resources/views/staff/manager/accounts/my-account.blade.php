@@ -6,7 +6,7 @@
       <div class="manager-field manager-field-wide"><label class="f" for="name">Full name</label><input id="name" name="name" value="{{ old('name', $account->name) }}" required maxlength="120" autocomplete="name">@error('name')<p class="err">{{ $message }}</p>@enderror</div>
       <div class="manager-field"><label class="f" for="username">Username</label><input id="username" name="username" value="{{ old('username', $account->username) }}" required minlength="4" maxlength="40" pattern="[A-Za-z0-9]+" autocomplete="username">@error('username')<p class="err">{{ $message }}</p>@enderror</div>
       <div class="manager-field"><label class="f" for="email">Email</label><input id="email" name="email" type="email" maxlength="255" value="{{ old('email', $account->email) }}" autocomplete="email">@error('email')<p class="err">{{ $message }}</p>@enderror</div>
-      <div class="manager-field"><label class="f" for="phone">Mobile</label><input id="phone" name="phone" type="tel" inputmode="tel" maxlength="17" placeholder="0917 555 0142" value="{{ old('phone', $account->phone) }}" autocomplete="tel">@error('phone')<p class="err">{{ $message }}</p>@enderror</div>
+      <div class="manager-field"><label class="f" for="phone">Mobile</label><input id="phone" name="phone" type="tel" inputmode="tel" maxlength="13" placeholder="09175550142" value="{{ old('phone', $account->phone) }}" autocomplete="tel">@error('phone')<p class="err">{{ $message }}</p>@enderror</div>
       <p class="hint manager-field-wide">Keep at least one contact method on your account.</p>
     </div>
     <div class="manager-form-actions"><button class="btn sm" type="submit">Save profile</button></div>

@@ -121,9 +121,6 @@
   @if ($errors->has('understand'))
     <div class="err-box" role="alert"><b>Confirm that you will arrive on time</b>{{ $errors->first('understand') }}</div>
   @endif
-  @if ($errors->has('id_photo'))
-    <div class="err-box" role="alert"><b>PWD ID photo</b>{{ $errors->first('id_photo') }}</div>
-  @endif
   <section class="dcard">
     <p class="lab">Review</p>
     <h3>Slot {{ $slot->code }}</h3>
@@ -157,7 +154,7 @@
   </div>
 
   @push('dialogs')
-  <dialog class="dsheet" id="confirm-res" aria-labelledby="cr-t" @if ($errors->has('id_photo') || $errors->has('understand')) data-autoopen @endif>
+  <dialog class="dsheet" id="confirm-res" aria-labelledby="cr-t" @if ($errors->has('id_photo') || $errors->has('understand') || ! empty($photoTooLarge)) data-autoopen @endif>
     <form class="in" method="POST" action="{{ route('driver.reserve.store') }}" enctype="multipart/form-data" data-busy data-busy-label="Sending">
       @csrf
       <input type="hidden" name="date" value="{{ $date }}">
@@ -166,12 +163,14 @@
       <input type="hidden" name="vehicle" value="{{ $vehicle->id }}">
       <button class="x" type="button" data-close aria-label="Close">X</button>
       <h2 id="cr-t">Reserve slot {{ $slot->code }}?</h2>
-      <p class="sub" style="color:var(--ink)">{{ \App\Support\Lot::when($at) }} for {{ $vehicle->displayPlate() }}. The reservation is free. The booth attendant approves it before your QR code appears.</p>
+      <p class="sub" style="color:var(--ink)">{{ \App\Support\Lot::when($at) }} for {{ $vehicle->displayPlate() }}. The reservation is free.@if ($slot->type === 'PWD') The booth attendant checks your PWD ID and approves it before your QR code appears.@else It is confirmed right away and your QR code appears as soon as you reserve.@endif</p>
       @if ($slot->type === 'PWD')
         <div class="fld">
           <label class="f" for="id_photo">Photo of your PWD ID</label>
-          <input id="id_photo" name="id_photo" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" required @error('id_photo') aria-invalid="true" @enderror>
-          <p class="fine" style="margin-top:6px">A clear, readable photo (JPG, PNG or WEBP, up to 5 MB). Only the booth attendant sees it, and it is deleted if the request is turned down.</p>
+          @php $photoWarning = $errors->first('id_photo') ?: (! empty($photoTooLarge) ? \App\Support\PwdPhoto::tooLargeMessage() : ''); @endphp
+          <div class="err-box" id="id-photo-warning" role="alert" style="margin:0 0 10px" @if (! $photoWarning) hidden @endif><b>Photo not accepted</b><span data-text>{{ $photoWarning }}</span></div>
+          <input id="id_photo" name="id_photo" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" required data-max-bytes="{{ $photoLimitBytes }}" data-max-label="{{ $photoLimitLabel }}" @if ($photoWarning) aria-invalid="true" @endif>
+          <p class="fine" style="margin-top:6px">A clear, readable photo (JPG, PNG or WEBP, up to {{ $photoLimitLabel }}). Only the booth attendant sees it, and it is deleted if the request is turned down.</p>
           <img id="id-preview" alt="Preview of your ID photo" hidden style="max-width:100%;max-height:180px;margin-top:8px;border-radius:6px">
         </div>
       @endif
@@ -180,7 +179,7 @@
         <span>I will arrive by <b>{{ \App\Support\Lot::time($holdEnds) }}</b>. I understand that if I am not checked in by then, the reservation and the slot are no longer valid.</span>
       </label>
       <div class="actions">
-        <button class="btn" type="submit">Send for approval</button>
+        <button class="btn" type="submit">{{ $slot->type === 'PWD' ? 'Send for approval' : 'Reserve slot' }}</button>
         <button class="btn ghost" type="button" data-close>Not yet</button>
       </div>
     </form>

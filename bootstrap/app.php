@@ -7,6 +7,7 @@ use App\Http\Middleware\RunSweeper;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Exceptions\PostTooLargeException;
 use Illuminate\Http\Request;
 
 return Application::configure(basePath: dirname(__DIR__))
@@ -35,6 +36,23 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->dontFlash(['manager_pin', 'manager_pin_confirmation']);
+
+        // A photo bigger than PHP's post_max_size empties the whole form, so Laravel never sees the fields.
+        // Send the driver back to the reservation pop-up with a clear reason instead of an error page.
+        $exceptions->render(function (PostTooLargeException $e, Request $request) {
+            if (! $request->is('driver/reserve')) {
+                return null;
+            }
+
+            $back = (string) $request->headers->get('referer');
+            $path = $back !== '' && str_starts_with($back, $request->getSchemeAndHttpHost().'/driver/reserve')
+                ? strtok($back, '#')
+                : route('driver.reserve', ['step' => 1]);
+            $path = preg_replace('/([?&])photo=[^&]*&?/', '$1', $path);
+            $path = rtrim($path, '?&');
+
+            return redirect($path.(str_contains($path, '?') ? '&' : '?').'photo=too_large');
+        });
 
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*') || $request->expectsJson(),

@@ -39,7 +39,7 @@ class AuditValidationTest extends TestCase
     private function signUp(array $override = []): array
     {
         return $override + [
-            'name' => 'Pedro Cruz', 'email' => 'pedro.cruz@gmail.com', 'phone' => '0917 123 4567', 'plate_number' => 'KLM 4455',
+            'name' => 'Pedro Cruz', 'email' => 'pedro.cruz@gmail.com', 'phone' => '09171234567', 'plate_number' => 'KLM 4455',
             'vehicle_type' => 'Car', 'make_model' => 'Toyota Vios', 'color' => 'Black',
             'password' => 'Driver123x!', 'password_confirmation' => 'Driver123x!',
         ];
@@ -101,16 +101,28 @@ class AuditValidationTest extends TestCase
             ]))->assertSessionHasNoErrors();
         }
 
-        $this->assertSame(6, Vehicle::count());
+        // Each valid sign up waits for its link; nothing is saved as an account yet.
+        $this->assertSame(6, \App\Models\PendingRegistration::count());
+        $this->assertSame(0, Vehicle::count());
     }
 
     public function test_sign_up_stores_a_clean_record_and_refuses_a_plate_that_is_already_registered(): void
     {
+        \Illuminate\Support\Facades\Mail::fake();
         $this->post(route('driver.register'), $this->signUp(['name' => '  Pedro   Cruz ', 'email' => ' Pedro.Cruz@GMAIL.com ']))
-            ->assertRedirect(route('driver.verify'));
+            ->assertRedirect(route('driver.register.sent'));
+        $this->assertNull(User::where('email', 'pedro.cruz@gmail.com')->first(), 'Nothing is saved before the link is clicked.');
+
+        $link = null;
+        \Illuminate\Support\Facades\Mail::assertSent(\App\Mail\ConfirmRegistrationMail::class, function ($mail) use (&$link) {
+            $link = $mail->link;
+
+            return $mail->hasTo('pedro.cruz@gmail.com');
+        });
+        $this->get($link)->assertRedirect(route('driver.login'));
 
         $user = User::where('email', 'pedro.cruz@gmail.com')->firstOrFail();
-        $this->assertNull($user->email_verified_at, 'A new account stays unverified until the code is entered.');
+        $this->assertNotNull($user->email_verified_at, 'The link confirms the email.');
         $this->assertSame('Pedro Cruz', $user->name);
         $this->assertSame('09171234567', $user->phone);
         $this->assertSame('KLM4455', Vehicle::where('user_id', $user->id)->value('plate_number'));
@@ -146,7 +158,7 @@ class AuditValidationTest extends TestCase
         $this->put(route('driver.account.profile.update'), ['name' => 'Maria Santos', 'email' => 'maria@yahoo.com', 'phone' => '09175550142'])->assertSessionHasErrors('email');
         $this->put(route('driver.account.profile.update'), ['name' => 'Maria Santos', 'email' => 'maria@example.com', 'phone' => '555'])->assertSessionHasErrors('phone');
         \Illuminate\Support\Facades\Mail::fake();
-        $this->put(route('driver.account.profile.update'), ['name' => 'Maria Santos', 'email' => 'maria@example.com', 'phone' => '+63 917 555 0199'])
+        $this->put(route('driver.account.profile.update'), ['name' => 'Maria Santos', 'email' => 'maria@example.com', 'phone' => '+639175550199'])
             ->assertSessionHasNoErrors();
         $this->assertSame('09175550199', $driver->fresh()->pending_phone, 'The number is held until the emailed code is entered.');
         $this->assertSame('09175550142', $driver->fresh()->phone);
