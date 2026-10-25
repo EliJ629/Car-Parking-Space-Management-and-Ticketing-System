@@ -23,7 +23,7 @@ class Vehicle extends Model
      * ABC1234 or ABC123 (cars and motorcycles), 1234ABC (older plates), AB12345, and the short
      * plates of high offices and government (1 to 4 digits such as 5, or letters and a number such as SENATE3).
      */
-    public const PLATE_PATTERN = '/^(?:[A-Z]{3}[0-9]{3,4}|[0-9]{3,4}[A-Z]{2,3}|[A-Z]{2}[0-9]{4,5}|[0-9]{1,4}|[A-Z]{2,8}[0-9]{1,4})$/';
+    public const PLATE_PATTERN = '/^(?:[A-Z]{3}[0-9]{3,4}|[0-9]{3,4}[A-Z]{2,3}|[A-Z]{2}[0-9]{4,5}|[0-9]{1,4}|[A-Z]{2,8}[0-9]{1,4}|[A-Z][0-9]{3}[A-Z]{2})$/';
 
     public const COLORS = ['White', 'Black', 'Gray', 'Silver', 'Red', 'Blue', 'Green', 'Yellow', 'Orange', 'Brown', 'Other'];
 
@@ -41,7 +41,7 @@ class Vehicle extends Model
     }
 
     /**
-     * "ABC 1234" for display. Plates of seven characters or fewer split after three.
+     * Nicely formatted plate for display (e.g. "ABC 1234", "AB 12345", "1").
      */
     public function displayPlate(): string
     {

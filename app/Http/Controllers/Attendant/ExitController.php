@@ -153,6 +153,12 @@ class ExitController extends Controller
         $now = Lot::now();
         $estimate = $calculator->estimate($session, $now);
 
+        // For attendant checkout, initial penalty is 0 unless attendant explicitly adds one at the booth
+        $estimate['penalties'] = 0.0;
+        $estimate['lost_ticket_penalty'] = 0.0;
+        $estimate['overstay_penalty'] = 0.0;
+        $estimate['total'] = max(0.0, round($estimate['parking_charge'] - ($estimate['already_paid'] ?? 0.0), 2));
+
         $discounts = ParkingDiscount::query()->where('active', true)->get();
         $managers = User::query()->where('role', User::ROLE_MANAGER)->where('status', User::STATUS_ACTIVE)->get();
 
@@ -162,6 +168,7 @@ class ExitController extends Controller
             'discounts' => $discounts,
             'managers' => $managers,
             'isReserved' => $session->reservation !== null,
+            'currentRate' => ParkingRateSet::current(),
         ]);
     }
 
@@ -263,31 +270,55 @@ class ExitController extends Controller
         $estimate = $calculator->estimate($session, now());
         $parkingCharge = $estimate['parking_charge'];
 
-        // Apply discount if selected
+        // Apply penalties only if explicitly added by the attendant
+        $penalties = 0.0;
+        $currentRate = ParkingRateSet::current();
+        if ($request->boolean('lost_ticket')) {
+            $penalties += (float) ($currentRate?->lost_ticket_penalty ?? 100);
+            $session->lost_ticket = true;
+        } else {
+            $session->lost_ticket = false;
+        }
+
+        if ($request->boolean('overstay')) {
+            $penalties += (float) ($currentRate?->overstay_penalty ?? 150);
+        }
+
+        $subtotal = $parkingCharge + $penalties;
+
+        // Apply discount if selected (applies to total including additional fees like lost ticket and overstay)
         $discountAmount = 0.0;
         $discountName = null;
         if (! empty($validated['discount_id'])) {
             $discount = ParkingDiscount::query()->find($validated['discount_id']);
             if ($discount) {
+                $proof = trim((string) ($validated['discount_proof'] ?? ''));
+                if (empty($proof)) {
+                    return back()->withErrors(['discount_proof' => 'An ID number or proof is required to apply this discount.']);
+                }
+
+                $lowerName = strtolower($discount->name);
+                $isDummy = (bool) preg_match('/^(?:0+|12345|test|none|asdf|demo)$/i', $proof);
+
+                if (str_contains($lowerName, 'senior')) {
+                    $validSenior = preg_match('/^(?:(?:SC|OSCA|SR)[-\s]?[A-Z0-9-]{4,18}|[0-9]{2,4}[-\s]?[0-9]{4,10}|[0-9]{4}[-\s][0-9]{4}[-\s][0-9]{4}[-\s]?[0-9]{4}|[A-Z0-9-]{5,20})$/i', $proof);
+                    if (! $validSenior || $isDummy || strlen($proof) < 5) {
+                        return back()->withErrors(['discount_proof' => 'Invalid Senior Citizen (OSCA) ID format. Example: SC-0048215 or 12-3456-789']);
+                    }
+                } elseif (str_contains($lowerName, 'pwd')) {
+                    $validPwd = preg_match('/^(?:PWD[-\s]?[A-Z0-9-]{4,18}|[0-9]{2}[-\s][0-9]{4}[-\s][0-9]{3}[-\s]?[0-9]{4,7}|[0-9]{2,4}[-\s]?[0-9]{4,10}|[A-Z0-9-]{5,20})$/i', $proof);
+                    if (! $validPwd || $isDummy || strlen($proof) < 5) {
+                        return back()->withErrors(['discount_proof' => 'Invalid PWD ID format. Example: PWD-2024-00142 or 11-2402-001-0001234']);
+                    }
+                }
+
                 $discountName = $discount->name;
-                $discountAmount = round(($parkingCharge * $discount->percent) / 100, 2);
+                $discountAmount = round(($subtotal * $discount->percent) / 100, 2);
             }
         }
 
-        // Apply penalties
-        $penalties = 0.0;
-        $currentRate = ParkingRateSet::current();
-        if (! empty($validated['lost_ticket']) || $session->lost_ticket) {
-            $penalties += (float) ($currentRate?->lost_ticket_penalty ?? 100);
-            $session->lost_ticket = true;
-        }
-
-        if (! empty($validated['overstay']) || $session->exit_window_expired_at) {
-            $penalties += (float) ($currentRate?->overstay_penalty ?? 150);
-        }
-
         $alreadyPaid = (float) ($session->payment?->total ?? 0.0);
-        $finalAmount = max(0.0, round($parkingCharge - $discountAmount + $penalties - $alreadyPaid, 2));
+        $finalAmount = max(0.0, round($subtotal - $discountAmount - $alreadyPaid, 2));
         $cashReceived = (float) $validated['cash_received'];
 
         // BA-45: Cash check
@@ -303,7 +334,7 @@ class ExitController extends Controller
         }
 
         $changeGiven = round($cashReceived - $finalAmount, 2);
-        $receiptNumber = $this->generateNextReceiptNumber();
+        $receiptNumber = $session->payment?->receipt_number ?: $this->generateNextReceiptNumber();
 
         $payment = DB::transaction(function () use (
             $session, $attendant, $estimate, $discountAmount, $discountName, $penalties,
@@ -388,15 +419,23 @@ class ExitController extends Controller
 
     private function generateNextReceiptNumber(): string
     {
-        $last = ParkingPayment::query()
+        $all = ParkingPayment::query()
             ->where('receipt_number', 'like', 'RC-%')
-            ->orderByDesc('id')
-            ->value('receipt_number');
+            ->pluck('receipt_number');
 
-        if ($last && preg_match('/^RC-(\d+)$/', $last, $m)) {
-            $next = (int) $m[1] + 1;
-        } else {
-            $next = 1;
+        $max = 0;
+        foreach ($all as $rc) {
+            if (preg_match('/^RC-(\d+)$/', $rc, $m)) {
+                $num = (int) $m[1];
+                if ($num > $max) {
+                    $max = $num;
+                }
+            }
+        }
+
+        $next = $max + 1;
+        while (ParkingPayment::where('receipt_number', 'RC-'.str_pad((string) $next, 4, '0', STR_PAD_LEFT))->exists()) {
+            $next++;
         }
 
         return 'RC-'.str_pad((string) $next, 4, '0', STR_PAD_LEFT);

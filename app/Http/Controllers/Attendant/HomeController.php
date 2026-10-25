@@ -28,14 +28,13 @@ class HomeController extends Controller
         $pendingExits = ParkingSession::query()->where('status', ParkingSession::STATUS_PAID)->count();
         $availableSlots = ParkingSlot::query()->where('status', ParkingSlot::STATUS_AVAILABLE)->count();
 
-        // Shift cash: payments received by this attendant today (or current shift)
-        $shiftStart = $attendant->last_login_at
-            ? Lot::local($attendant->last_login_at)
-            : Lot::dayStart();
+        // Shift cash: payments received by this attendant during current shift
+        $shiftStart = ShiftController::determineShiftStart($attendant);
+        $shiftStartUtc = $shiftStart->copy()->setTimezone('UTC');
 
         $shiftCash = (float) ParkingPayment::query()
             ->where('received_by', $attendant->id)
-            ->where('paid_at', '>=', $shiftStart->setTimezone('UTC'))
+            ->where('paid_at', '>=', $shiftStartUtc)
             ->sum('total');
 
         // Reserved arrivals:

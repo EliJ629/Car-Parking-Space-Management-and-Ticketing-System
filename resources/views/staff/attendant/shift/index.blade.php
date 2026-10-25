@@ -192,6 +192,28 @@
   </div>
 </div>
 
+<!-- POP-UP: Note Required when Cash Count Differs -->
+@if(session('error_modal') && session('error_modal')['type'] === 'close_shift_note_required')
+<dialog class="badlg auto-open" id="close-note-required-dlg">
+  <div class="in">
+    <button class="x" type="button" data-close aria-label="Close">&times;</button>
+    <h2 style="color:var(--stop);">Note required for cash difference</h2>
+    <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;padding:14px;font-size:14px;margin-bottom:16px;">
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span style="color:var(--muted);">Expected in drawer</span><b>{{ \App\Support\Lot::peso(session('error_modal')['expected']) }}</b></div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span style="color:var(--muted);">Cash counted</span><b>{{ \App\Support\Lot::peso(session('error_modal')['counted']) }}</b></div>
+      <div style="display:flex;justify-content:space-between;border-top:1px solid var(--line);padding-top:6px;margin-top:6px;color:var(--stop);">
+        <b>Difference</b>
+        <b>{{ session('error_modal')['difference'] < 0 ? 'Short' : 'Over' }} {{ \App\Support\Lot::peso(abs(session('error_modal')['difference'])) }}</b>
+      </div>
+    </div>
+    <p>Because the cash counted differs from expected, an explanation note is required for the manager before closing.</p>
+    <div class="actions">
+      <button class="btn primary" type="button" data-close data-open="#close-shift-dlg">Return and add note</button>
+    </div>
+  </div>
+</dialog>
+@endif
+
 <!-- POP-UP BA-63: Close Shift Modal -->
 <dialog class="badlg" id="close-shift-dlg">
   <form class="in" method="POST" action="{{ route('attendant.shift.close') }}">
@@ -210,8 +232,10 @@
 
     <div class="ba-form-group">
       <label class="ba-label" for="cash-counted-input">Cash counted</label>
-      <input class="ba-input" id="cash-counted-input" name="cash_counted" type="number" step="any"
-             value="{{ $expectedInDrawer }}" style="font-size:22px;font-weight:800;" required>
+      <input class="ba-input" id="cash-counted-input" name="cash_counted" type="number" step="any" min="0"
+             value="{{ $expectedInDrawer }}" style="font-size:22px;font-weight:800;" required
+             onkeydown="if(['-','+','e','E'].includes(event.key))event.preventDefault();"
+             oninput="if(parseFloat(this.value)<0)this.value=0;">
     </div>
 
     <div id="diff-warning-box" style="display:none;background:#FEF2F2;border:1px solid #FECACA;border-radius:6px;padding:12px;margin-bottom:16px;color:#991B1B;font-size:13px;">
@@ -221,7 +245,7 @@
 
     <div class="ba-form-group">
       <label class="ba-label" for="shift-note-input">Note for the manager</label>
-      <textarea class="ba-input" id="shift-note-input" name="note" rows="2" placeholder="Count notes, reason for discrepancy, etc."></textarea>
+      <textarea class="ba-input" id="shift-note-input" name="note" rows="2" placeholder="Count notes, reason for discrepancy, etc." oninput="this.value = this.value.replace(/[<>{}\`\\]/g, '')"></textarea>
     </div>
 
     <div class="actions">
@@ -249,6 +273,20 @@ if (countedInput) {
       diffTitle.textContent = `Difference: ${word} \u20B1${Math.abs(diff).toFixed(2)}`;
     } else {
       diffBox.style.display = 'none';
+    }
+  });
+}
+
+const closeShiftForm = document.querySelector('#close-shift-dlg form');
+if (closeShiftForm) {
+  closeShiftForm.addEventListener('submit', (e) => {
+    const val = parseFloat(countedInput.value || '0');
+    const diff = Math.round((val - expectedCash) * 100) / 100;
+    const note = document.getElementById('shift-note-input').value.trim();
+    if (diff !== 0 && !note) {
+      e.preventDefault();
+      alert('Please add a note explaining why the drawer is ' + (diff < 0 ? 'short' : 'over') + ' before closing.');
+      document.getElementById('shift-note-input').focus();
     }
   });
 }

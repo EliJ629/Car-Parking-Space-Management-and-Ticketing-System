@@ -152,7 +152,7 @@ class Rules
         ];
     }
 
-    /** Three letters then three or four digits, written without spaces: ABC1234. */
+    /** Valid Philippine vehicle plate (standard, legacy, vintage, or protocol). */
     public static function plate(bool $required = true): array
     {
         return [$required ? 'required' : 'nullable', 'regex:'.Vehicle::PLATE_PATTERN];

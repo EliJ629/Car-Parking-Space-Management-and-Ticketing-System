@@ -44,9 +44,9 @@
         <div class="ba-form-group">
           <label class="ba-label" for="plate-input">Plate number</label>
           <input class="ba-input" id="plate-input" name="plate" type="text"
-                 placeholder="Enter the plate number" style="font-size:24px;font-weight:800;letter-spacing:1px;text-transform:uppercase;"
-                 autocomplete="off" autofocus>
-          <p style="font-size:12px;color:var(--muted);margin-top:4px;">Letters and digits as printed on the plate, for example ABC 1234.</p>
+                 placeholder="e.g. ABC 1234, AB 12345, or 1" style="font-size:24px;font-weight:800;letter-spacing:1px;text-transform:uppercase;"
+                 autocomplete="off" autofocus oninput="this.value = this.value.toUpperCase().replace(/[^A-Z0-9\s-]/g, '')">
+          <p style="font-size:12px;color:var(--muted);margin-top:4px;">Philippine standard (ABC 1234, AB 12345), legacy, vintage, or protocol plates (e.g. 1 for President).</p>
           <div class="ba-err-msg" id="plate-err" hidden></div>
         </div>
 
@@ -105,7 +105,7 @@
           </div>
           <div class="ba-form-group">
             <label class="ba-label" for="det-phone">Phone number</label>
-            <input class="ba-input" id="det-phone" name="phone" type="tel" placeholder="09175550199" maxlength="13">
+            <input class="ba-input" id="det-phone" name="phone" type="tel" placeholder="09175550199" maxlength="13" oninput="this.value = this.value.replace(/[^\d+]/g, '').replace(/(?!^)\+/g, '').slice(0, 13)">
           </div>
         </div>
 
@@ -278,6 +278,9 @@
             <span style="color:var(--muted);">Slot</span>
             <b id="sum-slot" style="color:var(--paint-deep);">None picked</b>
           </div>
+          <div id="side-pwd-badge" style="display:none;margin-top:10px;padding:8px 12px;background:#EFF6FF;border:1px solid #BFDBFE;border-radius:6px;font-size:12.5px;color:#1E40AF;">
+            ♿ <strong>Accessible (PWD) Bay</strong> &mdash; verify PWD car sticker or ID.
+          </div>
 
           <div style="display:flex;gap:10px;margin-top:20px;">
             <button class="btn primary" type="button" id="btn-confirm-slot" disabled data-open="#confirm-slot-dlg">Confirm slot</button>
@@ -310,6 +313,17 @@
         <div style="display:flex;justify-content:space-between;">
           <span style="color:var(--muted);">Entry time</span>
           <b>{{ \App\Support\Lot::stamp(now()) }}</b>
+        </div>
+      </div>
+
+      <!-- PWD Slot Visual Verification Reminder -->
+      <div id="dlg-pwd-notice" style="display:none;background:#EFF6FF;border:1.5px solid #3B82F6;border-radius:8px;padding:12px 14px;margin-bottom:14px;color:#1E40AF;font-size:13px;">
+        <div style="display:flex;align-items:flex-start;gap:10px;">
+          <span style="font-size:20px;line-height:1;">♿</span>
+          <div>
+            <b style="font-size:13.5px;display:block;margin-bottom:2px;color:#1D4ED8;">Accessible (PWD) Bay Selected</b>
+            <span>Please visually verify that the vehicle displays an <strong>LTO PWD car sticker</strong> or the driver/passenger has shown a <strong>PWD ID card</strong>.</span>
+          </div>
         </div>
       </div>
 
@@ -385,7 +399,7 @@ async function doLookup() {
   const plate = plateInput.value.trim();
   plateErr.hidden = true;
   if (!plate) {
-    plateErr.textContent = 'Enter a plate like ABC 1234.';
+    plateErr.textContent = 'Enter a valid Philippine plate (e.g. ABC 1234, AB 12345, or 1).';
     plateErr.hidden = false;
     return;
   }
@@ -507,9 +521,16 @@ function goToSlot() {
     return;
   }
 
+  const phoneVal = document.getElementById('det-phone').value.trim();
+  if (phoneVal && !/^09\d{9}$/.test(phoneVal)) {
+    alert('Please enter a valid 11-digit mobile number starting with 09 (e.g. 09171234567).');
+    document.getElementById('det-phone').focus();
+    return;
+  }
+
   vehicleState.color = color;
   vehicleState.type = type;
-  vehicleState.phone = document.getElementById('det-phone').value;
+  vehicleState.phone = phoneVal;
 
   document.getElementById('section-details').style.display = 'none';
   document.getElementById('section-slot').style.display = 'block';
@@ -603,6 +624,13 @@ window.selectSlot = function(el) {
   document.getElementById('dlg-slot-full').textContent = `${selectedSlot.code}, ${selectedSlot.zone}, ${selectedSlot.type}`;
   document.getElementById('dlg-plate').textContent = vehicleState.plate;
   document.getElementById('dlg-veh').textContent = `${vehicleState.color} ${vehicleState.type}`;
+
+  const isPwdSlot = (selectedSlot.type === 'PWD');
+  const pwdNotice = document.getElementById('dlg-pwd-notice');
+  if (pwdNotice) pwdNotice.style.display = isPwdSlot ? 'block' : 'none';
+
+  const sidePwd = document.getElementById('side-pwd-badge');
+  if (sidePwd) sidePwd.style.display = isPwdSlot ? 'block' : 'none';
 };
 </script>
 @endpush

@@ -303,6 +303,7 @@ function updateCharCount() {
   const countSpan = document.getElementById('mc-char-count');
   if (!reasonEl || !countSpan) return;
 
+  reasonEl.value = reasonEl.value.replace(/[<>{}\`\\]/g, '');
   const len = reasonEl.value.trim().length;
   if (len >= 10) {
     countSpan.textContent = `${len} chars (valid)`;

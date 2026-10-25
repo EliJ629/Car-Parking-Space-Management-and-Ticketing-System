@@ -31,7 +31,7 @@
             <input class="ba-input ba-predict-ghost" id="exit-ghost" type="text" readonly tabindex="-1" aria-hidden="true" style="font-size:20px;font-weight:700;text-transform:uppercase;">
             <input class="ba-input" id="exit-q" name="q" type="text" value="{{ $q }}"
                    placeholder="PK-0016 or HJK 4471" style="font-size:20px;font-weight:700;text-transform:uppercase;"
-                   autocomplete="off" autofocus>
+                   autocomplete="off" autofocus oninput="this.value = this.value.toUpperCase().replace(/[^A-Z0-9\s-]/g, '')">
           </div>
 
           <!-- Active Customer Suggestions Chips -->

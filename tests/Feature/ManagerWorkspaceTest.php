@@ -322,8 +322,8 @@ class ManagerWorkspaceTest extends TestCase
             'plate_number' => 'ABC1234',
             'vehicle_color' => 'White',
             'vehicle_type' => 'Car',
-            'entered_at' => now()->subHours(2),
-            'exited_at' => now()->subHour(),
+            'entered_at' => \App\Support\Lot::now()->startOfDay()->addMinutes(10),
+            'exited_at' => \App\Support\Lot::now()->startOfDay()->addMinutes(30),
             'status' => 'completed',
         ]);
         ParkingPayment::create([
@@ -336,7 +336,7 @@ class ManagerWorkspaceTest extends TestCase
             'discount' => 0,
             'total' => 50,
             'method' => 'cash',
-            'paid_at' => now(),
+            'paid_at' => \App\Support\Lot::now()->startOfDay()->addMinutes(25),
             'receipt_snapshot' => ['lot_name' => 'Bayline Central Lot'],
         ]);
         ParkingReservation::create([
@@ -344,7 +344,7 @@ class ManagerWorkspaceTest extends TestCase
             'slot_id' => $slot->id,
             'slot_code' => $slot->code,
             'plate_number' => 'ABC1234',
-            'scheduled_at' => now(),
+            'scheduled_at' => \App\Support\Lot::now()->startOfDay()->addMinutes(5),
             'status' => 'checked_in',
             'session_id' => $session->id,
         ]);
