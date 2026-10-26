@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['code', 'zone', 'type', 'status', 'notes', 'out_of_service_reason'])]
+#[Fillable(['code', 'zone', 'type', 'status', 'notes', 'out_of_service_reason', 'layout_x', 'layout_y'])]
 class ParkingSlot extends Model
 {
     public const STATUS_AVAILABLE = 'available';
@@ -35,6 +35,14 @@ class ParkingSlot extends Model
             self::STATUS_RESERVED => 'Reserved',
             self::STATUS_PENDING_EXIT => 'Pending exit',
             self::STATUS_OUT_OF_SERVICE => 'Out of service',
+        ];
+    }
+
+    protected function casts(): array
+    {
+        return [
+            'layout_x' => 'float',
+            'layout_y' => 'float',
         ];
     }
 

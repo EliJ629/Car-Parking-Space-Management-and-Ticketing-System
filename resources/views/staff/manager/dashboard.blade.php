@@ -33,7 +33,13 @@
         <p class="eyebrow">Current layout</p>
         <h2>Live lot map</h2>
       </div>
-      <a class="manager-text-link" href="{{ route('manager.slots.index') }}">All slots</a>
+      <div class="manager-layout-actions" data-layout-actions>
+        <button class="btn ghost sm" type="button" data-layout-edit>Edit Layout</button>
+        <button class="btn ghost sm" type="button" data-layout-auto hidden>Auto Layout</button>
+        <button class="btn ghost sm" type="button" data-layout-cancel hidden>Cancel</button>
+        <button class="btn sm" type="button" data-layout-save hidden>Save Layout</button>
+        <a class="manager-text-link" href="{{ route('manager.slots.index') }}">All slots</a>
+      </div>
     </div>
 
     @if ($slotsByZone->isEmpty())
@@ -43,26 +49,37 @@
         <a class="btn sm" href="{{ route('manager.slots.create') }}">Add your first slot</a>
       </div>
     @else
-      <div class="manager-lot">
-        @foreach ($slotsByZone as $zone => $zoneSlots)
-          <section class="manager-zone" aria-label="{{ $zone }}">
-            <h3>{{ $zone }}</h3>
-            <div class="manager-slot-grid">
+      <div class="manager-layout-workspace">
+        <div class="manager-lot manager-layout" data-layout-editor data-save-url="{{ route('manager.layout.update') }}">
+          <div class="manager-layout-canvas" data-layout-canvas>
+            @foreach ($slotsByZone as $zone => $zoneSlots)
+              @php($zonePosition = $zonePositions[$zone] ?? null)
+              <span class="manager-layout-zone-label" data-layout-zone-label data-zone="{{ $zone }}"
+                    data-x="{{ $zonePosition?->label_x ?? '' }}" data-y="{{ $zonePosition?->label_y ?? '' }}">{{ $zone }}</span>
+            @endforeach
+            @foreach ($slotsByZone as $zone => $zoneSlots)
               @foreach ($zoneSlots as $slot)
-                <a class="manager-slot manager-slot-{{ str_replace('_', '-', $slot->status) }}"
+                <a class="manager-slot manager-layout-slot manager-slot-{{ str_replace('_', '-', $slot->status) }}"
                    href="{{ route('manager.slots.edit', $slot) }}"
+                   data-layout-slot data-slot-id="{{ $slot->id }}" data-zone="{{ $zone }}"
+                   data-x="{{ $slot->layout_x ?? '' }}" data-y="{{ $slot->layout_y ?? '' }}"
                    aria-label="{{ $slot->code }}, {{ $slot->statusLabel() }}, {{ $slot->type }}">
                   <strong>{{ $slot->code }}</strong>
                   <span>{{ $slot->statusLabel() }}</span>
                 </a>
               @endforeach
-            </div>
-          </section>
-        @endforeach
-        <div class="manager-lane" aria-label="Vehicle lane">
-          <span>Entrance</span><i aria-hidden="true"></i><span>Exit</span>
+            @endforeach
+          </div>
+          <div class="manager-lane" aria-label="Vehicle lane">
+            <span>Entrance</span><i aria-hidden="true"></i><span>Exit</span>
+          </div>
         </div>
       </div>
+      <form class="manager-layout-form" data-layout-form method="POST" action="{{ route('manager.layout.update') }}">
+        @csrf
+        @method('PUT')
+        <div data-layout-inputs></div>
+      </form>
       <div class="manager-legend" aria-label="Slot status legend">
         @foreach (\App\Models\ParkingSlot::statuses() as $status => $label)
           <span><i class="manager-legend-{{ str_replace('_', '-', $status) }}" aria-hidden="true"></i>{{ $label }}</span>

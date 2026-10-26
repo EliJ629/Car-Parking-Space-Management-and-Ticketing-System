@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\ActivityLog;
+use App\Models\ParkingLayoutZone;
 use App\Models\ParkingSlot;
 use App\Models\SystemSetting;
 use App\Models\User;
@@ -266,6 +267,112 @@ class ParkingSlotManagementTest extends TestCase
         $this->patch(route('manager.slots.update', $zoneA), ['zone' => 'Zone A', 'type' => ParkingSlot::TYPE_STANDARD, 'notes' => 'Near lift'])
             ->assertSessionHasNoErrors();
         $this->assertSame('Near lift', $zoneA->fresh()->notes);
+    }
+
+    public function test_manager_can_save_layout_positions_without_changing_slot_business_state(): void
+    {
+        $manager = User::factory()->create([
+            'role' => User::ROLE_MANAGER,
+            'status' => User::STATUS_ACTIVE,
+        ]);
+        $slot = ParkingSlot::create([
+            'code' => 'A-01',
+            'zone' => 'Zone A',
+            'type' => ParkingSlot::TYPE_STANDARD,
+            'status' => ParkingSlot::STATUS_OCCUPIED,
+        ]);
+
+        $this->actingAs($manager)
+            ->put(route('manager.layout.update'), [
+                'positions' => [
+                    ['id' => $slot->id, 'x' => 0.42, 'y' => 0.68],
+                ],
+            ])
+            ->assertRedirect(route('manager.dashboard'));
+
+        $slot->refresh();
+        $this->assertSame(ParkingSlot::STATUS_OCCUPIED, $slot->status);
+        $this->assertSame('Zone A', $slot->zone);
+        $this->assertEqualsWithDelta(0.42, $slot->layout_x, 0.000001);
+        $this->assertEqualsWithDelta(0.68, $slot->layout_y, 0.000001);
+    }
+
+    public function test_manager_layout_rejects_unknown_slots_and_out_of_bounds_positions(): void
+    {
+        $manager = User::factory()->create([
+            'role' => User::ROLE_MANAGER,
+            'status' => User::STATUS_ACTIVE,
+        ]);
+
+        $this->actingAs($manager)
+            ->put(route('manager.layout.update'), [
+                'positions' => [
+                    ['id' => 99999, 'x' => 0.5, 'y' => 0.5],
+                ],
+            ])
+            ->assertSessionHasErrors('positions');
+
+        $this->put(route('manager.layout.update'), [
+            'positions' => [
+                ['id' => 99999, 'x' => 1.1, 'y' => -0.1],
+            ],
+        ])->assertSessionHasErrors(['positions.0.x', 'positions.0.y']);
+    }
+
+    public function test_manager_can_save_zone_label_positions_separately_from_slots(): void
+    {
+        $manager = User::factory()->create([
+            'role' => User::ROLE_MANAGER,
+            'status' => User::STATUS_ACTIVE,
+        ]);
+        $slot = ParkingSlot::create([
+            'code' => 'A-01',
+            'zone' => 'Zone A',
+            'type' => ParkingSlot::TYPE_STANDARD,
+            'status' => ParkingSlot::STATUS_AVAILABLE,
+            'layout_x' => 0.2,
+            'layout_y' => 0.3,
+        ]);
+
+        $this->actingAs($manager)
+            ->put(route('manager.layout.update'), [
+                'positions' => [['id' => $slot->id, 'x' => 0.7, 'y' => 0.8]],
+                'zone_positions' => [['zone' => 'Zone A', 'x' => 0.12, 'y' => 0.18]],
+            ])
+            ->assertRedirect(route('manager.dashboard'));
+
+        $slot->refresh();
+        $label = ParkingLayoutZone::where('zone', 'Zone A')->firstOrFail();
+        $this->assertEqualsWithDelta(0.7, $slot->layout_x, 0.000001);
+        $this->assertEqualsWithDelta(0.8, $slot->layout_y, 0.000001);
+        $this->assertEqualsWithDelta(0.12, $label->label_x, 0.000001);
+        $this->assertEqualsWithDelta(0.18, $label->label_y, 0.000001);
+        $this->assertSame('Zone A', $slot->zone);
+    }
+
+    public function test_driver_sees_saved_layout_read_only(): void
+    {
+        $driver = User::factory()->create([
+            'role' => User::ROLE_DRIVER,
+            'status' => User::STATUS_ACTIVE,
+        ]);
+        ParkingSlot::create([
+            'code' => 'B-04',
+            'zone' => 'Zone B',
+            'type' => ParkingSlot::TYPE_STANDARD,
+            'status' => ParkingSlot::STATUS_AVAILABLE,
+            'layout_x' => 0.31,
+            'layout_y' => 0.57,
+        ]);
+
+        $this->actingAs($driver)
+            ->get(route('driver.find'))
+            ->assertOk()
+            ->assertSee('data-layout-readonly', false)
+            ->assertSee('data-x="0.31"', false)
+            ->assertSee('data-y="0.57"', false)
+            ->assertSee('data-layout-zone-label', false)
+            ->assertDontSee('data-layout-edit', false);
     }
 
     public function test_parking_slot_seeder_creates_ten_slots_per_zone_without_overwriting_existing_slots(): void

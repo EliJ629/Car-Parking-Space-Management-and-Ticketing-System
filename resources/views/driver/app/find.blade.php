@@ -29,21 +29,24 @@
   </div>
 @endif
 
-<div class="lot" style="margin-top:14px">
+<div class="lot driver-layout" data-layout-readonly style="margin-top:14px">
+  <div class="driver-layout-canvas" data-layout-canvas>
   @foreach ($zones as $zone => $slots)
-    <div class="zl">{{ strtoupper($zone) }}</div>
-    <div class="g">
-      @foreach ($slots as $slot)
-        <button type="button" class="sl {{ $cls[$slot->status] ?? '' }}"
-          data-slot="{{ $slot->code }}" data-zone="{{ $zone }}" data-type="{{ $slot->type }}"
-          data-status="{{ $label[$slot->status] ?? ucfirst($slot->status) }}" data-free="{{ $slot->status === 'available' ? 1 : 0 }}"
-          data-reserve="{{ route('driver.reserve', ['slot' => $slot->id]) }}"
-          aria-label="Slot {{ $slot->code }}, {{ $label[$slot->status] ?? $slot->status }}">
-          <b>{{ $slot->code }}</b><span>{{ $label[$slot->status] ?? '' }}</span>
-        </button>
-      @endforeach
-    </div>
+    @php($zonePosition = $zonePositions[$zone] ?? null)
+    <span class="driver-layout-zone-label" data-layout-zone-label data-zone="{{ $zone }}"
+      data-x="{{ $zonePosition?->label_x ?? '' }}" data-y="{{ $zonePosition?->label_y ?? '' }}">{{ $zone }}</span>
+    @foreach ($slots as $slot)
+      <button type="button" class="sl driver-layout-slot {{ $cls[$slot->status] ?? '' }}"
+        data-layout-slot data-slot="{{ $slot->code }}" data-slot-id="{{ $slot->id }}" data-zone="{{ $zone }}"
+        data-type="{{ $slot->type }}" data-x="{{ $slot->layout_x ?? '' }}" data-y="{{ $slot->layout_y ?? '' }}"
+        data-status="{{ $label[$slot->status] ?? ucfirst($slot->status) }}" data-free="{{ $slot->status === 'available' ? 1 : 0 }}"
+        data-reserve="{{ route('driver.reserve', ['slot' => $slot->id]) }}"
+        aria-label="Slot {{ $slot->code }}, {{ $label[$slot->status] ?? $slot->status }}">
+        <b>{{ $slot->code }}</b><span>{{ $label[$slot->status] ?? '' }}</span>
+      </button>
+    @endforeach
   @endforeach
+  </div>
   @include('driver.app.partials.legend')
 </div>
 

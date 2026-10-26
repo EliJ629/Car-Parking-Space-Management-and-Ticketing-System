@@ -48,6 +48,7 @@ Route::prefix('staff')->name('staff.')->group(function () {
 
 Route::prefix('staff/manager')->name('manager.')->middleware(['area:staff', 'role:manager'])->group(function () {
     Route::get('/', [ManagerDashboardController::class, 'index'])->name('dashboard');
+    Route::put('layout', [ManagerDashboardController::class, 'saveLayout'])->name('layout.update');
     Route::get('slots', [ParkingSlotController::class, 'index'])->name('slots.index');
     Route::get('slots/create', [ParkingSlotController::class, 'create'])->name('slots.create');
     Route::post('slots', [ParkingSlotController::class, 'store'])->name('slots.store');
