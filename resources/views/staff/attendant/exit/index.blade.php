@@ -48,7 +48,7 @@
         <div class="ba-form-group">
           <label style="display:inline-flex;align-items:center;gap:8px;font-size:14px;cursor:pointer;">
             <input type="checkbox" name="include_closed" value="1" @checked($includeClosed) style="width:18px;height:18px;">
-            Include closed sessions
+            Include closed sessions (past 24 hours)
           </label>
         </div>
 
