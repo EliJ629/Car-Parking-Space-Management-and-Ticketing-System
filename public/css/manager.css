@@ -50,6 +50,7 @@
 .manager-layout.is-editing .manager-layout-zone-label{border-color:var(--paint-deep);background:var(--paint);color:var(--paint-ink);cursor:grab;touch-action:none;user-select:none}
 .manager-layout.is-editing .manager-layout-zone-label:active{cursor:grabbing}
 .manager-layout.is-editing .manager-layout-slot{cursor:grab;touch-action:none;user-select:none}
+.manager-layout.is-editing .manager-layout-slot{outline:1px dashed var(--paint-deep);outline-offset:3px}
 .manager-layout.is-editing .manager-layout-slot:active{cursor:grabbing}
 .manager-layout-form{display:none}
 .manager-zone+.manager-zone{margin-top:12px}
@@ -164,12 +165,13 @@
 .manager-inline-delete{display:inline-block;margin-left:8px}
 .manager-inline-delete button{padding:0;border:0;border-bottom:2px solid var(--stop);background:none;color:var(--ink);font:600 11px var(--f-b);cursor:pointer}
 .manager-dialog{position:fixed;z-index:1000;width:min(520px,calc(100vw - 24px));max-height:calc(100vh - 24px);padding:0;border:0;border-radius:9px;background:var(--surface);color:var(--ink);box-shadow:0 20px 60px rgba(0,0,0,.4)}
-.manager-layout-dialog{width:min(1400px,calc(100vw - 32px));max-width:none}
+.manager-layout-dialog{width:min(1000px,calc(100vw - 32px));max-width:none}
 .manager-layout-dialog .manager-dialog-inner{max-height:calc(100vh - 24px)}
-.manager-layout-dialog [data-layout-modal-content]{display:grid;grid-template-columns:minmax(0,1fr) 150px;gap:14px;align-items:start}
+.manager-layout-dialog [data-layout-modal-content]{display:grid;grid-template-columns:minmax(0,1fr) 156px;gap:14px;align-items:start}
 .manager-layout-dialog [data-layout-actions]{grid-column:2;grid-row:1;display:grid;align-content:start;gap:8px;position:sticky;top:0}
 .manager-layout-dialog [data-layout-actions] .btn,.manager-layout-dialog [data-layout-actions] .manager-text-link{width:100%;text-align:center}
-.manager-layout-dialog .manager-layout{grid-column:1;grid-row:1;width:100%;min-width:0}
+.manager-layout-dialog .manager-layout{grid-column:1;grid-row:1;width:100%;min-width:0;overflow:hidden}
+.manager-layout-dialog .manager-layout-canvas{min-width:0;width:100%}
 .manager-layout-dialog .manager-layout-form{grid-column:1 / -1;grid-row:2}
 .manager-dialog::backdrop{background:rgba(10,14,18,.62)}
 .manager-dialog-inner{padding:22px;border-top:5px solid var(--paint);border-radius:9px;overflow:auto}

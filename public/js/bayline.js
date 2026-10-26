@@ -192,6 +192,15 @@ document.querySelectorAll('[data-layout-canvas]').forEach(function(canvas){
     formHome=form&&form.parentNode;actionsHome=actions&&actions.parentNode;
   }
   function clamp(value,min,max){return Math.max(min,Math.min(max,value))}
+  function overlaps(left,top,width,height,other,gap){
+    var otherLeft=other.offsetLeft,otherTop=other.offsetTop;
+    return left<otherLeft+other.offsetWidth+gap&&left+width+gap>otherLeft&&top<otherTop+other.offsetHeight+gap&&top+height+gap>otherTop;
+  }
+  function availablePosition(slot,left,top,base){
+    return !slots.some(function(other){
+      return other!==slot&&overlaps(left,top,slot.offsetWidth,slot.offsetHeight,other,6);
+    });
+  }
   function arrange(){
     var groups={},zones,height=40,offset=20;
     slots.forEach(function(slot){(groups[slot.dataset.zone]||(groups[slot.dataset.zone]=[])).push(slot)});
@@ -222,7 +231,7 @@ document.querySelectorAll('[data-layout-canvas]').forEach(function(canvas){
   function moveToModal(){
     if(!modalContent||!editor)return;
     editorWidth=editor.style.width;
-    editor.style.width='';
+    editor.style.width='100%';
     modalContent.appendChild(actions);modalContent.appendChild(editor);
     if(form)modalContent.appendChild(form);
     panel=modalContent;
@@ -280,8 +289,12 @@ document.querySelectorAll('[data-layout-canvas]').forEach(function(canvas){
     });
     slot.addEventListener('pointermove',function(event){
       if(!start)return;var base=canvas.getBoundingClientRect();
-      slot.style.left=clamp(start.left+event.clientX-start.x,0,base.width-slot.offsetWidth)/base.width*100+'%';
-      slot.style.top=clamp(start.top+event.clientY-start.y,0,base.height-slot.offsetHeight)/base.height*100+'%';
+      var left=clamp(start.left+event.clientX-start.x,0,base.width-slot.offsetWidth);
+      var top=clamp(start.top+event.clientY-start.y,0,base.height-slot.offsetHeight);
+      if(availablePosition(slot,left,top,base)){
+        slot.style.left=left/base.width*100+'%';
+        slot.style.top=top/base.height*100+'%';
+      }
     });
     slot.addEventListener('pointerup',function(){start=null});
     slot.addEventListener('click',function(event){if(editing)event.preventDefault()});
