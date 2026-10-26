@@ -13,8 +13,10 @@
     $slotCode = $r->slot?->code ?? $r->slot_code;
 @endphp
 
-@if ($fresh)
-  <div class="alert ok" role="status" style="margin-bottom:14px"><b>Request sent</b>The booth attendant will check your reservation. Your QR code appears here once it is approved, and we will notify you. Be there by {{ \App\Support\Lot::time($holdEnds) }}, or the reservation expires and the slot is released.</div>
+@if ($fresh && $awaiting)
+  <div class="alert ok" role="status" style="margin-bottom:14px"><b>Request sent</b>The booth attendant will check your PWD ID. Your QR code appears here once it is approved, and we will notify you. Be there by {{ \App\Support\Lot::time($holdEnds) }}, or the reservation expires and the slot is released.</div>
+@elseif ($fresh)
+  <div class="alert ok" role="status" style="margin-bottom:14px"><b>Reservation confirmed</b>Your QR code is below. Be there by {{ \App\Support\Lot::time($holdEnds) }}, or the reservation expires and the slot is released.</div>
 @endif
 @if (session('canceled'))
   <div class="alert" role="status" style="margin-bottom:14px"><b>Reservation canceled</b>Slot {{ $slotCode }} is free again.</div>
@@ -47,7 +49,7 @@
 @if ($awaiting)
   <section class="dcard paint" style="margin-top:14px">
     <p class="lab">Waiting for approval</p>
-    <p style="margin:4px 0 0;font-size:14px">The booth attendant has to approve this reservation{{ $r->requires_id ? ' and check your PWD ID' : '' }}. Slot {{ $slotCode }} is held for you meanwhile. If it is not approved in time, the reservation expires.</p>
+    <p style="margin:4px 0 0;font-size:14px">The booth attendant has to check your PWD ID and approve this reservation. Slot {{ $slotCode }} is held for you meanwhile. If it is not approved in time, the reservation expires.</p>
   </section>
 @endif
 @if ($awaiting || $open)

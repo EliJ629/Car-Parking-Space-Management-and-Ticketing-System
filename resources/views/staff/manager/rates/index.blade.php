@@ -260,3 +260,16 @@
   @endforelse
   <a class="manager-text-link" href="{{ route('manager.activity.index', ['action' => 'rate_set_created']) }}">View full change log</a>
 </section>
+
+<script>
+document.querySelectorAll('input[name="percent"]').forEach(function (el) {
+  el.addEventListener('input', function () {
+    var val = parseInt(this.value, 10);
+    if (!isNaN(val)) {
+      if (val > 100) this.value = 100;
+      if (val < 0) this.value = 0;
+    }
+  });
+});
+</script>
+

@@ -22,7 +22,7 @@
   @include('partials.vehicle-fields', ['type' => old('vehicle_type', $vehicle->vehicle_type)])
   <div class="fld">
     <label class="f" for="contact_number">Contact number <span class="fine">(optional)</span></label>
-    <input id="contact_number" name="contact_number" type="tel" inputmode="tel" maxlength="17" value="{{ old('contact_number', $vehicle->contact_number) }}" placeholder="0917 555 0142" @error('contact_number') aria-invalid="true" @enderror>
+    <input id="contact_number" name="contact_number" type="tel" inputmode="tel" maxlength="13" value="{{ old('contact_number', $vehicle->contact_number) }}" placeholder="09175550142" @error('contact_number') aria-invalid="true" @enderror>
     @error('contact_number')<p class="err">{{ $message }}</p>@enderror
   </div>
   <div class="actions"><button class="btn" type="submit">Save vehicle</button><a class="btn ghost" href="{{ route('driver.vehicles') }}">Cancel</a></div>

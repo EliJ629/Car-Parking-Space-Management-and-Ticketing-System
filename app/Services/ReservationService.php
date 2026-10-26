@@ -11,10 +11,10 @@ use App\Models\Vehicle;
 use App\Support\Lot;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * Reservations (process document 6.3): list the slots free at a time, create,
@@ -183,8 +183,10 @@ class ReservationService
                 'plate_number' => $vehicle->plate_number,
                 'scheduled_at' => $at,
                 'status' => ParkingReservation::STATUS_BOOKED,
-                // The slot is held right away, but the QR code only works after the booth attendant approves.
-                'approval_status' => ParkingReservation::APPROVAL_PENDING,
+                // Only a PWD slot waits for the booth attendant, who checks the ID photo. Any other slot is
+                // confirmed at once, so there is nothing for the attendant to approve.
+                'approval_status' => $needsId ? ParkingReservation::APPROVAL_PENDING : ParkingReservation::APPROVAL_APPROVED,
+                'approved_at' => $needsId ? null : now(),
                 'requires_id' => $needsId,
             ]);
 
@@ -199,8 +201,12 @@ class ReservationService
         }
 
         $reservation->load(['slot', 'driver']);
-        $this->notices->reservationSubmitted($reservation);
-        $this->notices->staffReservationPending($reservation);
+        if ($needsId) {
+            $this->notices->reservationSubmitted($reservation);
+            $this->notices->staffReservationPending($reservation);
+        } else {
+            $this->notices->reservationConfirmed($reservation);
+        }
         ActivityLog::record('reservation_created', $driver, $request, $reservation->code, 'driver', [
             'slot' => $reservation->slot_code, 'plate' => $reservation->plate_number, 'scheduled_at' => $reservation->scheduled_at->toIso8601String(),
             'needs_id' => $needsId,
@@ -215,7 +221,8 @@ class ReservationService
         $done = DB::transaction(function () use ($reservation, $attendant) {
             $fresh = ParkingReservation::query()->lockForUpdate()->find($reservation->id);
 
-            if (! $fresh || ! $fresh->isAwaitingApproval()) {
+            // Only a PWD reservation is ever approved by hand. Others are confirmed when they are made.
+            if (! $fresh || ! $fresh->requires_id || ! $fresh->isAwaitingApproval()) {
                 return false;
             }
 

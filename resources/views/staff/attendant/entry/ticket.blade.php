@@ -9,7 +9,7 @@
     <span style="background:#15803D;color:#fff;border-radius:50%;width:34px;height:34px;display:inline-flex;align-items:center;justify-content:center;font-size:18px;font-weight:900;">✓</span>
     Ticket generated &mdash; <span style="font-family:'Courier New',Courier,monospace;letter-spacing:1px;">{{ $session->ticket_number }}</span>
   </h1>
-  <a class="btn ghost sm" href="{{ route('attendant.entry.index') }}">+ Start next entry</a>
+  <a class="btn ghost sm guard-unprinted-ticket" href="{{ route('attendant.entry.index') }}">+ Start next entry</a>
 </div>
 <p class="ba-sub">Entry complete. Hand the printed thermal ticket to the driver before the vehicle moves into slot <b>{{ $session->slot_code }}</b>.</p>
 
@@ -88,16 +88,17 @@
     </div>
 
     <div style="display:flex;gap:12px;">
-      <button class="btn primary" type="button" data-open="#print-preview-dlg">Print ticket</button>
-      <a class="btn ghost" href="{{ route('attendant.entry.index') }}">New entry</a>
+      <button class="btn primary" type="button" data-open="#print-preview-dlg" id="btn-open-ticket-print">Print ticket</button>
+      <a class="btn ghost guard-unprinted-ticket" href="{{ route('attendant.entry.index') }}">New entry</a>
     </div>
   </div>
 
   <!-- Right Column: Thermal Ticket Preview -->
   <div>
     <div class="ba-thermal">
-      <h4>Bayline</h4>
-      <p class="subt">Parking ticket</p>
+      <h4>{{ \App\Support\Lot::lotName() }}</h4>
+      <p class="subt">{{ \App\Support\Lot::lotAddress() }}</p>
+      <p class="subt" style="margin-top:2px;font-weight:700;">Parking ticket</p>
       <div class="t-div"></div>
       <div class="t-num-label">Ticket number</div>
       <div class="t-num">
@@ -131,8 +132,9 @@
     <p style="font-size:12px;color:var(--muted);text-align:center;margin-top:-6px;">Booth thermal printer, 58 mm paper</p>
 
     <div class="ba-thermal" id="ticket-print-slip" style="box-shadow:none;border:1px solid #CBD5E1;width:100%;max-width:260px;">
-      <h4>Bayline</h4>
-      <p class="subt">Parking ticket</p>
+      <h4>{{ \App\Support\Lot::lotName() }}</h4>
+      <p class="subt">{{ \App\Support\Lot::lotAddress() }}</p>
+      <p class="subt" style="margin-top:2px;font-weight:700;">Parking ticket</p>
       <div class="t-div"></div>
       <div class="t-num-label">Ticket number</div>
       <div class="t-num">
@@ -147,8 +149,70 @@
 
     <div class="actions">
       <button class="btn ghost" type="button" data-close>Cancel</button>
-      <button class="btn primary" type="button" onclick="window.baPrint('#ticket-print-slip')">Print</button>
+      <button class="btn primary" type="button" id="btn-do-print-ticket" onclick="markTicketPrinted(); window.baPrint('#ticket-print-slip');">Print</button>
     </div>
   </div>
 </dialog>
+
+<!-- Unprinted Ticket Warning Modal (Option A) -->
+<dialog class="badlg" id="unprinted-ticket-dlg">
+  <div class="in">
+    <button class="x" type="button" data-close aria-label="Close">&times;</button>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+      <span style="font-size:26px;">⚠️</span>
+      <h2 style="margin:0;">Ticket not printed</h2>
+    </div>
+    <p>
+      The thermal ticket for slot <b>{{ $session->slot_code }}</b> (Ticket <b>{{ $session->ticket_number }}</b>) has not been printed yet.
+    </p>
+    <div style="font-size:13px;color:var(--ink);background:var(--bg);padding:12px 14px;border-radius:6px;border-left:3px solid var(--paint);margin-bottom:16px;">
+      Drivers need their physical ticket to verify their assigned slot and present it to the booth upon exit.
+    </div>
+    <div class="actions" style="justify-content:flex-end;">
+      <a class="btn ghost" id="unprinted-ticket-proceed-btn" href="{{ route('attendant.entry.index') }}">Proceed without printing</a>
+      <button class="btn primary" type="button" onclick="document.getElementById('unprinted-ticket-dlg').close(); document.getElementById('print-preview-dlg').showModal();">Print ticket now</button>
+    </div>
+  </div>
+</dialog>
+
+<script>
+  let hasPrintedTicket = false;
+  let pendingTicketUrl = '{{ route('attendant.entry.index') }}';
+
+  function markTicketPrinted() {
+    hasPrintedTicket = true;
+    const btn = document.getElementById('btn-open-ticket-print');
+    if (btn) {
+      btn.innerHTML = 'Reprint ticket ✓';
+      btn.classList.remove('primary');
+      btn.classList.add('ghost');
+    }
+  }
+
+  function setupTicketNavigationGuard() {
+    const selector = '.guard-unprinted-ticket, .ba-tabs a, header.ba-head a, a.btn';
+    document.querySelectorAll(selector).forEach(el => {
+      const href = el.getAttribute('href');
+      if (!href || href.startsWith('#') || href.startsWith('javascript:')) return;
+
+      el.addEventListener('click', (e) => {
+        if (!hasPrintedTicket) {
+          e.preventDefault();
+          pendingTicketUrl = el.href;
+          const proceedBtn = document.getElementById('unprinted-ticket-proceed-btn');
+          if (proceedBtn) {
+            proceedBtn.href = pendingTicketUrl;
+          }
+          const dlg = document.getElementById('unprinted-ticket-dlg');
+          if (dlg && typeof dlg.showModal === 'function') {
+            dlg.showModal();
+          }
+        }
+      });
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', setupTicketNavigationGuard);
+  setupTicketNavigationGuard();
+</script>
 @endsection

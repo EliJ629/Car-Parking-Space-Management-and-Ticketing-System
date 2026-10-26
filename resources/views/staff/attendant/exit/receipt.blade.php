@@ -84,8 +84,8 @@
       </div>
 
       <div style="display:flex;gap:12px;">
-        <button class="btn primary" type="button" data-open="#receipt-preview-dlg">Print receipt</button>
-        <a class="btn ghost" href="{{ route('attendant.exit.index') }}">Search another vehicle</a>
+        <button class="btn primary" type="button" data-open="#receipt-preview-dlg" id="btn-open-receipt-print">Print receipt</button>
+        <a class="btn ghost guard-unprinted-receipt" href="{{ route('attendant.exit.index') }}">Search another vehicle</a>
       </div>
     </div>
   </div>
@@ -93,8 +93,9 @@
   <!-- Right Column: Thermal Receipt Preview (BA-46, BA-47) -->
   <div>
     <div class="ba-thermal">
-      <h4>Bayline</h4>
-      <p class="subt">Official receipt</p>
+      <h4>{{ \App\Support\Lot::lotName() }}</h4>
+      <p class="subt">{{ \App\Support\Lot::lotAddress() }}</p>
+      <p class="subt" style="margin-top:2px;font-weight:700;">Official receipt</p>
       <div class="t-div"></div>
       <div class="t-row"><span>Receipt</span><b>{{ $payment->receipt_number }}</b></div>
       <div class="t-row"><span>Ticket</span><b>{{ $session->ticket_number }}</b></div>
@@ -119,10 +120,7 @@
       <div class="t-row"><span>Cash received</span><b>{{ \App\Support\Lot::peso($payment->receipt_snapshot['cash_received'] ?? $payment->total) }}</b></div>
       <div class="t-row"><span>Change</span><b>{{ \App\Support\Lot::peso($payment->receipt_snapshot['change_given'] ?? 0) }}</b></div>
       <div class="t-div"></div>
-      <p class="foot">
-        Exit gate approval is required before you leave.<br>
-        Valid for 15 minutes.
-      </p>
+      <p class="foot">{!! nl2br(e(\App\Support\Lot::receiptFooter())) !!}</p>
     </div>
   </div>
 </div>
@@ -135,8 +133,9 @@
     <p style="font-size:12px;color:var(--muted);text-align:center;margin-top:-6px;">Booth thermal printer, 58 mm paper</p>
 
     <div class="ba-thermal" id="receipt-print-slip" style="box-shadow:none;border:1px solid #CBD5E1;width:100%;max-width:260px;">
-      <h4>Bayline</h4>
-      <p class="subt">Official receipt</p>
+      <h4>{{ \App\Support\Lot::lotName() }}</h4>
+      <p class="subt">{{ \App\Support\Lot::lotAddress() }}</p>
+      <p class="subt" style="margin-top:2px;font-weight:700;">Official receipt</p>
       <div class="t-div"></div>
       <div class="t-row"><span>Receipt</span><b>{{ $payment->receipt_number }}</b></div>
       <div class="t-row"><span>Ticket</span><b>{{ $session->ticket_number }}</b></div>
@@ -153,13 +152,75 @@
       <div class="t-row"><span>Cash received</span><b>{{ \App\Support\Lot::peso($payment->receipt_snapshot['cash_received'] ?? $payment->total) }}</b></div>
       <div class="t-row"><span>Change</span><b>{{ \App\Support\Lot::peso($payment->receipt_snapshot['change_given'] ?? 0) }}</b></div>
       <div class="t-div"></div>
-      <p class="foot">Exit gate approval is required before you leave. Valid for 15 minutes.</p>
+      <p class="foot">{!! nl2br(e(\App\Support\Lot::receiptFooter())) !!}</p>
     </div>
 
     <div class="actions">
       <button class="btn ghost" type="button" data-close>Cancel</button>
-      <button class="btn primary" type="button" onclick="window.baPrint('#receipt-print-slip')">Print</button>
+      <button class="btn primary" type="button" id="btn-do-print-receipt" onclick="markReceiptPrinted(); window.baPrint('#receipt-print-slip');">Print</button>
     </div>
   </div>
 </dialog>
+
+<!-- Unprinted Receipt Warning Modal (Option A) -->
+<dialog class="badlg" id="unprinted-receipt-dlg">
+  <div class="in">
+    <button class="x" type="button" data-close aria-label="Close">&times;</button>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+      <span style="font-size:26px;">⚠️</span>
+      <h2 style="margin:0;">Receipt not printed</h2>
+    </div>
+    <p>
+      The official receipt (<b>{{ $payment->receipt_number }}</b>) has not been printed yet.
+    </p>
+    <div style="font-size:13px;color:var(--ink);background:var(--bg);padding:12px 14px;border-radius:6px;border-left:3px solid var(--paint);margin-bottom:16px;">
+      Drivers may require their official printed receipt for reimbursement or proof of payment at the exit gate.
+    </div>
+    <div class="actions" style="justify-content:flex-end;">
+      <a class="btn ghost" id="unprinted-receipt-proceed-btn" href="{{ route('attendant.exit.index') }}">Proceed without printing</a>
+      <button class="btn primary" type="button" onclick="document.getElementById('unprinted-receipt-dlg').close(); document.getElementById('receipt-preview-dlg').showModal();">Print receipt now</button>
+    </div>
+  </div>
+</dialog>
+
+<script>
+  let hasPrintedReceipt = false;
+  let pendingReceiptUrl = '{{ route('attendant.exit.index') }}';
+
+  function markReceiptPrinted() {
+    hasPrintedReceipt = true;
+    const btn = document.getElementById('btn-open-receipt-print');
+    if (btn) {
+      btn.innerHTML = 'Reprint receipt ✓';
+      btn.classList.remove('primary');
+      btn.classList.add('ghost');
+    }
+  }
+
+  function setupReceiptNavigationGuard() {
+    const selector = '.guard-unprinted-receipt, .ba-tabs a, header.ba-head a, a.btn';
+    document.querySelectorAll(selector).forEach(el => {
+      const href = el.getAttribute('href');
+      if (!href || href.startsWith('#') || href.startsWith('javascript:')) return;
+
+      el.addEventListener('click', (e) => {
+        if (!hasPrintedReceipt) {
+          e.preventDefault();
+          pendingReceiptUrl = el.href;
+          const proceedBtn = document.getElementById('unprinted-receipt-proceed-btn');
+          if (proceedBtn) {
+            proceedBtn.href = pendingReceiptUrl;
+          }
+          const dlg = document.getElementById('unprinted-receipt-dlg');
+          if (dlg && typeof dlg.showModal === 'function') {
+            dlg.showModal();
+          }
+        }
+      });
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', setupReceiptNavigationGuard);
+  setupReceiptNavigationGuard();
+</script>
 @endsection

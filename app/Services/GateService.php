@@ -124,7 +124,7 @@ class GateService
                 ->where('source', 'auto')
                 ->where('status', '!=', 'resolved')
                 ->get()
-                ->each(function (Incident $incident) use ($guard, $fresh): void {
+                ->each(function (Incident $incident) use ($guard): void {
                     $note = "Vehicle exited. Exit approved by {$guard->name}.";
                     $incident->update([
                         'status' => 'resolved',

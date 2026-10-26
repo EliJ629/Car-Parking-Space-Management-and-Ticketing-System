@@ -7,27 +7,75 @@ use App\Models\ActivityLog;
 use App\Models\ParkingPayment;
 use App\Models\ParkingReservation;
 use App\Models\ParkingSession;
+use App\Models\User;
 use App\Support\Lot;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\View\View;
 
 class ShiftController extends Controller
 {
     public const OPENING_FLOAT = 500.00;
 
+    /**
+     * Determine when the attendant's active shift started.
+     * Prevents re-logins from zeroing out prior transactions from the shift.
+     */
+    public static function determineShiftStart(User $attendant): Carbon
+    {
+        // 1. If attendant closed a shift earlier today, the active shift started right after that
+        $lastShiftClosed = ActivityLog::query()
+            ->where('user_id', $attendant->id)
+            ->where('action', 'shift_closed')
+            ->latest('created_at')
+            ->first();
+
+        if ($lastShiftClosed && $lastShiftClosed->created_at->gt(Lot::dayStart())) {
+            return Lot::local($lastShiftClosed->created_at);
+        }
+
+        // 2. Earliest transaction or activity today by this attendant
+        $earliestPayment = ParkingPayment::query()
+            ->where('received_by', $attendant->id)
+            ->where('paid_at', '>=', Lot::dayStart())
+            ->oldest('paid_at')
+            ->value('paid_at');
+
+        $earliestSession = ParkingSession::query()
+            ->where('attendant_id', $attendant->id)
+            ->where('entered_at', '>=', Lot::dayStart())
+            ->oldest('entered_at')
+            ->value('entered_at');
+
+        $candidates = array_filter([
+            $earliestPayment ? Lot::local($earliestPayment) : null,
+            $earliestSession ? Lot::local($earliestSession) : null,
+            $attendant->last_login_at && Lot::local($attendant->last_login_at)->isSameDay(Lot::now())
+                ? Lot::local($attendant->last_login_at)
+                : null,
+        ]);
+
+        if (! empty($candidates)) {
+            usort($candidates, fn ($a, $b) => $a->timestamp <=> $b->timestamp);
+
+            return $candidates[0];
+        }
+
+        return $attendant->last_login_at ? Lot::local($attendant->last_login_at) : Lot::local(Lot::dayStart());
+    }
+
     /** BA-62: Shift summary and cash reconciliation */
     public function index(Request $request): View
     {
         $attendant = $request->user();
 
-        $shiftStart = $attendant->last_login_at
-            ? Lot::local($attendant->last_login_at)
-            : Lot::dayStart();
+        $shiftStart = self::determineShiftStart($attendant);
+        $shiftStartUtc = $shiftStart->copy()->setTimezone('UTC');
 
         $paymentsQuery = ParkingPayment::query()
             ->where('received_by', $attendant->id)
-            ->where('paid_at', '>=', $shiftStart->setTimezone('UTC'));
+            ->where('paid_at', '>=', $shiftStartUtc);
 
         $payments = (clone $paymentsQuery)->with('session')->latest('paid_at')->get();
 
@@ -39,21 +87,21 @@ class ShiftController extends Controller
         $expectedInDrawer = self::OPENING_FLOAT + $cashCollected;
 
         // Discount and penalty breakdowns
-        $seniorDiscounts = $payments->filter(fn ($p) => ($p->receipt_snapshot['discount_name'] ?? '') === 'Senior citizen');
-        $pwdDiscounts = $payments->filter(fn ($p) => ($p->receipt_snapshot['discount_name'] ?? '') === 'PWD');
-        $lostTicketPenalties = $payments->filter(fn ($p) => ($p->session?->lost_ticket ?? false));
-        $overstayPenalties = $payments->filter(fn ($p) => ($p->penalty > 0 && ! ($p->session?->lost_ticket ?? false)));
+        $seniorDiscounts = $payments->filter(fn ($p) => stripos($p->receipt_snapshot['discount_name'] ?? '', 'senior') !== false);
+        $pwdDiscounts = $payments->filter(fn ($p) => stripos($p->receipt_snapshot['discount_name'] ?? '', 'pwd') !== false);
+        $lostTicketPenalties = $payments->filter(fn ($p) => ($p->session?->lost_ticket ?? false) || stripos(json_encode($p->receipt_snapshot), 'lost') !== false);
+        $overstayPenalties = $payments->filter(fn ($p) => $p->penalty > 0 && ! (($p->session?->lost_ticket ?? false) || stripos(json_encode($p->receipt_snapshot), 'lost') !== false));
 
         // Entries handled during this shift
         $walkInsCount = ParkingSession::query()
             ->where('attendant_id', $attendant->id)
             ->whereNull('driver_id')
-            ->where('entered_at', '>=', $shiftStart->setTimezone('UTC'))
+            ->where('entered_at', '>=', $shiftStartUtc)
             ->count();
 
         $reservedCheckInsCount = ParkingReservation::query()
             ->where('status', ParkingReservation::STATUS_CHECKED_IN)
-            ->where('checked_in_at', '>=', $shiftStart->setTimezone('UTC'))
+            ->where('checked_in_at', '>=', $shiftStartUtc)
             ->count();
 
         $closedSummary = session('closed_shift');
@@ -93,13 +141,12 @@ class ShiftController extends Controller
         $attendant = $request->user();
         $counted = (float) $validated['cash_counted'];
 
-        $shiftStart = $attendant->last_login_at
-            ? Lot::local($attendant->last_login_at)
-            : Lot::dayStart();
+        $shiftStart = self::determineShiftStart($attendant);
+        $shiftStartUtc = $shiftStart->copy()->setTimezone('UTC');
 
         $cashCollected = (float) ParkingPayment::query()
             ->where('received_by', $attendant->id)
-            ->where('paid_at', '>=', $shiftStart->setTimezone('UTC'))
+            ->where('paid_at', '>=', $shiftStartUtc)
             ->sum('total');
 
         $expected = self::OPENING_FLOAT + $cashCollected;

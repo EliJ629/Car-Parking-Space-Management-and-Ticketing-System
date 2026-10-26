@@ -13,9 +13,9 @@ use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
- * Reservation approval. A new request waits here until the booth attendant approves it
- * (the driver then gets the QR code) or rejects it (the driver is told to pick another slot).
- * A PWD slot also shows the ID photo the driver uploaded.
+ * Reservation approval, for PWD slots only. A PWD request waits here until the booth attendant has
+ * checked the ID photo the driver uploaded and approves it (the driver then gets the QR code) or rejects
+ * it (the driver is told to pick another slot). Reservations for other slots are confirmed at once.
  */
 class ReservationController extends Controller
 {
@@ -32,12 +32,14 @@ class ReservationController extends Controller
         $pending = ParkingReservation::query()
             ->where('status', ParkingReservation::STATUS_BOOKED)
             ->where('approval_status', ParkingReservation::APPROVAL_PENDING)
+            ->where('requires_id', true)
             ->with(['driver', 'slot', 'vehicle'])
             ->orderBy('scheduled_at')
             ->get();
 
         $decided = ParkingReservation::query()
             ->whereIn('approval_status', [ParkingReservation::APPROVAL_APPROVED, ParkingReservation::APPROVAL_REJECTED])
+            ->where('requires_id', true)
             ->where(fn ($q) => $q->where('approved_at', '>=', Lot::dayStart())->orWhere('rejected_at', '>=', Lot::dayStart()))
             ->with(['driver', 'slot', 'approver'])
             ->latest('updated_at')
@@ -68,6 +70,15 @@ class ReservationController extends Controller
 
     public function approve(Request $request, ParkingReservation $reservation, ReservationService $reservations): RedirectResponse
     {
+        // Approval is only for PWD slots, where the attendant has to check the driver's ID.
+        if (! $reservation->requires_id) {
+            return redirect()->route('attendant.reservations.index')->with('modal', [
+                'title' => 'No approval needed',
+                'body' => "{$reservation->code} is not for a PWD slot, so it does not need your approval. The driver's reservation is already confirmed.",
+                'primary' => ['label' => 'OK', 'close' => true],
+            ]);
+        }
+
         if ($reservation->isAwaitingApproval() && $reservation->requires_id && ! $reservation->id_photo_path) {
             return redirect()->route('attendant.reservations.index')->with('modal', [
                 'title' => 'No ID photo to check',

@@ -31,7 +31,7 @@
             <input class="ba-input ba-predict-ghost" id="exit-ghost" type="text" readonly tabindex="-1" aria-hidden="true" style="font-size:20px;font-weight:700;text-transform:uppercase;">
             <input class="ba-input" id="exit-q" name="q" type="text" value="{{ $q }}"
                    placeholder="PK-0016 or HJK 4471" style="font-size:20px;font-weight:700;text-transform:uppercase;"
-                   autocomplete="off" autofocus>
+                   autocomplete="off" autofocus oninput="this.value = this.value.toUpperCase().replace(/[^A-Z0-9\s-]/g, '')">
           </div>
 
           <!-- Active Customer Suggestions Chips -->
@@ -48,7 +48,7 @@
         <div class="ba-form-group">
           <label style="display:inline-flex;align-items:center;gap:8px;font-size:14px;cursor:pointer;">
             <input type="checkbox" name="include_closed" value="1" @checked($includeClosed) style="width:18px;height:18px;">
-            Include closed sessions
+            Include closed sessions (past 24 hours)
           </label>
         </div>
 

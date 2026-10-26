@@ -38,13 +38,52 @@ class Rules
         ];
     }
 
-    /** Philippine mobile number after normalizing: 09 and nine more digits. */
+    /**
+     * Philippine mobile number. Only digits and a leading + are allowed (no letters, spaces or dashes).
+     * A number that starts with 09 has exactly 11 digits. A number that starts with +63 has exactly 13 characters
+     * (+63 and 10 digits, for example +639171234567). Lot::normalizePhone turns a valid +63 number into the 09 form
+     * before this rule runs, so the stored value is always 09 and 9 more digits.
+     */
     public static function mobile(bool $required = true): array
     {
-        return [$required ? 'required' : 'nullable', 'regex:/^09\d{9}$/'];
+        return [
+            $required ? 'required' : 'nullable',
+            'bail',
+            function (string $attribute, mixed $value, \Closure $fail): void {
+                $message = self::mobileProblem((string) $value);
+
+                if ($message !== null) {
+                    $fail($message);
+                }
+            },
+        ];
     }
 
-    public const MOBILE_MESSAGE = 'Enter an 11-digit mobile number starting with 09, for example 0917 555 0142.';
+    /** What is wrong with the number, or null when it is fine. */
+    public static function mobileProblem(string $phone): ?string
+    {
+        if ($phone === '') {
+            return null;
+        }
+
+        if (! preg_match('/^\+?\d+$/', $phone)) {
+            return 'Use digits only, or a + at the start. No letters, spaces or dashes.';
+        }
+
+        if (str_starts_with($phone, '09')) {
+            return preg_match('/^09\d{9}$/', $phone) ? null : 'A number that starts with 09 must be exactly 11 digits, for example 09171234567.';
+        }
+
+        if (str_starts_with($phone, '+63')) {
+            return strlen($phone) === 13 && preg_match('/^\+639\d{9}$/', $phone)
+                ? null
+                : 'A number that starts with +63 must be exactly 13 characters, for example +639171234567.';
+        }
+
+        return 'The number must start with 09 or +63.';
+    }
+
+    public const MOBILE_MESSAGE = 'Enter a mobile number like 09171234567 or +639171234567.';
 
     /**
      * A normal email address with a real domain: a dot and a two-or-more-letter suffix.
@@ -113,7 +152,7 @@ class Rules
         ];
     }
 
-    /** Three letters then three or four digits, written without spaces: ABC1234. */
+    /** Valid Philippine vehicle plate (standard, legacy, vintage, or protocol). */
     public static function plate(bool $required = true): array
     {
         return [$required ? 'required' : 'nullable', 'regex:'.Vehicle::PLATE_PATTERN];

@@ -9,9 +9,11 @@ use App\Models\ParkingSession;
 use App\Models\ParkingSlot;
 use App\Models\User;
 use App\Models\Vehicle;
+use App\Support\Lot;
 use Database\Seeders\ManagerDefaultsSeeder;
 use Database\Seeders\ParkingSlotSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
 class BoothAttendantTest extends TestCase
@@ -166,12 +168,24 @@ class BoothAttendantTest extends TestCase
             'status' => ParkingReservation::STATUS_BOOKED,
         ]);
 
-        // Lookup reservation
+        // Lookup reservation with standard code, without dash, and without RSV prefix
         $lookupRes = $this->actingAs($attendant)->postJson(route('attendant.entry.reserved.lookup'), [
             'code' => 'RSV-4F7K29',
         ]);
         $lookupRes->assertOk();
         $lookupRes->assertJson(['ok' => true, 'status' => 'confirmed']);
+
+        $lookupResNoDash = $this->actingAs($attendant)->postJson(route('attendant.entry.reserved.lookup'), [
+            'code' => 'RSV4F7K29',
+        ]);
+        $lookupResNoDash->assertOk();
+        $lookupResNoDash->assertJson(['ok' => true, 'status' => 'confirmed']);
+
+        $lookupResRaw = $this->actingAs($attendant)->postJson(route('attendant.entry.reserved.lookup'), [
+            'code' => '4F7K29',
+        ]);
+        $lookupResRaw->assertOk();
+        $lookupResRaw->assertJson(['ok' => true, 'status' => 'confirmed']);
 
         // Check in reservation
         $checkInRes = $this->actingAs($attendant)->post(route('attendant.entry.reserved.check-in'), [
@@ -231,6 +245,131 @@ class BoothAttendantTest extends TestCase
         $this->assertStringStartsWith('RC-', $payment->receipt_number);
     }
 
+    public function test_discount_applies_to_total_including_lost_ticket_and_overstay_penalties(): void
+    {
+        $this->lot();
+        $attendant = $this->attendant();
+        $slot = ParkingSlot::query()->where('code', 'A-04')->first();
+
+        $session = ParkingSession::create([
+            'ticket_number' => 'PK-0099',
+            'slot_id' => $slot->id,
+            'slot_code' => 'A-04',
+            'plate_number' => 'ABC1234',
+            'vehicle_color' => 'Red',
+            'vehicle_type' => 'Car',
+            'entered_at' => now()->subHours(2)->subMinutes(5),
+            'status' => ParkingSession::STATUS_ACTIVE,
+        ]);
+
+        $seniorDiscount = ParkingDiscount::query()->where('name', 'Senior citizen')->first();
+        // Parking charge = 30 + 40 = 70.
+        // Penalties: lost_ticket (100) + overstay (150) = 250.
+        // Total before discount = 70 + 250 = 320.
+        // Discount 20% on 320 = 64.00.
+        // Final total = 320 - 64 = 256.00.
+
+        $payResponse = $this->actingAs($attendant)->post(route('attendant.exit.pay', $session), [
+            'cash_received' => 300.00,
+            'discount_id' => $seniorDiscount->id,
+            'discount_proof' => 'SC-999999',
+            'discount_note' => 'Senior ID verified with penalties',
+            'lost_ticket' => '1',
+            'overstay' => '1',
+        ]);
+
+        $payResponse->assertRedirect();
+
+        $payment = ParkingPayment::query()->where('session_id', $session->id)->first();
+        $this->assertNotNull($payment);
+        $this->assertEquals(250.00, (float) $payment->penalty);
+        $this->assertEquals(64.00, (float) $payment->discount);
+        $this->assertEquals(256.00, (float) $payment->total);
+        $this->assertEquals(44.00, (float) ($payment->receipt_snapshot['change_given'] ?? 0));
+    }
+
+    public function test_penalty_can_be_removed_before_payment(): void
+    {
+        $this->lot();
+        $attendant = $this->attendant();
+        $slot = ParkingSlot::query()->where('code', 'A-05')->first();
+
+        $session = ParkingSession::create([
+            'ticket_number' => 'PK-0100',
+            'slot_id' => $slot->id,
+            'slot_code' => 'A-05',
+            'plate_number' => 'NKL5555',
+            'vehicle_color' => 'White',
+            'vehicle_type' => 'Car',
+            'entered_at' => now()->subHours(2)->subMinutes(5),
+            'status' => ParkingSession::STATUS_ACTIVE,
+            'lost_ticket' => false,
+        ]);
+
+        // Attendant undid/removed penalty before confirming payment: lost_ticket = '0', overstay = '0'
+        $payResponse = $this->actingAs($attendant)->post(route('attendant.exit.pay', $session), [
+            'cash_received' => 100.00,
+            'lost_ticket' => '0',
+            'overstay' => '0',
+        ]);
+
+        $payResponse->assertRedirect();
+
+        $payment = ParkingPayment::query()->where('session_id', $session->id)->first();
+        $this->assertNotNull($payment);
+        $this->assertEquals(0.00, (float) $payment->penalty);
+        $this->assertEquals(70.00, (float) $payment->total);
+        $this->assertEquals(30.00, (float) ($payment->receipt_snapshot['change_given'] ?? 0));
+        $this->assertFalse($session->fresh()->lost_ticket);
+    }
+
+    public function test_senior_and_pwd_discount_id_regex_validation(): void
+    {
+        $this->lot();
+        $attendant = $this->attendant();
+        $slot = ParkingSlot::query()->where('code', 'A-06')->first();
+
+        $session = ParkingSession::create([
+            'ticket_number' => 'PK-0101',
+            'slot_id' => $slot->id,
+            'slot_code' => 'A-06',
+            'plate_number' => 'SEN8888',
+            'entered_at' => now()->subHours(1),
+            'status' => ParkingSession::STATUS_ACTIVE,
+        ]);
+
+        $seniorDiscount = ParkingDiscount::query()->where('name', 'Senior citizen')->firstOrFail();
+        $pwdDiscount = ParkingDiscount::query()->where('name', 'PWD')->firstOrFail();
+
+        // Invalid Senior ID (too short / bogus)
+        $invalidSenior = $this->actingAs($attendant)->post(route('attendant.exit.pay', $session), [
+            'cash_received' => 100.00,
+            'discount_id' => $seniorDiscount->id,
+            'discount_proof' => '123',
+        ]);
+        $invalidSenior->assertSessionHasErrors(['discount_proof']);
+
+        // Invalid PWD ID (dummy string)
+        $invalidPwd = $this->actingAs($attendant)->post(route('attendant.exit.pay', $session), [
+            'cash_received' => 100.00,
+            'discount_id' => $pwdDiscount->id,
+            'discount_proof' => 'test',
+        ]);
+        $invalidPwd->assertSessionHasErrors(['discount_proof']);
+
+        // Valid PWD ID succeeds
+        $validPwd = $this->actingAs($attendant)->post(route('attendant.exit.pay', $session), [
+            'cash_received' => 100.00,
+            'discount_id' => $pwdDiscount->id,
+            'discount_proof' => 'PWD-2024-00142',
+        ]);
+        $validPwd->assertRedirect();
+        $this->assertDatabaseHas('parking_payments', [
+            'session_id' => $session->id,
+            'discount' => 6.00,
+        ]);
+    }
+
     public function test_manager_pin_approval_for_tenant_discount(): void
     {
         $this->lot();
@@ -284,7 +423,7 @@ class BoothAttendantTest extends TestCase
         $correctRes->assertJson(['ok' => true]);
 
         // Manager's configured 6-digit PIN
-        $manager->forceFill(['manager_pin_hash' => \Illuminate\Support\Facades\Hash::make('987654')])->save();
+        $manager->forceFill(['manager_pin_hash' => Hash::make('987654')])->save();
         $configuredRes = $this->actingAs($attendant)->postJson(route('attendant.exit.verify-pin', $session2), [
             'manager_id' => $manager->id,
             'pin' => '987654',
@@ -364,5 +503,474 @@ class BoothAttendantTest extends TestCase
             'action' => 'shift_closed',
             'area' => 'attendant',
         ]);
+    }
+
+    public function test_all_philippine_plate_formats_and_protocol_plates_are_supported(): void
+    {
+        $this->lot();
+        $attendant = $this->attendant();
+
+        $validPlates = [
+            'ABC 1234' => 'ABC 1234',   // Current Standard Car (MVSP)
+            'AB 12345' => 'AB 12345',   // Current Standard Motorcycle (MVSP)
+            'ABC 123' => 'ABC 123',    // Legacy Car (1981-2014)
+            'AB 1234' => 'AB 1234',    // Legacy Motorcycle
+            '1234 AB' => '1234 AB',    // Regional Motorcycle
+            'A-123-BC' => 'A-123-BC',   // Vintage L-DDD-LL
+            '123-ABC' => '123 ABC',    // Vintage DDD-LLL
+            '1' => '1',          // Protocol: President of the Philippines
+            '7' => '7',          // Protocol: Senator
+            '16' => '16',         // Protocol: Regional Trial Court Judge
+        ];
+
+        foreach ($validPlates as $rawPlate => $expectedDisplay) {
+            $norm = Vehicle::normalizePlate($rawPlate);
+            $this->assertMatchesRegularExpression(Vehicle::PLATE_PATTERN, $norm, "Failed on {$rawPlate}");
+            $this->assertSame($expectedDisplay, Lot::plate($norm), "Formatting mismatch on {$rawPlate}");
+
+            // Can lookup via walk-in API
+            $res = $this->actingAs($attendant)->postJson(route('attendant.entry.walk-in.lookup'), [
+                'plate' => $rawPlate,
+            ]);
+            $res->assertOk();
+            $res->assertJson(['ok' => true, 'status' => 'guest']);
+        }
+
+        // Test president can park!
+        $presEntry = $this->actingAs($attendant)->post(route('attendant.entry.walk-in.store'), [
+            'plate' => '1',
+            'phone' => '09175550199',
+            'color' => 'Black',
+            'type' => 'SUV',
+            'slot_code' => 'A-01',
+        ]);
+        $presEntry->assertRedirect();
+
+        $presSession = ParkingSession::query()->where('plate_number', '1')->first();
+        $this->assertNotNull($presSession);
+        $this->assertSame('1', $presSession->plate_number);
+        $this->assertSame('1', Lot::plate($presSession->plate_number));
+
+        // Invalid plate rejection
+        $invalidPlates = ['AB12', 'ABCD123', 'ABC 12', '0', '18', '99', 'ZZ'];
+        foreach ($invalidPlates as $badPlate) {
+            $badNorm = Vehicle::normalizePlate($badPlate);
+            $this->assertDoesNotMatchRegularExpression(Vehicle::PLATE_PATTERN, $badNorm, "Should reject {$badPlate}");
+
+            $res = $this->actingAs($attendant)->postJson(route('attendant.entry.walk-in.lookup'), [
+                'plate' => $badPlate,
+            ]);
+            $res->assertStatus(422);
+        }
+    }
+
+    public function test_walk_in_entry_phone_validation(): void
+    {
+        $this->lot();
+        $attendant = $this->attendant();
+
+        // 1. Invalid phone numbers (non-Philippine or wrong digits)
+        foreach (['12345', 'abcdefghijk', '08123456789', '0917-123', '091712345678'] as $badPhone) {
+            $res = $this->actingAs($attendant)->post(route('attendant.entry.walk-in.store'), [
+                'plate' => 'ABC 1234',
+                'phone' => $badPhone,
+                'color' => 'White',
+                'type' => 'Car',
+                'slot_code' => 'A-01',
+            ]);
+            $res->assertSessionHasErrors('phone');
+        }
+
+        // 2. Valid 11-digit mobile starting with 09
+        $goodRes = $this->actingAs($attendant)->post(route('attendant.entry.walk-in.store'), [
+            'plate' => 'ABC 1234',
+            'phone' => '0917 555 0199',
+            'color' => 'White',
+            'type' => 'Car',
+            'slot_code' => 'A-01',
+        ]);
+        $goodRes->assertRedirect();
+        $this->assertDatabaseHas('parking_sessions', [
+            'plate_number' => 'ABC1234',
+        ]);
+    }
+
+    public function test_close_shift_requires_note_when_difference_exists(): void
+    {
+        $this->lot();
+        $attendant = $this->attendant();
+
+        // Counted is 450, expected is 500 (short by 50) without note -> rejected with error modal
+        $resWithoutNote = $this->actingAs($attendant)->post(route('attendant.shift.close'), [
+            'cash_counted' => 450.00,
+            'note' => '',
+        ]);
+        $resWithoutNote->assertSessionHas('error_modal');
+        $modal = session('error_modal');
+        $this->assertSame('close_shift_note_required', $modal['type']);
+        $this->assertEquals(-50.0, $modal['difference']);
+
+        // Counted is 450, with explanation note -> accepted
+        $resWithNote = $this->actingAs($attendant)->post(route('attendant.shift.close'), [
+            'cash_counted' => 450.00,
+            'note' => 'Gave ₱50 change advance for customer bills',
+        ]);
+        $resWithNote->assertRedirect(route('attendant.shift.index'));
+        $resWithNote->assertSessionHas('closed_shift');
+    }
+
+    public function test_reserved_check_in_rejects_canceled_reservation(): void
+    {
+        $this->lot();
+        $attendant = $this->attendant();
+        $driver = $this->driver();
+        $slot = ParkingSlot::query()->where('code', 'A-04')->first();
+
+        $reservation = ParkingReservation::create([
+            'code' => 'RSV-CANC01',
+            'driver_id' => $driver->id,
+            'slot_id' => $slot->id,
+            'slot_code' => 'A-04',
+            'plate_number' => 'GHI7765',
+            'scheduled_at' => now()->addMinutes(10),
+            'status' => ParkingReservation::STATUS_CANCELED,
+            'canceled_at' => now()->subMinutes(5),
+        ]);
+
+        // 1. Lookup returns canceled status
+        $lookupRes = $this->actingAs($attendant)->postJson(route('attendant.entry.reserved.lookup'), [
+            'code' => 'RSV-CANC01',
+        ]);
+        $lookupRes->assertOk();
+        $lookupRes->assertJson([
+            'ok' => false,
+            'status' => 'canceled',
+            'reservation' => [
+                'code' => 'RSV-CANC01',
+                'status' => 'CANCELED',
+            ],
+        ]);
+
+        // 2. Direct check-in attempt is rejected with reservation_not_bookable modal
+        $checkInRes = $this->actingAs($attendant)->post(route('attendant.entry.reserved.check-in'), [
+            'reservation_id' => $reservation->id,
+            'entered_plate' => 'GHI 7765',
+        ]);
+        $checkInRes->assertSessionHas('error_modal');
+        $modal = session('error_modal');
+        $this->assertSame('reservation_not_bookable', $modal['type']);
+        $this->assertSame('RSV-CANC01', $modal['code']);
+
+        // Assert no parking session was created
+        $this->assertDatabaseMissing('parking_sessions', [
+            'plate_number' => 'GHI7765',
+        ]);
+    }
+
+    public function test_reserved_check_in_rejects_completed_or_exited_reservation(): void
+    {
+        $this->lot();
+        $attendant = $this->attendant();
+        $driver = $this->driver();
+        $slot = ParkingSlot::query()->where('code', 'A-04')->first();
+
+        $reservation = ParkingReservation::create([
+            'code' => 'RSV-EXIT01',
+            'driver_id' => $driver->id,
+            'slot_id' => $slot->id,
+            'slot_code' => 'A-04',
+            'plate_number' => 'GHI7765',
+            'scheduled_at' => now()->subHours(2),
+            'status' => ParkingReservation::STATUS_COMPLETED,
+        ]);
+
+        // 1. Lookup returns already_used with COMPLETED (EXITED) status
+        $lookupRes = $this->actingAs($attendant)->postJson(route('attendant.entry.reserved.lookup'), [
+            'code' => 'RSV-EXIT01',
+        ]);
+        $lookupRes->assertOk();
+        $lookupRes->assertJson([
+            'ok' => false,
+            'status' => 'already_used',
+            'reservation' => [
+                'code' => 'RSV-EXIT01',
+                'status' => 'COMPLETED (EXITED)',
+            ],
+        ]);
+
+        // 2. Direct check-in attempt is rejected
+        $checkInRes = $this->actingAs($attendant)->post(route('attendant.entry.reserved.check-in'), [
+            'reservation_id' => $reservation->id,
+            'entered_plate' => 'GHI 7765',
+        ]);
+        $checkInRes->assertSessionHas('error_modal');
+        $modal = session('error_modal');
+        $this->assertSame('reservation_not_bookable', $modal['type']);
+
+        $reservation->refresh();
+        $this->assertSame(ParkingReservation::STATUS_COMPLETED, $reservation->status);
+    }
+
+    public function test_reserved_check_in_rejects_already_checked_in_reservation(): void
+    {
+        $this->lot();
+        $attendant = $this->attendant();
+        $driver = $this->driver();
+        $slot = ParkingSlot::query()->where('code', 'A-04')->first();
+
+        $reservation = ParkingReservation::create([
+            'code' => 'RSV-IN0001',
+            'driver_id' => $driver->id,
+            'slot_id' => $slot->id,
+            'slot_code' => 'A-04',
+            'plate_number' => 'GHI7765',
+            'scheduled_at' => now()->subMinutes(15),
+            'status' => ParkingReservation::STATUS_CHECKED_IN,
+        ]);
+
+        // 1. Lookup returns already_used
+        $lookupRes = $this->actingAs($attendant)->postJson(route('attendant.entry.reserved.lookup'), [
+            'code' => 'RSV-IN0001',
+        ]);
+        $lookupRes->assertOk();
+        $lookupRes->assertJson([
+            'ok' => false,
+            'status' => 'already_used',
+            'reservation' => [
+                'code' => 'RSV-IN0001',
+                'status' => 'ALREADY CHECKED IN',
+            ],
+        ]);
+
+        // 2. Direct check-in attempt is rejected
+        $checkInRes = $this->actingAs($attendant)->post(route('attendant.entry.reserved.check-in'), [
+            'reservation_id' => $reservation->id,
+            'entered_plate' => 'GHI 7765',
+        ]);
+        $checkInRes->assertSessionHas('error_modal');
+        $this->assertSame('reservation_not_bookable', session('error_modal')['type']);
+    }
+
+    public function test_exit_checkout_has_zero_penalty_by_default_and_hides_remove_penalty(): void
+    {
+        $this->lot();
+        $attendant = $this->attendant();
+
+        $session = ParkingSession::create([
+            'ticket_number' => 'PK-9991',
+            'slot_code' => 'A-01',
+            'plate_number' => 'ABC1234',
+            'vehicle_color' => 'White',
+            'vehicle_type' => 'Car',
+            'entered_at' => now()->subHours(2),
+            'status' => ParkingSession::STATUS_ACTIVE,
+            'exit_window_expired_at' => now()->subMinutes(10), // Had prior expired window
+        ]);
+
+        $res = $this->actingAs($attendant)->get(route('attendant.exit.show', $session));
+        $res->assertOk();
+
+        // Must show Add penalty and hide Remove penalty
+        $res->assertSee('Add penalty');
+        $res->assertSee('style="display:none;"', false);
+        $res->assertSee('Penalties');
+        $res->assertSee('None');
+    }
+
+    public function test_exit_payment_reuses_existing_receipt_number_without_unique_constraint_violation(): void
+    {
+        $this->lot();
+        $attendant = $this->attendant();
+
+        $session = ParkingSession::create([
+            'ticket_number' => 'PK-9992',
+            'slot_code' => 'A-01',
+            'plate_number' => 'ABC1234',
+            'vehicle_color' => 'White',
+            'vehicle_type' => 'Car',
+            'entered_at' => now()->subHours(2),
+            'status' => ParkingSession::STATUS_ACTIVE,
+        ]);
+
+        // Pre-existing payment for this session
+        $existingPayment = ParkingPayment::create([
+            'receipt_number' => 'RC-0003',
+            'session_id' => $session->id,
+            'received_by' => $attendant->id,
+            'base_fee' => 30,
+            'additional_fee' => 0,
+            'penalty' => 0,
+            'discount' => 0,
+            'total' => 30,
+            'method' => 'cash',
+            'paid_at' => now()->subHour(),
+        ]);
+
+        // Another payment exists with RC-0006 on another session
+        $session2 = ParkingSession::create([
+            'ticket_number' => 'PK-9993',
+            'slot_code' => 'A-02',
+            'plate_number' => 'DEF5678',
+            'vehicle_color' => 'Black',
+            'vehicle_type' => 'Car',
+            'entered_at' => now()->subHours(3),
+            'status' => ParkingSession::STATUS_PAID,
+        ]);
+
+        ParkingPayment::create([
+            'receipt_number' => 'RC-0006',
+            'session_id' => $session2->id,
+            'received_by' => $attendant->id,
+            'base_fee' => 50,
+            'additional_fee' => 0,
+            'penalty' => 0,
+            'discount' => 0,
+            'total' => 50,
+            'method' => 'cash',
+            'paid_at' => now()->subHour(),
+        ]);
+
+        // Take payment for session - should update existing payment without generating RC-0006 or crashing
+        $payRes = $this->actingAs($attendant)->post(route('attendant.exit.pay', $session), [
+            'cash_received' => 200,
+        ]);
+
+        $payRes->assertRedirect(route('attendant.exit.receipt', $existingPayment));
+        $existingPayment->refresh();
+        $this->assertSame('RC-0003', $existingPayment->receipt_number);
+    }
+
+    public function test_reserved_check_in_rejects_pending_exit_reservation(): void
+    {
+        $this->lot();
+        $attendant = $this->attendant();
+        $driver = $this->driver();
+        $slot = ParkingSlot::query()->where('code', 'A-04')->first();
+
+        $session = ParkingSession::create([
+            'ticket_number' => 'PK-8888',
+            'driver_id' => $driver->id,
+            'slot_id' => $slot->id,
+            'slot_code' => 'A-04',
+            'plate_number' => 'GHI7765',
+            'vehicle_color' => 'Gray',
+            'vehicle_type' => 'Motorcycle',
+            'entered_at' => now()->subHour(),
+            'status' => ParkingSession::STATUS_PAID,
+        ]);
+
+        $reservation = ParkingReservation::create([
+            'code' => 'RSV-PEND01',
+            'driver_id' => $driver->id,
+            'slot_id' => $slot->id,
+            'slot_code' => 'A-04',
+            'plate_number' => 'GHI7765',
+            'scheduled_at' => now()->subHours(2),
+            'status' => ParkingReservation::STATUS_CHECKED_IN,
+            'session_id' => $session->id,
+        ]);
+
+        // 1. Lookup returns already_used with PAID (PENDING EXIT)
+        $lookupRes = $this->actingAs($attendant)->postJson(route('attendant.entry.reserved.lookup'), [
+            'code' => 'RSV-PEND01',
+        ]);
+        $lookupRes->assertOk();
+        $lookupRes->assertJson([
+            'ok' => false,
+            'status' => 'already_used',
+            'reservation' => [
+                'code' => 'RSV-PEND01',
+                'status' => 'PAID (PENDING EXIT)',
+                'is_pending_exit' => true,
+            ],
+        ]);
+
+        // 2. Direct check-in attempt is rejected
+        $checkInRes = $this->actingAs($attendant)->post(route('attendant.entry.reserved.check-in'), [
+            'reservation_id' => $reservation->id,
+            'entered_plate' => 'GHI 7765',
+        ]);
+        $checkInRes->assertSessionHas('error_modal');
+        $modal = session('error_modal');
+        $this->assertSame('reservation_not_bookable', $modal['type']);
+        $this->assertSame('PAID (PENDING EXIT)', $modal['status']);
+    }
+
+    public function test_shift_summary_accurately_reflects_cash_discounts_and_penalties_even_after_relogin(): void
+    {
+        $this->lot();
+        $attendant = $this->attendant();
+
+        $session1 = ParkingSession::create([
+            'ticket_number' => 'PK-7001',
+            'slot_code' => 'A-01',
+            'plate_number' => 'ABC1234',
+            'vehicle_color' => 'White',
+            'vehicle_type' => 'Car',
+            'attendant_id' => $attendant->id,
+            'entered_at' => now()->subHours(3),
+            'status' => ParkingSession::STATUS_PAID,
+        ]);
+
+        $session2 = ParkingSession::create([
+            'ticket_number' => 'PK-7002',
+            'slot_code' => 'A-02',
+            'plate_number' => 'XYZ9876',
+            'vehicle_color' => 'Black',
+            'vehicle_type' => 'SUV',
+            'attendant_id' => $attendant->id,
+            'entered_at' => now()->subHours(2),
+            'status' => ParkingSession::STATUS_PAID,
+            'lost_ticket' => true,
+        ]);
+
+        // Payment 1: with Senior discount
+        ParkingPayment::create([
+            'receipt_number' => 'RC-7001',
+            'session_id' => $session1->id,
+            'received_by' => $attendant->id,
+            'base_fee' => 30,
+            'additional_fee' => 20,
+            'penalty' => 0,
+            'discount' => 10,
+            'total' => 40,
+            'method' => 'cash',
+            'receipt_snapshot' => [
+                'discount_name' => 'Senior citizen',
+                'discount_amount' => 10,
+            ],
+            'paid_at' => now()->subMinutes(90),
+        ]);
+
+        // Payment 2: with Lost ticket penalty
+        ParkingPayment::create([
+            'receipt_number' => 'RC-7002',
+            'session_id' => $session2->id,
+            'received_by' => $attendant->id,
+            'base_fee' => 30,
+            'additional_fee' => 40,
+            'penalty' => 100,
+            'discount' => 0,
+            'total' => 170,
+            'method' => 'cash',
+            'receipt_snapshot' => [
+                'penalties' => 100,
+            ],
+            'paid_at' => now()->subMinutes(45),
+        ]);
+
+        // Attendant logs in again now (last_login_at is now, after payments)
+        $attendant->update(['last_login_at' => now()]);
+
+        $res = $this->actingAs($attendant)->get(route('attendant.shift.index'));
+        $res->assertOk();
+
+        // Must see 2 transactions, 210 cash collected (40 + 170), 10 discount, 100 penalties
+        $res->assertSee('2'); // 2 transactions
+        $res->assertSee('₱210.00'); // cash collected
+        $res->assertSee('₱10.00'); // discounts
+        $res->assertSee('₱100.00'); // penalties
+        $res->assertSee('RC-7001');
+        $res->assertSee('RC-7002');
     }
 }

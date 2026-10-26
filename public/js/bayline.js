@@ -2,8 +2,15 @@
 var root=document.documentElement,tb=document.getElementById('theme'),KEY='bayline-theme';
 function eff(){var t=root.getAttribute('data-theme');if(t)return t;return matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}
 function lab(){if(!tb)return;var t=eff()==='dark'?'Switch to light mode':'Switch to dark mode';tb.setAttribute('title',t);if(!tb.textContent.trim())tb.setAttribute('aria-label',t)}
-try{var saved=localStorage.getItem(KEY);if(saved==='dark'||saved==='light')root.setAttribute('data-theme',saved)}catch(e){}
-if(tb){tb.addEventListener('click',function(){var n=eff()==='dark'?'light':'dark';root.setAttribute('data-theme',n);try{localStorage.setItem(KEY,n)}catch(e){}lab()});lab()}
+/* The chosen theme is kept in localStorage and in a cookie. The cookie is shared by every port of the same address, and it is the
+   fallback when the browser clears or blocks localStorage. Other open tabs follow the change. */
+function readSaved(){var t=null;try{t=localStorage.getItem(KEY)}catch(e){}if(t!=='dark'&&t!=='light'){var m=document.cookie.match(/(?:^|; )bayline-theme=(dark|light)/);t=m?m[1]:null}return t==='dark'||t==='light'?t:null}
+function save(t){try{localStorage.setItem(KEY,t)}catch(e){}try{document.cookie=KEY+'='+t+'; path=/; max-age=31536000; SameSite=Lax'}catch(e){}}
+function apply(t){if(t)root.setAttribute('data-theme',t);lab()}
+var saved=readSaved();if(saved)save(saved);apply(saved);
+if(tb){tb.addEventListener('click',function(){var n=eff()==='dark'?'light':'dark';save(n);apply(n)})}
+window.addEventListener('storage',function(e){if(e.key===KEY&&(e.newValue==='dark'||e.newValue==='light'))apply(e.newValue)});
+window.addEventListener('pageshow',function(e){if(e.persisted)apply(readSaved())});
 document.querySelectorAll('[data-open-dialog]').forEach(function(button){
   button.addEventListener('click',function(){
     var dialog=document.getElementById(button.getAttribute('data-open-dialog'));
@@ -72,16 +79,40 @@ document.querySelectorAll('input[data-pwcheck]').forEach(function(input){
   }
   input.addEventListener('input',run);if(confirm)confirm.addEventListener('input',run);run();
 });
+/* Phone fields take digits and a leading + only. Letters, spaces and dashes are removed as they are typed or pasted. */
+document.querySelectorAll('input[type=tel]').forEach(function(input){
+  input.maxLength=13;
+  function clean(){
+    var v=input.value.replace(/[^0-9+]/g,'');
+    v=(v.charAt(0)==='+'?'+':'')+v.replace(/\+/g,'');
+    v=v.slice(0,13);
+    if(v!==input.value)input.value=v;
+  }
+  input.addEventListener('input',clean);input.addEventListener('change',clean);clean();
+});
 /* Gmail address check while typing: <input data-live-gmail data-live-target="#email-note"> */
 document.querySelectorAll('input[data-live-gmail]').forEach(function(input){
   var note=document.querySelector(input.getAttribute('data-live-target'));
   var re=/^(?=[^@]{6,30}@)[a-z0-9]+(?:\.[a-z0-9]+)*@gmail\.com$/;
+  var url=input.getAttribute('data-check-url'),timer=null,seq=0;
+  function plain(){note.textContent='We send a confirmation link to this Gmail address.';note.className='hint'}
   function run(){
     var v=input.value.trim().toLowerCase();
     if(!note)return;
-    if(!v){note.textContent='We send a 6 digit code to this Gmail address.';note.className='hint';return}
-    if(re.test(v)){note.textContent='Looks like a Gmail address.';note.className='hint okline'}
-    else{note.textContent='Use a Gmail address, for example maria.santos@gmail.com.';note.className='hint badline'}
+    clearTimeout(timer);seq++;
+    if(!v){plain();return}
+    if(!re.test(v)){note.textContent='Use a Gmail address, for example maria.santos@gmail.com.';note.className='hint badline';return}
+    plain();
+    if(!url||typeof fetch!=='function')return;
+    var mine=seq;
+    timer=setTimeout(function(){
+      fetch(url+'?email='+encodeURIComponent(v),{headers:{'Accept':'application/json'},credentials:'same-origin'})
+        .then(function(r){return r.ok?r.json():null})
+        .then(function(d){
+          if(mine!==seq||!d)return;
+          if(d.taken){note.textContent='This Gmail account is already registered. Sign in instead.';note.className='hint badline'}
+        }).catch(function(){});
+    },400);
   }
   input.addEventListener('input',run);run();
 });

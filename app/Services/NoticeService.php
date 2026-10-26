@@ -63,7 +63,8 @@ class NoticeService
 
         return $this->toDriver($r->driver, 'N-01', 'reservation_confirmed', 'Reservation confirmed',
             "Reservation {$r->code} is confirmed for slot {$this->slotCode($r)} ".Lot::whenText($r->scheduled_at).'. '
-            .'The booth attendant approved it. Show the QR code when you arrive. You can check in from '.Lot::time($opens).' until '.Lot::time($ends).'.',
+            .($r->approved_by ? 'The booth attendant approved it. ' : '')
+            .'Show the QR code when you arrive. You can check in from '.Lot::time($opens).' until '.Lot::time($ends).'.',
             $r, ['code' => $r->code]);
     }
 

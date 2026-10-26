@@ -118,6 +118,14 @@ class Lot
     public static function plate(?string $plate): string
     {
         $plate = (string) $plate;
+        if ($plate === '') {
+            return '';
+        }
+
+        // Vintage plates such as A123BC are written A-123-BC.
+        if (preg_match('/^[A-Z][0-9]{3}[A-Z]{2}$/', $plate)) {
+            return substr($plate, 0, 1).'-'.substr($plate, 1, 3).'-'.substr($plate, 4);
+        }
 
         if (preg_match('/^([A-Z]+)([0-9]+)$/', $plate, $m) || preg_match('/^([0-9]+)([A-Z]+)$/', $plate, $m)) {
             return $m[1].' '.$m[2];
@@ -136,12 +144,12 @@ class Lot
             : $phone;
     }
 
-    /** 0917 123 4567, 0917-123-4567 and +63 917 123 4567 all become 09171234567. */
+    /** +639171234567 becomes 09171234567. Anything else is returned as typed (trimmed), so the phone rule can refuse it. */
     public static function normalizePhone(?string $phone): string
     {
-        $phone = preg_replace('/[\s()\-]+/', '', (string) $phone);
+        $phone = trim((string) $phone);
 
-        if (preg_match('/^\+?63(9\d{9})$/', $phone, $matches)) {
+        if (preg_match('/^\+63(9\d{9})$/', $phone, $matches)) {
             return '0'.$matches[1];
         }
 
@@ -190,5 +198,20 @@ class Lot
     public static function exitWindowMinutes(): int
     {
         return max(1, (int) self::setting('exit_window_minutes', 15));
+    }
+
+    public static function lotName(): string
+    {
+        return (string) self::setting('lot_name', 'Bayline');
+    }
+
+    public static function lotAddress(): string
+    {
+        return (string) self::setting('lot_address', '123 Commercial Ave, Metro Manila');
+    }
+
+    public static function receiptFooter(): string
+    {
+        return (string) self::setting('receipt_footer', "Exit gate approval is required before you leave.\nValid for 15 minutes.");
     }
 }

@@ -1,9 +1,11 @@
 <?php
 
+use App\Http\Controllers\Driver\GoogleController;
 use App\Http\Controllers\Driver\LoginController as DriverLoginController;
 use App\Http\Controllers\Driver\PasswordResetController;
 use App\Http\Controllers\Driver\RegisterController;
 use App\Http\Controllers\Driver\VerifyEmailController;
+use App\Http\Controllers\Staff\PasswordResetController as StaffPasswordResetController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\LandingController;
 use App\Http\Controllers\Manager\AccountController;
@@ -35,6 +37,12 @@ Route::prefix('staff')->name('staff.')->group(function () {
     Route::middleware('guest')->group(function () {
         Route::get('login', [StaffLoginController::class, 'create'])->name('login');
         Route::post('login', [StaffLoginController::class, 'store'])->middleware('throttle:20,1');
+
+        // Forgot password for booth attendants and guards: a link by email, then a new password and its confirmation.
+        Route::get('forgot-password', [StaffPasswordResetController::class, 'request'])->name('password.request');
+        Route::post('forgot-password', [StaffPasswordResetController::class, 'email'])->middleware('throttle:5,1')->name('password.email');
+        Route::get('reset-password/{token}', [StaffPasswordResetController::class, 'reset'])->name('password.reset');
+        Route::post('reset-password', [StaffPasswordResetController::class, 'update'])->middleware('throttle:10,1')->name('password.update');
     });
 
     Route::middleware('area:staff')->group(function () {
@@ -119,6 +127,12 @@ Route::prefix('driver')->name('driver.')->group(function () {
 
         Route::get('register', [RegisterController::class, 'create'])->name('register');
         Route::post('register', [RegisterController::class, 'store'])->middleware('throttle:10,1');
+        Route::get('register/check-email', [RegisterController::class, 'checkEmail'])->middleware('throttle:30,1')->name('register.check-email');
+
+        // After the form: the "check your email" page. The account is saved only when the link in the email is clicked.
+        Route::get('register/check-your-email', [RegisterController::class, 'sent'])->name('register.sent');
+        Route::post('register/resend', [RegisterController::class, 'resend'])->middleware('throttle:5,1')->name('register.resend');
+        Route::post('register/restart', [RegisterController::class, 'restart'])->middleware('throttle:5,1')->name('register.restart');
 
         // The code step after sign up, and after a sign in with an email that was never confirmed.
         Route::get('verify', [VerifyEmailController::class, 'show'])->name('verify');
@@ -126,12 +140,22 @@ Route::prefix('driver')->name('driver.')->group(function () {
         Route::post('verify/resend', [VerifyEmailController::class, 'resend'])->middleware('throttle:5,1')->name('verify.resend');
         Route::post('verify/restart', [VerifyEmailController::class, 'restart'])->middleware('throttle:5,1')->name('verify.restart');
 
+        // Continue to Google Sign-in. A new driver finishes a short form after coming back from Google.
+        Route::get('auth/google', [GoogleController::class, 'redirect'])->middleware('throttle:20,1')->name('google.redirect');
+        Route::get('auth/google/callback', [GoogleController::class, 'callback'])->middleware('throttle:20,1')->name('google.callback');
+        Route::get('auth/google/complete', [GoogleController::class, 'complete'])->name('google.complete');
+        Route::post('auth/google/complete', [GoogleController::class, 'store'])->middleware('throttle:10,1')->name('google.store');
+        Route::post('auth/google/cancel', [GoogleController::class, 'cancel'])->name('google.cancel');
+
         Route::get('forgot-password', [PasswordResetController::class, 'request'])->name('password.request');
         Route::post('forgot-password', [PasswordResetController::class, 'email'])
             ->middleware('throttle:5,1')
             ->name('password.email');
         Route::post('reset-password', [PasswordResetController::class, 'update'])->middleware('throttle:10,1')->name('password.update');
     });
+
+    // The link that finishes a sign up. The token is random, stored hashed, works once and expires.
+    Route::get('register/confirm/{token}', [RegisterController::class, 'confirm'])->middleware('throttle:20,1')->name('register.confirm');
 
     // The link in the email. Signed, so it works only as sent. Open to a signed in driver too (profile changes).
     Route::get('verify-email/{user}/{hash}', [VerifyEmailController::class, 'link'])->middleware(['signed', 'throttle:20,1'])->name('verify.link');

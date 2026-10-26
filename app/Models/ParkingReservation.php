@@ -46,6 +46,7 @@ class ParkingReservation extends Model
             'canceled_at' => 'datetime',
             'approved_at' => 'datetime',
             'rejected_at' => 'datetime',
+            'reminder_sent_at' => 'datetime',
             'requires_id' => 'boolean',
         ];
     }

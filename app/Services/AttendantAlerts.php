@@ -105,6 +105,7 @@ class AttendantAlerts
         return ParkingReservation::query()
             ->where('status', ParkingReservation::STATUS_BOOKED)
             ->where('approval_status', ParkingReservation::APPROVAL_PENDING)
+            ->where('requires_id', true)
             ->count();
     }
 
