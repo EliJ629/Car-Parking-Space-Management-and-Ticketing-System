@@ -4,10 +4,12 @@ namespace App\Http\Controllers\Manager;
 
 use App\Models\ActivityLog;
 use App\Models\ParkingSlot;
+use App\Models\User;
 use App\Support\Lot;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -83,20 +85,25 @@ class ParkingSlotController extends ManagerController
             'notes' => ['nullable', 'string', 'max:1000'],
         ], $this->messages());
 
-        $this->assertZoneLimits($validated['zone']);
+        $slot = DB::transaction(function () use ($validated, $request): ParkingSlot {
+            $this->lockManagerSlotMutations();
+            $this->assertZoneLimits($validated['zone']);
 
-        $slot = ParkingSlot::create($validated + [
-            'status' => ParkingSlot::STATUS_AVAILABLE,
-        ]);
+            $slot = ParkingSlot::create($validated + [
+                'status' => ParkingSlot::STATUS_AVAILABLE,
+            ]);
 
-        ActivityLog::record(
-            'slot_created',
-            $request->user(),
-            $request,
-            $slot->code,
-            'manager',
-            ['slot' => $slot->only(['code', 'zone', 'type', 'status', 'notes'])],
-        );
+            ActivityLog::record(
+                'slot_created',
+                $request->user(),
+                $request,
+                $slot->code,
+                'manager',
+                ['slot' => $slot->only(['code', 'zone', 'type', 'status', 'notes'])],
+            );
+
+            return $slot;
+        });
 
         return redirect()->route('manager.slots.index')->with('status', "{$slot->code} was added as available.");
     }
@@ -127,22 +134,27 @@ class ParkingSlotController extends ManagerController
             'notes' => ['nullable', 'string', 'max:1000'],
         ], $this->messages());
 
-        // Existing zones may predate a lower limit; only a move into another zone is checked.
-        if ($validated['zone'] !== $slot->zone) {
-            $this->assertZoneLimits($validated['zone'], $slot);
-        }
+        DB::transaction(function () use ($validated, $request, $slot): void {
+            $this->lockManagerSlotMutations();
+            $slot = ParkingSlot::query()->lockForUpdate()->findOrFail($slot->id);
 
-        $before = $slot->only(['code', 'zone', 'type', 'status', 'notes']);
-        $slot->update($validated);
+            // Existing zones may predate a lower limit; only a move into another zone is checked.
+            if ($validated['zone'] !== $slot->zone) {
+                $this->assertZoneLimits($validated['zone'], $slot);
+            }
 
-        ActivityLog::record(
-            'slot_updated',
-            $request->user(),
-            $request,
-            $slot->code,
-            'manager',
-            ['before' => $before, 'after' => $slot->only(array_keys($before))],
-        );
+            $before = $slot->only(['code', 'zone', 'type', 'status', 'notes']);
+            $slot->update($validated);
+
+            ActivityLog::record(
+                'slot_updated',
+                $request->user(),
+                $request,
+                $slot->code,
+                'manager',
+                ['before' => $before, 'after' => $slot->only(array_keys($before))],
+            );
+        });
 
         return redirect()->route('manager.slots.index')->with('status', "{$slot->code} was updated.");
     }
@@ -271,6 +283,15 @@ class ParkingSlotController extends ManagerController
                 'zone' => "The configured maximum of {$zoneLimit} active zones is reached. Use an existing zone or change the limit in Settings.",
             ]);
         }
+    }
+
+    private function lockManagerSlotMutations(): void
+    {
+        User::query()
+            ->where('role', User::ROLE_MANAGER)
+            ->where('status', User::STATUS_ACTIVE)
+            ->lockForUpdate()
+            ->get(['id']);
     }
 
     /**

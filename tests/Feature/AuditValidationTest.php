@@ -217,7 +217,9 @@ class AuditValidationTest extends TestCase
         }
 
         $send(['idle_timeout_minutes' => 5, 'idle_warning_seconds' => 300])->assertSessionHasErrors();
+        $send(['idle_timeout_minutes' => 5.5])->assertSessionHasErrors('settings.idle_timeout_minutes');
         $send(['lot_name' => ' '])->assertSessionHasErrors('settings.lot_name');
+        $send(['lot_name' => str_repeat('A', 121)])->assertSessionHasErrors('settings.lot_name');
     }
 
     public function test_a_rate_change_checks_its_amounts_and_reads_its_start_in_lot_time(): void

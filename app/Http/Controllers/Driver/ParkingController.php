@@ -3,8 +3,10 @@
 namespace App\Http\Controllers\Driver;
 
 use App\Http\Controllers\Controller;
+use App\Models\ParkingLayoutZone;
 use App\Models\ParkingRateSet;
 use App\Models\ParkingReservation;
+use App\Models\ParkingSession;
 use App\Models\ParkingSlot;
 use App\Models\Vehicle;
 use App\Services\DriverData;
@@ -14,7 +16,6 @@ use App\Services\ReservationService;
 use App\Support\Lot;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
 use Illuminate\View\View;
 
 /** Find parking (live board) and the three step reservation. */
@@ -24,6 +25,10 @@ class ParkingController extends Controller
     {
         $lot = $data->lot();
         $slots = ParkingSlot::query()->orderBy('zone')->orderBy('code')->get();
+        $zonePositions = ParkingLayoutZone::query()
+            ->whereIn('zone', $slots->pluck('zone')->unique())
+            ->get()
+            ->keyBy('zone');
         $rate = ParkingRateSet::effectiveAt();
 
         $release = null;
@@ -39,6 +44,7 @@ class ParkingController extends Controller
         return view('driver.app.find', [
             'lot' => $lot,
             'zones' => $slots->groupBy('zone'),
+            'zonePositions' => $zonePositions,
             'rate' => $rate,
             'release' => $release,
             'rateText' => $rate
@@ -244,7 +250,7 @@ class ParkingController extends Controller
     /** The pop-up for a driver who still has a reservation or a parked car. */
     private function busyModal(ReservationException $e): array
     {
-        $parked = $e->context instanceof \App\Models\ParkingSession;
+        $parked = $e->context instanceof ParkingSession;
         $checkedIn = $e->context instanceof ParkingReservation && $e->context->status === ParkingReservation::STATUS_CHECKED_IN;
 
         return [

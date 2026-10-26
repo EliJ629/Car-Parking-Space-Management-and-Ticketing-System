@@ -121,6 +121,12 @@
 /* slot board */
 .dapp .lot{padding:12px}
 .dapp .lot .g{grid-template-columns:repeat(auto-fill,minmax(60px,1fr))}
+.dapp .driver-layout{overflow-x:auto;padding:12px}
+.dapp .driver-layout-canvas{position:relative;min-width:760px;height:520px;background:var(--out-bg);border:1px solid var(--line);border-radius:6px}
+.dapp .driver-layout-canvas [data-layout-zone-label]{position:absolute;left:8px;color:var(--muted);font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;z-index:2}
+.dapp .driver-layout-zone-label{padding:4px 7px;white-space:nowrap;pointer-events:none}
+.dapp .driver-layout-slot{position:absolute;width:68px;height:56px;min-height:0;padding:7px 4px;z-index:1}
+.dapp .driver-layout-slot.sl{cursor:pointer}
 .dapp .sl{font-family:var(--f-b)}
 .dapp button.sl{cursor:pointer;width:100%}
 .dapp .sl span{font-size:10px}
