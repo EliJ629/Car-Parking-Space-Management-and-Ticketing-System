@@ -1,7 +1,7 @@
 @extends('layouts.app')
 
 @push('head')
-<link rel="stylesheet" href="{{ asset('css/guard.css') }}?v={{ filemtime(public_path('css/guard.css')) }}">
+<link rel="stylesheet" href="/css/guard.css?v={{ filemtime(public_path('css/guard.css')) }}">
 @endpush
 
 @section('body')
