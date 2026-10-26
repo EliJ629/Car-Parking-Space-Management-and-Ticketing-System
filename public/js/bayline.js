@@ -200,6 +200,25 @@ document.querySelectorAll('form[data-range-check]').forEach(function(form){
       if(message){ok=false;if(show)end.reportValidity()}
     });
 
+    document.querySelectorAll('input[data-rate-amount]').forEach(function(input){
+      var error=input.parentElement.querySelector('[data-rate-error]');
+      function validate(){
+        var value=input.value.trim(),number=Number(value),message='';
+        if(value!==''&&(!Number.isFinite(number)||number<0||number>1000000)){
+          message='Enter an amount from ₱0.00 to ₱1,000,000.00.';
+        }else if(value!==''&&!/^\d+(?:\.\d{0,2})?$/.test(value)){
+          message='Use a whole amount or up to 2 decimal places.';
+        }
+        input.setCustomValidity(message);
+        if(error){error.textContent=message;error.hidden=!message}
+      }
+      input.addEventListener('keydown',function(event){
+        if(['e','E','+','-'].indexOf(event.key)!==-1)event.preventDefault();
+      });
+      input.addEventListener('input',validate);
+      validate();
+    });
+
     return ok;
   }
 
@@ -209,6 +228,25 @@ document.querySelectorAll('form[data-range-check]').forEach(function(form){
   });
   form.addEventListener('submit',function(event){if(!check(true))event.preventDefault()});
   check(false);
+});
+
+document.querySelectorAll('input[data-setting-number]').forEach(function(input){
+  var error=input.parentElement.querySelector('[data-setting-error]');
+  function validate(){
+    var value=input.value.trim(),number=Number(value),min=Number(input.min),max=Number(input.max),message='';
+    if(value!==''&&(!/^\d+$/.test(value)||!Number.isInteger(number))){
+      message='Enter a whole number.';
+    }else if(value!==''&&(number<min||number>max)){
+      message='Enter a value from '+min+' to '+max+'.';
+    }
+    input.setCustomValidity(message);
+    if(error){error.textContent=message;error.hidden=!message}
+  }
+  input.addEventListener('keydown',function(event){
+    if(['e','E','+','-','.'].indexOf(event.key)!==-1)event.preventDefault();
+  });
+  input.addEventListener('input',validate);
+  validate();
 });
 
 document.querySelectorAll('[data-layout-canvas]').forEach(function(canvas){

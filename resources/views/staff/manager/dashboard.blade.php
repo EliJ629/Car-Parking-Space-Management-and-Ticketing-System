@@ -59,13 +59,15 @@
             @endforeach
             @foreach ($slotsByZone as $zone => $zoneSlots)
               @foreach ($zoneSlots as $slot)
-                <a class="manager-slot manager-layout-slot manager-slot-{{ str_replace('_', '-', $slot->status) }}"
-                   href="{{ route('manager.slots.edit', $slot) }}"
+                <a class="manager-slot manager-layout-slot manager-slot-{{ str_replace('_', '-', $slot->status) }} {{ in_array($slot->status, [\App\Models\ParkingSlot::STATUS_OCCUPIED, \App\Models\ParkingSlot::STATUS_RESERVED], true) ? 'manager-slot-readonly' : '' }}"
+                   @if (! in_array($slot->status, [\App\Models\ParkingSlot::STATUS_OCCUPIED, \App\Models\ParkingSlot::STATUS_RESERVED], true)) href="{{ route('manager.slots.edit', $slot) }}" @endif
                    data-layout-slot data-slot-id="{{ $slot->id }}" data-zone="{{ $zone }}"
                    data-x="{{ $slot->layout_x ?? '' }}" data-y="{{ $slot->layout_y ?? '' }}"
-                   aria-label="{{ $slot->code }}, {{ $slot->statusLabel() }}, {{ $slot->type }}">
+                   aria-label="{{ $slot->code }}, {{ $slot->statusLabel() }}, {{ $slot->type }}"
+                   @if (in_array($slot->status, [\App\Models\ParkingSlot::STATUS_OCCUPIED, \App\Models\ParkingSlot::STATUS_RESERVED], true)) aria-disabled="true" title="Occupied and reserved slots cannot be edited" @endif>
                   <strong>{{ $slot->code }}</strong>
-                  <span>{{ $slot->statusLabel() }}</span>
+                    @if ($slot->type === \App\Models\ParkingSlot::TYPE_PWD)<small class="manager-pwd-marker" aria-label="PWD parking slot">PWD</small>@endif
+                    <span>{{ $slot->statusLabel() }}</span>
                 </a>
               @endforeach
             @endforeach

@@ -110,6 +110,10 @@ class ParkingSlotController extends ManagerController
 
     public function edit(ParkingSlot $slot): View
     {
+        if (in_array($slot->status, [ParkingSlot::STATUS_OCCUPIED, ParkingSlot::STATUS_RESERVED], true)) {
+            abort(403, 'Occupied and reserved parking slots cannot be edited.');
+        }
+
         return $this->managerPage(
             "Edit {$slot->code}",
             'slots',
@@ -123,6 +127,11 @@ class ParkingSlotController extends ManagerController
 
     public function update(Request $request, ParkingSlot $slot): RedirectResponse
     {
+        if (in_array($slot->status, [ParkingSlot::STATUS_OCCUPIED, ParkingSlot::STATUS_RESERVED], true)) {
+            return redirect()->route('manager.slots.index')
+                ->withErrors(['slot' => 'Occupied and reserved parking slots cannot be edited.']);
+        }
+
         $request->merge([
             'zone' => trim((string) $request->input('zone')),
             'notes' => $this->cleanNotes($request->input('notes')),
@@ -137,6 +146,12 @@ class ParkingSlotController extends ManagerController
         DB::transaction(function () use ($validated, $request, $slot): void {
             $this->lockManagerSlotMutations();
             $slot = ParkingSlot::query()->lockForUpdate()->findOrFail($slot->id);
+
+            if (in_array($slot->status, [ParkingSlot::STATUS_OCCUPIED, ParkingSlot::STATUS_RESERVED], true)) {
+                throw ValidationException::withMessages([
+                    'slot' => 'Occupied and reserved parking slots cannot be edited.',
+                ]);
+            }
 
             // Existing zones may predate a lower limit; only a move into another zone is checked.
             if ($validated['zone'] !== $slot->zone) {

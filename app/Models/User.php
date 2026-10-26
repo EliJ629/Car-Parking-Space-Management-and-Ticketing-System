@@ -15,7 +15,7 @@ use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 
-#[Fillable(['name', 'username', 'email', 'phone', 'password', 'role', 'status', 'last_login_at', 'must_change_password'])]
+#[Fillable(['name', 'first_name', 'last_name', 'username', 'email', 'phone', 'password', 'role', 'status', 'last_login_at', 'must_change_password'])]
 #[Hidden(['password', 'remember_token', 'manager_pin_hash', 'verification_code_hash'])]
 class User extends Authenticatable
 {

@@ -57,7 +57,11 @@
           <td>{{ $slot->notes ?: '—' }}</td>
           <td>
             <div class="manager-row-actions">
-              <a href="{{ route('manager.slots.edit', $slot) }}">Edit</a>
+              @if (in_array($slot->status, [\App\Models\ParkingSlot::STATUS_OCCUPIED, \App\Models\ParkingSlot::STATUS_RESERVED], true))
+                <span class="manager-action-disabled" title="Occupied and reserved slots cannot be edited">Edit unavailable</span>
+              @else
+                <a href="{{ route('manager.slots.edit', $slot) }}">Edit</a>
+              @endif
               @if ($slot->canBeTakenOutOfService())
                 <a href="{{ route('manager.slots.service.edit', $slot) }}">Out of service</a>
               @elseif ($slot->status === \App\Models\ParkingSlot::STATUS_OUT_OF_SERVICE)

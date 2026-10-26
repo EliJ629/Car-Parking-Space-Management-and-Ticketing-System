@@ -4,7 +4,7 @@
   <div class="manager-form-grid">
     @foreach ($fields as $key => $field)
       @if ($field['group'] === 'security')
-        <div class="manager-field"><label class="f" for="setting-{{ $key }}">{{ $field['label'] }}</label><input id="setting-{{ $key }}" name="settings[{{ $key }}]" type="number" min="{{ $field['min'] }}" max="{{ $field['max'] }}" step="1" inputmode="numeric" value="{{ old("settings.{$key}", $settings[$key] ?? '') }}" required>@error("settings.{$key}")<p class="err">{{ $message }}</p>@enderror</div>
+        <div class="manager-field"><label class="f" for="setting-{{ $key }}">{{ $field['label'] }}</label><input id="setting-{{ $key }}" name="settings[{{ $key }}]" type="number" min="{{ $field['min'] }}" max="{{ $field['max'] }}" step="1" inputmode="numeric" data-setting-number value="{{ old("settings.{$key}", $settings[$key] ?? '') }}" required><p class="err" data-setting-error hidden></p>@error("settings.{$key}")<p class="err">{{ $message }}</p>@enderror</div>
       @endif
     @endforeach
   </div>
@@ -13,7 +13,7 @@
   <div class="manager-form-grid">
     @foreach ($fields as $key => $field)
       @if ($field['group'] === 'parking')
-        <div class="manager-field"><label class="f" for="setting-{{ $key }}">{{ $field['label'] }}</label><input id="setting-{{ $key }}" name="settings[{{ $key }}]" type="number" min="{{ $field['min'] }}" max="{{ $field['max'] }}" step="1" inputmode="numeric" value="{{ old("settings.{$key}", $settings[$key] ?? '') }}" required>@error("settings.{$key}")<p class="err">{{ $message }}</p>@enderror</div>
+        <div class="manager-field"><label class="f" for="setting-{{ $key }}">{{ $field['label'] }}</label><input id="setting-{{ $key }}" name="settings[{{ $key }}]" type="number" min="{{ $field['min'] }}" max="{{ $field['max'] }}" step="1" inputmode="numeric" data-setting-number value="{{ old("settings.{$key}", $settings[$key] ?? '') }}" required><p class="err" data-setting-error hidden></p>@error("settings.{$key}")<p class="err">{{ $message }}</p>@enderror</div>
       @endif
     @endforeach
   </div>
@@ -22,7 +22,7 @@
     @foreach ($notifications as $key)
       <div class="manager-field"><label class="ck"><input type="checkbox" name="settings[{{ $key }}]" value="1" @checked(old("settings.{$key}", $settings[$key] ?? true))>{{ str_replace('_', ' ', ucfirst(str_replace('notify_', '', $key))) }}</label></div>
     @endforeach
-    <div class="manager-field"><label class="f" for="setting-reservation_reminder_minutes">{{ $fields['reservation_reminder_minutes']['label'] }}</label><input id="setting-reservation_reminder_minutes" name="settings[reservation_reminder_minutes]" type="number" min="{{ $fields['reservation_reminder_minutes']['min'] }}" max="{{ $fields['reservation_reminder_minutes']['max'] }}" step="1" inputmode="numeric" value="{{ old('settings.reservation_reminder_minutes', $settings['reservation_reminder_minutes'] ?? '') }}" required>@error('settings.reservation_reminder_minutes')<p class="err">{{ $message }}</p>@enderror</div>
+    <div class="manager-field"><label class="f" for="setting-reservation_reminder_minutes">{{ $fields['reservation_reminder_minutes']['label'] }}</label><input id="setting-reservation_reminder_minutes" name="settings[reservation_reminder_minutes]" type="number" min="{{ $fields['reservation_reminder_minutes']['min'] }}" max="{{ $fields['reservation_reminder_minutes']['max'] }}" step="1" inputmode="numeric" data-setting-number value="{{ old('settings.reservation_reminder_minutes', $settings['reservation_reminder_minutes'] ?? '') }}" required><p class="err" data-setting-error hidden></p>@error('settings.reservation_reminder_minutes')<p class="err">{{ $message }}</p>@enderror</div>
   </div>
   <h2 class="manager-subheading">Lot details shown on receipts</h2>
   <div class="manager-form-grid">

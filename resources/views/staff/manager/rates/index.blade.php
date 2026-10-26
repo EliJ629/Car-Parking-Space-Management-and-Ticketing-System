@@ -68,7 +68,7 @@
         'lost_ticket_penalty' => 'Lost ticket penalty (₱)',
         'overstay_penalty' => 'Overstay penalty (₱)',
       ] as $field => $label)
-        <div class="manager-field"><label class="f" for="{{ $field }}">{{ $label }}</label><input id="{{ $field }}" name="{{ $field }}" type="number" min="0" max="1000000" step="0.01" value="{{ old($field, $currentRate?->$field ?? 0) }}" required></div>
+        <div class="manager-field"><label class="f" for="{{ $field }}">{{ $label }}</label><input id="{{ $field }}" name="{{ $field }}" type="number" min="0" max="1000000" step="0.01" inputmode="decimal" data-rate-amount value="{{ old($field, $currentRate?->$field ?? 0) }}" required><p class="err" data-rate-error hidden></p></div>
       @endforeach
       <div class="manager-field"><label class="f" for="effective_at">Effective from</label><input id="effective_at" name="effective_at" type="datetime-local" min="{{ \App\Support\Lot::now()->format('Y-m-d\TH:i') }}" value="{{ old('effective_at', \App\Support\Lot::now()->addDay()->startOfDay()->format('Y-m-d\TH:i')) }}" data-range-start required><p class="hint">Lot time (Asia/Manila). The new rates start at this time.</p></div>
       <div class="manager-field"><label class="f" for="ends_at">Ends at <span class="manager-muted">(optional)</span></label><input id="ends_at" name="ends_at" type="datetime-local" min="{{ \App\Support\Lot::now()->format('Y-m-d\TH:i') }}" value="{{ old('ends_at') }}" data-range-end><p class="hint">For a temporary rate. Leave empty to keep the rate until it is replaced.</p></div>
@@ -272,4 +272,3 @@ document.querySelectorAll('input[name="percent"]').forEach(function (el) {
   });
 });
 </script>
-

@@ -148,6 +148,39 @@ class ParkingSlotManagementTest extends TestCase
         ]);
     }
 
+    public function test_occupied_and_reserved_slots_cannot_be_edited(): void
+    {
+        $manager = User::factory()->create([
+            'role' => User::ROLE_MANAGER,
+            'status' => User::STATUS_ACTIVE,
+        ]);
+
+        foreach ([ParkingSlot::STATUS_OCCUPIED, ParkingSlot::STATUS_RESERVED] as $status) {
+            $slot = ParkingSlot::create([
+                'code' => $status === ParkingSlot::STATUS_OCCUPIED ? 'A-07' : 'A-08',
+                'zone' => 'Zone A',
+                'type' => ParkingSlot::TYPE_STANDARD,
+                'status' => $status,
+            ]);
+
+            $this->actingAs($manager)
+                ->get(route('manager.slots.edit', $slot))
+                ->assertForbidden();
+
+            $this->patch(route('manager.slots.update', $slot), [
+                'zone' => 'Zone B',
+                'type' => ParkingSlot::TYPE_PWD,
+            ])->assertSessionHasErrors('slot');
+
+            $this->assertDatabaseHas('parking_slots', [
+                'id' => $slot->id,
+                'zone' => 'Zone A',
+                'type' => ParkingSlot::TYPE_STANDARD,
+                'status' => $status,
+            ]);
+        }
+    }
+
     public function test_non_managers_cannot_access_manager_slot_tools(): void
     {
         $attendant = User::factory()->create([
