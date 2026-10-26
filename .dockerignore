@@ -1,7 +1,7 @@
 # Version Control
 .git
 .gitignore
-
+vendor
 # Package Manager & Local Dependencies 
 node_modules/
 jspm_packages/
