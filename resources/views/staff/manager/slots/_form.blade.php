@@ -35,6 +35,17 @@
     @error('type')<p class="err">{{ $message }}</p>@enderror
   </div>
 
+  <div class="manager-field">
+    <label class="f" for="slot-class">Zone is for</label>
+    <select id="slot-class" name="vehicle_class" required @if ($errors->has('vehicle_class')) aria-invalid="true" @endif>
+      @foreach (\App\Models\ParkingSlot::vehicleClasses() as $value => $text)
+        <option value="{{ $value }}" @selected(old('vehicle_class', $slot->vehicle_class ?? 'car') === $value)>{{ $text }}{{ $value === 'car' ? ' (cars, SUVs, vans, pickups, tricycles)' : ' (motorcycles only)' }}</option>
+      @endforeach
+    </select>
+    <p class="hint">The whole zone follows this setting. Drivers can reserve only slots in a zone that fits their vehicle. Changing it here changes every slot in the zone, when none of them is in use or booked.</p>
+    @error('vehicle_class')<p class="err">{{ $message }}</p>@enderror
+  </div>
+
   <div class="manager-field manager-field-wide">
     <label class="f" for="slot-notes">Notes <span class="manager-muted">(optional)</span></label>
     <textarea id="slot-notes" name="notes" rows="3" maxlength="1000" @if ($errors->has('notes')) aria-invalid="true" @endif>{{ old('notes', $slot->notes ?? '') }}</textarea>

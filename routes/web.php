@@ -8,7 +8,10 @@ use App\Http\Controllers\Driver\VerifyEmailController;
 use App\Http\Controllers\Staff\PasswordResetController as StaffPasswordResetController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\LandingController;
+use App\Http\Controllers\FindMyCarController;
 use App\Http\Controllers\Manager\AccountController;
+use App\Http\Controllers\Manager\BanController;
+use App\Http\Controllers\Manager\LandingPageController;
 use App\Http\Controllers\Manager\ActivityLogController;
 use App\Http\Controllers\Manager\DashboardController as ManagerDashboardController;
 use App\Http\Controllers\Manager\IncidentController;
@@ -108,6 +111,14 @@ Route::prefix('staff/manager')->name('manager.')->middleware(['area:staff', 'rol
     Route::post('incidents', [IncidentController::class, 'store'])->name('incidents.store');
     Route::get('incidents/{incident}', [IncidentController::class, 'show'])->name('incidents.show');
     Route::patch('incidents/{incident}', [IncidentController::class, 'update'])->name('incidents.update');
+    Route::post('incidents/{incident}/confirm', [IncidentController::class, 'confirm'])->name('incidents.confirm');
+    Route::post('incidents/{incident}/dismiss', [IncidentController::class, 'dismiss'])->name('incidents.dismiss');
+
+    Route::get('landing', [LandingPageController::class, 'edit'])->name('landing.edit');
+    Route::put('landing', [LandingPageController::class, 'update'])->name('landing.update');
+
+    Route::get('bans', [BanController::class, 'index'])->name('bans.index');
+    Route::post('bans/{ban}/lift', [BanController::class, 'lift'])->name('bans.lift');
 
     Route::get('settings', [SettingsController::class, 'index'])->name('settings.index');
     Route::put('settings', [SettingsController::class, 'update'])->name('settings.update');
@@ -119,6 +130,9 @@ Route::prefix('staff/manager')->name('manager.')->middleware(['area:staff', 'rol
 |--------------------------------------------------------------------------
 */
 Route::get('/driver', [LandingController::class, 'driver'])->name('driver.landing');
+
+// Find my car: public, read only, rate limited per visitor. It never returns the full plate or contact details.
+Route::get('/find-my-car', FindMyCarController::class)->middleware('throttle:20,1')->name('find-my-car');
 
 Route::prefix('driver')->name('driver.')->group(function () {
     Route::middleware('guest')->group(function () {

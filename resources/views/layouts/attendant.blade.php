@@ -3,6 +3,7 @@
 @push('head')
 <link rel="stylesheet" href="/css/bayline.css?v={{ filemtime(public_path('css/bayline.css')) }}">
 <link rel="stylesheet" href="/css/attendant.css?v={{ filemtime(public_path('css/attendant.css')) }}">
+<link rel="stylesheet" href="/css/pager.css?v={{ filemtime(public_path('css/pager.css')) }}">
 @endpush
 
 @section('body')
@@ -81,7 +82,6 @@
 <!-- Alerts Panel Modal (BA-65) -->
 <dialog class="badlg wide" id="alerts-dlg" aria-labelledby="alerts-t">
   <div class="in">
-    <button class="x" type="button" data-close aria-label="Close">X</button>
     <h2 id="alerts-t">Alerts</h2>
     <ul class="ba-alerts" id="alert-list" data-keys="{{ $alertItems->pluck('key')->implode(',') }}">
       @forelse ($alertItems as $a)
@@ -107,7 +107,6 @@
 <dialog class="badlg" id="logout-dlg" aria-labelledby="lo-t">
   <form class="in" method="POST" action="{{ route('staff.logout') }}">
     @csrf
-    <button class="x" type="button" data-close aria-label="Close">&times;</button>
     <h2 id="lo-t">Log out?</h2>
     <p>You are signed in as {{ $me->name }}. Open work stays saved.</p>
     <div class="actions">
@@ -146,4 +145,6 @@
 <script src="{{ asset('js/qr.min.js') }}"></script>
 <script src="{{ asset('js/html5-qrcode.min.js') }}"></script>
 <script src="{{ asset('js/attendant.js') }}?v={{ filemtime(public_path('js/attendant.js')) }}"></script>
+<script src="{{ asset('js/plate.js') }}?v={{ filemtime(public_path('js/plate.js')) }}"></script>
+<script src="{{ asset('js/table-pager.js') }}?v={{ filemtime(public_path('js/table-pager.js')) }}"></script>
 @endpush

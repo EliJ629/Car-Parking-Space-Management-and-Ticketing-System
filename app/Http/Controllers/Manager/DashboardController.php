@@ -27,10 +27,10 @@ class DashboardController extends ManagerController
                 $status => (int) ($statusTotals[$status] ?? 0),
             ]);
 
-        $slots = ParkingSlot::query()
+        $slots = \App\Support\SlotLayout::decorate(ParkingSlot::query()
             ->orderBy('zone')
             ->orderBy('code')
-            ->get();
+            ->get());
         $zonePositions = ParkingLayoutZone::query()
             ->whereIn('zone', $slots->pluck('zone')->unique())
             ->get()

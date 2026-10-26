@@ -87,7 +87,7 @@
     <button class="btn sm" type="button" data-open-dialog="discount-create-dialog">Add discount</button>
   </div>
   <div class="manager-table-wrap">
-    <table class="manager-table">
+    <table class="manager-table" data-paginate="10">
       <thead><tr><th>Name</th><th>Value</th><th>Required proof</th><th>Manager PIN</th><th>Status</th><th>Actions</th></tr></thead>
       <tbody>
       @forelse ($discounts as $discount)
@@ -117,7 +117,6 @@
 <dialog class="manager-dialog" id="discount-create-dialog" aria-labelledby="discount-create-title"
   @if (old('_form') === 'add') data-open-on-load @endif>
   <div class="manager-dialog-inner">
-    <button class="manager-dialog-close" type="button" data-close-dialog aria-label="Close">X</button>
     <p class="eyebrow">Exit discounts</p>
     <h2 id="discount-create-title">Add discount</h2>
     <p class="manager-muted">Discounts reduce the parking charge at exit. A value of 0% keeps the record without reducing the fee.</p>
@@ -155,7 +154,6 @@
   <dialog class="manager-dialog" id="discount-edit-{{ $discount->id }}" aria-labelledby="discount-edit-title-{{ $discount->id }}"
     @if ($editing) data-open-on-load @endif>
     <div class="manager-dialog-inner">
-      <button class="manager-dialog-close" type="button" data-close-dialog aria-label="Close">X</button>
       <p class="eyebrow">Exit discounts</p>
       <h2 id="discount-edit-title-{{ $discount->id }}">Edit {{ $discount->name }}</h2>
       <form method="POST" action="{{ route('manager.discounts.update', $discount) }}">
@@ -207,7 +205,6 @@
 <dialog class="manager-dialog" id="manager-pin-dialog" aria-labelledby="manager-pin-title"
   @if ($errors->has('manager_pin') || $errors->has('manager_pin_confirmation') || $errors->has('current_password')) data-open-on-load @endif>
   <div class="manager-dialog-inner">
-    <button class="manager-dialog-close" type="button" data-close-dialog aria-label="Close">X</button>
     <p class="eyebrow">Approval credentials</p>
     <h2 id="manager-pin-title">{{ $managerPinIsSet ? 'Edit manager PIN' : 'Create manager PIN' }}</h2>
     <p class="manager-muted">Choose a six-digit PIN and confirm it. Your current account password is required to save.</p>

@@ -15,7 +15,7 @@
   <a href="{{ route('guard.records', ['tab' => 'incidents']) }}" @if ($tab === 'incidents') aria-current="page" @endif>Incident records</a>
 </nav>
 
-<form class="g-filters g-form" method="GET" action="{{ route('guard.records') }}" aria-label="Filter records">
+<form class="g-filters g-form" method="GET" action="{{ route('guard.records') }}" aria-label="Filter records" data-auto-filter>
   <input type="hidden" name="tab" value="{{ $tab }}">
   <div class="fld">
     <label class="f" for="range">Date range</label>
@@ -25,11 +25,11 @@
       @endforeach
     </select>
   </div>
-  <div class="fld sm" data-custom @if ($f['range'] !== 'custom') hidden @endif><label class="f" for="from">From</label><input id="from" name="from" type="date" value="{{ $f['from'] }}"></div>
-  <div class="fld sm" data-custom @if ($f['range'] !== 'custom') hidden @endif><label class="f" for="to">To</label><input id="to" name="to" type="date" value="{{ $f['to'] }}"></div>
+  <div class="fld sm" data-custom @if ($f['range'] !== 'custom') hidden @endif><label class="f" for="from">From</label><input id="from" name="from" type="date" data-range-start max="{{ \App\Support\Lot::now()->format('Y-m-d') }}" value="{{ $f['from'] }}"></div>
+  <div class="fld sm" data-custom @if ($f['range'] !== 'custom') hidden @endif><label class="f" for="to">To</label><input id="to" name="to" type="date" data-range-end max="{{ \App\Support\Lot::now()->format('Y-m-d') }}" value="{{ $f['to'] }}"></div>
   <div class="fld">
     <label class="f" for="q">Search</label>
-    <input id="q" name="q" type="search" value="{{ $f['q'] }}" placeholder="{{ $tab === 'parking' ? 'Plate or ticket number' : 'Plate or incident code' }}" autocomplete="off">
+    <input id="q" name="q" type="search" maxlength="20" value="{{ $f['q'] }}" placeholder="{{ $tab === 'parking' ? 'Plate or ticket number' : 'Plate or incident code' }}" autocomplete="off">
   </div>
   @if ($tab === 'parking')
     <div class="fld sm">
@@ -46,14 +46,13 @@
       <select id="category" name="category"><option value="">All</option>@foreach ($categories as $c)<option value="{{ $c }}" @selected($category === $c)>{{ \App\Models\Incident::guardLabel($c) }}</option>@endforeach</select>
     </div>
   @endif
-  <button class="btn sm" type="submit" style="min-height:48px">Apply</button>
+  <noscript><button class="btn sm" type="submit" style="min-height:48px">Apply</button></noscript>
   <a class="btn ghost sm" href="{{ route('guard.records', ['tab' => $tab]) }}" style="min-height:48px">Clear filters</a>
 </form>
 <p class="hint" style="font-size:13px;color:var(--muted);margin:-4px 0 12px">{{ $rangeText }}</p>
 
 @if ($rows->isEmpty())
-  <div class="g-card g-empty"><h2>No results</h2><p>No {{ $tab === 'parking' ? 'parking sessions' : 'incidents' }} match these filters. Try a wider date range or clear the search.</p>
-    <div class="g-actions" style="justify-content:center"><a class="btn" href="{{ route('guard.records', ['tab' => $tab]) }}">Clear filters</a></div></div>
+  <div class="g-card g-empty"><h2>No results</h2><p>No {{ $tab === 'parking' ? 'parking sessions' : 'incidents' }} match these filters. Try a wider date range or clear the search.</p></div>
 @elseif ($tab === 'parking')
   <div class="g-tablewrap">
     <table class="g-table">
@@ -106,7 +105,6 @@
   @push('dialogs')
   <dialog class="gdlg wide" id="detail" aria-labelledby="dt-t" data-autoopen>
     <div class="in">
-      <a class="x" href="{{ route('guard.records', $keep(['view' => null])) }}" aria-label="Close" style="display:inline-flex;align-items:center;justify-content:center;text-decoration:none">X</a>
       @if ($tab === 'parking')
         @php $d = $detail; $paid = in_array($d->status, ['paid', 'completed'], true); @endphp
         <h2 id="dt-t">Parking record {{ $d->ticket_number }}</h2>

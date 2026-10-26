@@ -11,24 +11,40 @@
     $allowed = ['open' => ['open', 'under_review', 'resolved'], 'under_review' => ['under_review', 'resolved'], 'resolved' => ['resolved']][$i->status];
 @endphp
 <h1 class="g-title">Incident {{ $i->code }}</h1>
-<p class="g-sub">{{ \App\Models\Incident::guardLabel($i->category) }}, {{ $auto ? 'detected automatically' : 'reported manually' }}.</p>
+<p class="g-sub">{{ $i->title() }}, {{ $auto ? 'detected automatically' : 'reported manually' }}.</p>
 
+@php $longParked = $i->category === \App\Services\IncidentService::LONG_PARKED; @endphp
 <div class="g-actions" style="margin-top:12px">
-  @if ($i->status !== 'resolved')<button class="btn" type="button" data-open="#status-dlg">Update status</button>@endif
+  @if ($longParked && $i->status !== 'resolved')
+    <form method="POST" action="{{ route('guard.incidents.notify-driver', $i) }}" data-busy data-busy-label="Notifying" style="display:inline">@csrf<button class="btn" type="submit">Notify driver</button></form>
+  @endif
+  @if ($i->status !== 'resolved')<button class="btn {{ $longParked ? 'ghost' : '' }}" type="button" data-open="#status-dlg">Update status</button>@endif
   <a class="btn ghost" href="{{ route('guard.incidents') }}">Back to list</a>
 </div>
+
+@if ($longParked && $i->status !== 'resolved')
+  <div class="g-banner" style="margin-top:14px" role="status"><b>Waiting for payment and exit</b>
+    This incident resolves by itself when the fees are paid and verified and the Guard confirms the exit.
+    @if ($blockers) <ul style="margin:6px 0 0 18px">@foreach ($blockers as $b)<li>{{ $b }}</li>@endforeach</ul>@endif
+  </div>
+@endif
 
 <div class="g-two" style="margin-top:16px">
   <div class="g-stack">
     <section class="g-card">
       <h2>Report</h2>
       <dl class="g-kv">
-        <dt>Category</dt><dd>{{ \App\Models\Incident::guardLabel($i->category) }}</dd>
+        <dt>Category</dt><dd>{{ $i->title() }}</dd>
         <dt>Source</dt><dd><span class="g-tag ink">{{ $auto ? 'Automatic' : 'Manual' }}</span></dd>
         <dt>Status</dt><dd>@include('guard.partials.incident-status', ['status' => $i->status])</dd>
         <dt>Reported by</dt><dd>{{ $auto ? 'Bayline detection' : ($i->reporter?->name ?? '-') }}</dd>
         <dt>Reported</dt><dd>{{ \App\Support\Lot::stamp($i->reported_at) }}</dd>
-        <dt>Plate</dt><dd>{{ $i->plate_number ? \App\Support\Lot::plate($i->plate_number) : '-' }}</dd>
+        @if ($i->category === 'Vehicle damage')
+          <dt>Damaged vehicle</dt><dd>{{ $i->damaged_plate ? \App\Support\Lot::plate($i->damaged_plate) : '-' }}</dd>
+          <dt>Responsible vehicle</dt><dd>{{ $i->responsible_plate ? \App\Support\Lot::plate($i->responsible_plate) : 'Not known' }}</dd>
+        @else
+          <dt>Plate</dt><dd>{{ $i->plate_number ? \App\Support\Lot::plate($i->plate_number) : '-' }}</dd>
+        @endif
         <dt>Location</dt><dd>{{ $i->slot?->code ?? $i->location ?? '-' }}</dd>
         @if ($auto)
           <dt>Detections</dt><dd>{{ $i->detection_count }}@if ($i->last_seen_at), last seen {{ \App\Support\Lot::stamp($i->last_seen_at) }}@endif</dd>
@@ -58,7 +74,8 @@
       <h2>Driver notified</h2>
       <dl class="g-kv">
         <dt>Notified</dt><dd>{{ $i->driver_notified ? 'Yes' : 'No' }}</dd>
-        @if (! $i->driver_notified && $i->driver_notice_reason)<dt>Reason</dt><dd>{{ $i->driver_notice_reason }}</dd>@endif
+        @if ($i->driver_notified_at)<dt>When</dt><dd>{{ \App\Support\Lot::stamp($i->driver_notified_at) }} ({{ $i->driver_notice_channel === 'sms' ? 'text message' : 'in the app' }})</dd>@endif
+        @if ($i->driver_notice_result)<dt>Result</dt><dd>{{ $i->driver_notice_result }}</dd>@elseif (! $i->driver_notified && $i->driver_notice_reason)<dt>Reason</dt><dd>{{ $i->driver_notice_reason }}</dd>@endif
       </dl>
     </section>
     <section class="g-card">
@@ -73,7 +90,6 @@
 <dialog class="gdlg g-form" id="note-dlg" aria-labelledby="nt-t" @if ($errors->has('body')) data-autoopen @endif>
   <form class="in" method="POST" action="{{ route('guard.incidents.notes', $i) }}" data-busy data-busy-label="Saving">
     @csrf
-    <button class="x" type="button" data-close aria-label="Close">X</button>
     <h2 id="nt-t">Add note</h2>
     <label class="f" for="body">Note</label>
     <textarea id="body" name="body" maxlength="500" @error('body') aria-invalid="true" @enderror>{{ old('body') }}</textarea>
@@ -86,7 +102,6 @@
 <dialog class="gdlg g-form" id="status-dlg" aria-labelledby="st-t">
   <form class="in" method="POST" action="{{ route('guard.incidents.status', $i) }}" data-busy data-busy-label="Saving">
     @csrf
-    <button class="x" type="button" data-close aria-label="Close">X</button>
     <h2 id="st-t">Update status</h2>
     <p>An incident only moves forward. A resolved incident cannot be reopened.</p>
     <div style="margin-top:12px;display:grid;gap:8px">

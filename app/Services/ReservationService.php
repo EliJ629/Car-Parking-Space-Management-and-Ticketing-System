@@ -22,6 +22,9 @@ use Illuminate\Support\Facades\Storage;
  */
 class ReservationService
 {
+    /** A reservation can be made for any time from now until this many hours ahead. */
+    public const WINDOW_HOURS = 24;
+
     private const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
     /** Where the ID photos for PWD slots are kept. A private disk, never a public URL. */
@@ -48,16 +51,21 @@ class ReservationService
         $slots = ParkingSlot::query()->orderBy('zone')->orderBy('code')->get();
         $window = $this->overlapMinutes();
 
-        $held = ParkingReservation::query()
+        $around = ParkingReservation::query()
             ->where('status', ParkingReservation::STATUS_BOOKED)
             ->whereBetween('scheduled_at', [$at->copy()->subMinutes($window - 1), $at->copy()->addMinutes($window - 1)])
-            ->pluck('slot_id')
-            ->filter()
-            ->all();
+            ->get(['slot_id', 'approval_status', 'scheduled_at']);
+
+        // A PWD request that the booth attendant has not approved yet is not a reservation: it keeps the slot from being
+        // booked twice, but it is shown as awaiting approval, never as Reserved.
+        $held = $around->where('approval_status', '!=', ParkingReservation::APPROVAL_PENDING)->pluck('slot_id')->filter()->all();
+        $awaiting = $around->where('approval_status', ParkingReservation::APPROVAL_PENDING)->pluck('slot_id')->filter()->all();
 
         $today = Lot::local($at)->isSameDay(Lot::now());
 
-        return $slots->each(function (ParkingSlot $slot) use ($held, $today): void {
+        $times = $around->whereNotNull('slot_id')->sortBy('scheduled_at')->groupBy('slot_id')->map(fn ($rows) => $rows->first()->scheduled_at);
+
+        return $slots->each(function (ParkingSlot $slot) use ($held, $awaiting, $today, $times): void {
             $slot->setAttribute('free_at_time', true);
             $state = 'available';
 
@@ -65,6 +73,8 @@ class ReservationService
                 $state = 'out_of_service';
             } elseif (in_array($slot->id, $held, true)) {
                 $state = 'reserved';
+            } elseif (in_array($slot->id, $awaiting, true)) {
+                $state = 'awaiting_approval';
             } elseif ($today && $slot->status === ParkingSlot::STATUS_OCCUPIED) {
                 $state = 'occupied';
             } elseif ($today && $slot->status === ParkingSlot::STATUS_PENDING_EXIT) {
@@ -73,6 +83,7 @@ class ReservationService
 
             $slot->setAttribute('state', $state);
             $slot->setAttribute('free_at_time', $state === 'available');
+            $slot->setAttribute('booked_label', in_array($state, ['reserved', 'awaiting_approval'], true) && $times->has($slot->id) ? \App\Support\SlotLayout::tileTime($times->get($slot->id)) : null);
         });
     }
 
@@ -84,6 +95,11 @@ class ReservationService
      */
     public function blockingFor(User $driver): ?array
     {
+        if ($suspension = app(NoShowService::class)->activeSuspension($driver)) {
+            return ['kind' => 'suspended', 'reservation' => null, 'session' => null, 'slot' => '', 'message' => app(NoShowService::class)->message($suspension),
+                'until' => $suspension->ends_at];
+        }
+
         $reservation = ParkingReservation::query()
             ->where('driver_id', $driver->id)
             ->whereIn('status', [ParkingReservation::STATUS_BOOKED, ParkingReservation::STATUS_CHECKED_IN])
@@ -121,23 +137,40 @@ class ReservationService
         $now = now();
         $needsId = $slot->type === ParkingSlot::TYPE_PWD;
 
+        // Three missed reservations pause reserving (1 week, then longer). Walking in and parking are not affected.
+        if ($suspension = app(NoShowService::class)->activeSuspension($driver)) {
+            throw new ReservationException('suspended', app(NoShowService::class)->message($suspension));
+        }
+
+        // Motorcycles park in motorcycle zones. Cars, SUVs, vans, pickups and tricycles park in car zones.
+        if ($message = $slot->wrongZoneMessage($vehicle->vehicle_type)) {
+            throw new ReservationException('wrong_zone', $message);
+        }
+
         if ($needsId && ! $idPhoto) {
             throw new ReservationException('id_required', 'A PWD slot needs a photo of your PWD ID. Upload it to continue.');
         }
 
-        $localAt = Lot::local($at);
-        $latestDay = Lot::now()->addDays(Lot::advanceDays())->endOfDay();
+        $latest = $now->copy()->startOfMinute()->addHours(self::WINDOW_HOURS);
 
         if ($at->lessThan($now->copy()->startOfMinute())) {
             throw new ReservationException('past', 'Choose a time that is not in the past.');
         }
 
-        if ($localAt->greaterThan($latestDay)) {
-            throw new ReservationException('too_far', 'You can reserve up to '.Lot::advanceDays().' days ahead. The latest date is '.$latestDay->format('D, M j').'.');
+        if ($at->greaterThan($latest)) {
+            throw new ReservationException('too_far', 'You can reserve only within the next '.self::WINDOW_HOURS.' hours, up to '.Lot::when($latest).'.');
         }
 
         if ($vehicle->user_id !== $driver->id) {
             throw new ReservationException('no_vehicle', 'Choose one of your saved vehicles.');
+        }
+
+        if (! $vehicle->hasPlate()) {
+            throw new ReservationException('no_plate', 'This vehicle has no plate number yet. Add it under My vehicles once the LTO has issued it, then reserve.');
+        }
+
+        if (app(BanService::class)->isBanned($vehicle->plate_number)) {
+            throw new ReservationException('vehicle_banned', VehicleBanned::MESSAGE);
         }
 
         $reservation = DB::transaction(function () use ($driver, $vehicle, $slot, $at, $needsId) {
@@ -190,7 +223,7 @@ class ReservationService
                 'requires_id' => $needsId,
             ]);
 
-            $this->holdSlotIfToday($reservation, $fresh);
+            $this->holdSlotIfDue($reservation, $fresh);
 
             return $reservation;
         });
@@ -231,6 +264,11 @@ class ReservationService
                 'approved_by' => $attendant->id,
                 'approved_at' => now(),
             ]);
+
+            // Only now, when it is approved, can the slot show as Reserved (and only when the hold window has started).
+            if ($fresh->slot_id && ($slot = ParkingSlot::query()->lockForUpdate()->find($fresh->slot_id))) {
+                $this->holdSlotIfDue($fresh, $slot);
+            }
 
             return true;
         });
@@ -349,6 +387,7 @@ class ReservationService
                 $this->discardIdPhoto($expired);
                 $this->notices->reservationExpired($expired);
                 $this->notices->staffReservationExpired($expired);
+                app(NoShowService::class)->recordNoShow($expired);
                 ActivityLog::record('reservation_expired', null, null, $expired->code, 'system', [
                     'slot' => $expired->slot_code, 'scheduled_at' => $expired->scheduled_at->toIso8601String(),
                 ]);
@@ -359,14 +398,17 @@ class ReservationService
         return $count;
     }
 
-    /** A slot shows Reserved from the start of the reservation day (assumption AS-8). */
+    /**
+     * A slot shows Reserved only while an approved booking is about to arrive or is within its grace time (the hold
+     * window). A booking made for later today or tomorrow leaves the live board alone, so a slot is never shown as
+     * taken hours before anyone arrives. Run by the scheduler and by the screens' sweep.
+     */
     public function holdTodaysSlots(): int
     {
         $count = 0;
 
         ParkingReservation::query()
-            ->where('status', ParkingReservation::STATUS_BOOKED)
-            ->whereBetween('scheduled_at', [Lot::dayStart(), Lot::dayEnd()])
+            ->holdingNow()
             ->with('slot')
             ->get()
             ->each(function (ParkingReservation $reservation) use (&$count): void {
@@ -379,10 +421,14 @@ class ReservationService
         return $count;
     }
 
-    /** A new walk-in session cannot take a slot that is held, so Reserved is shown on the board from the day start. */
-    private function holdSlotIfToday(ParkingReservation $reservation, ParkingSlot $slot): void
+    /** Show Reserved on the live board when this approved booking's hold window has started. */
+    private function holdSlotIfDue(ParkingReservation $reservation, ParkingSlot $slot): void
     {
-        if (Lot::local($reservation->scheduled_at)->isSameDay(Lot::now()) && $slot->status === ParkingSlot::STATUS_AVAILABLE) {
+        if ($reservation->approval_status !== ParkingReservation::APPROVAL_APPROVED || $slot->status !== ParkingSlot::STATUS_AVAILABLE) {
+            return;
+        }
+
+        if (ParkingReservation::query()->whereKey($reservation->id)->holdingNow()->exists()) {
             $slot->update(['status' => ParkingSlot::STATUS_RESERVED]);
         }
     }
@@ -399,8 +445,7 @@ class ReservationService
         $stillHeld = ParkingReservation::query()
             ->where('slot_id', $slot->id)
             ->where('id', '!=', $reservation->id)
-            ->where('status', ParkingReservation::STATUS_BOOKED)
-            ->whereBetween('scheduled_at', [Lot::dayStart(), Lot::dayEnd()])
+            ->holdingNow()
             ->exists();
 
         if (! $stillHeld) {

@@ -69,7 +69,6 @@
   <dialog class="dsheet stop" id="cancel-res" aria-labelledby="cx-t">
     <form class="in" method="POST" action="{{ route('driver.bookings.cancel', $r) }}" data-busy data-busy-label="Canceling">
       @csrf
-      <button class="x" type="button" data-close aria-label="Close">X</button>
       <h2 id="cx-t">Cancel {{ $r->code }}?</h2>
       <p class="sub" style="color:var(--ink)">Slot {{ $slotCode }} will be released for other drivers. You can reserve again any time.</p>
       <div class="actions">

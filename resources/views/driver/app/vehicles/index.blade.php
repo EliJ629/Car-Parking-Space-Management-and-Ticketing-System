@@ -21,6 +21,8 @@
           <div style="min-width:0">
             <p style="font-weight:700;margin:0">{{ $v->make_model ?: $v->color.' '.strtolower($v->vehicle_type) }}</p>
             <p class="meta" style="margin:2px 0 0">{{ $v->color }}@if ($v->contact_number), {{ \App\Support\Lot::phone($v->contact_number) }}@endif</p>
+            @unless ($v->hasPlate())<a class="status-tag" style="margin-top:6px;display:inline-block" href="{{ route('driver.vehicles.edit', $v) }}">No plate yet - add plate number</a>@endunless
+            @if ($v->hasTemporaryPlate())<a class="status-tag" style="margin-top:6px;display:inline-block" href="{{ route('driver.vehicles.edit', $v) }}">Temporary plate - add permanent plate</a>@endif
             @if ($v->in_use)<span class="status-tag st-inuse" style="margin-top:6px">{{ $v->in_use['type'] === 'reservation' ? 'Reserved' : 'Parked now' }}</span>@endif
           </div>
         </div>
@@ -38,7 +40,6 @@
     <dialog class="dsheet stop" id="rm-{{ $v->id }}" aria-labelledby="rm-{{ $v->id }}-t">
       <form class="in" method="POST" action="{{ route('driver.vehicles.destroy', $v) }}" data-busy data-busy-label="Removing">
         @csrf @method('DELETE')
-        <button class="x" type="button" data-close aria-label="Close">X</button>
         <h2 id="rm-{{ $v->id }}-t">Remove {{ $v->displayPlate() }}?</h2>
         <p class="sub" style="color:var(--ink)">The vehicle leaves your list. Your parking history keeps its plate number.</p>
         <div class="actions">

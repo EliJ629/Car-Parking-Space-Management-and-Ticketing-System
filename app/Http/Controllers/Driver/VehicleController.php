@@ -5,12 +5,15 @@ namespace App\Http\Controllers\Driver;
 use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
 use App\Models\Vehicle;
+use App\Models\VehiclePreviousPlate;
 use App\Services\DriverData;
 use App\Support\Lot;
+use App\Support\PlateEntry;
 use App\Support\Rules;
 use App\Support\VehicleCatalog;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class VehicleController extends Controller
@@ -35,26 +38,11 @@ class VehicleController extends Controller
         $user = $request->user();
         $data = $this->validated($request);
 
-        $existing = Vehicle::withTrashed()->where('plate_number', $data['plate_number'])->first();
+        $existing = $data['plate_number'] === null ? null : Vehicle::withTrashed()->where('plate_number', $data['plate_number'])->first();
+        $takenBefore = $data['plate_number'] !== null && $existing === null && VehiclePreviousPlate::query()->where('plate_number', $data['plate_number'])->exists();
 
-        if ($existing && ! $existing->trashed()) {
-            return back()->withInput()->with('modal', [
-                'title' => Lot::plate($data['plate_number']).' is already registered',
-                'body' => Lot::plate($data['plate_number']).' is already registered to an account. A plate can belong to one account only.',
-                'note' => 'If this is your vehicle, ask the booth attendant to check it.',
-                'primary' => ['label' => 'Edit plate', 'close' => true],
-                'secondary' => ['label' => 'Close', 'close' => true],
-            ]);
-        }
-
-        if ($existing && $existing->trashed() && $existing->user_id !== $user->id) {
-            return back()->withInput()->with('modal', [
-                'title' => Lot::plate($data['plate_number']).' is already registered',
-                'body' => Lot::plate($data['plate_number']).' is already registered to an account. A plate can belong to one account only.',
-                'note' => 'If this is your vehicle, ask the booth attendant to check it.',
-                'primary' => ['label' => 'Edit plate', 'close' => true],
-                'secondary' => ['label' => 'Close', 'close' => true],
-            ]);
+        if (($existing && ! $existing->trashed()) || $takenBefore || ($existing && $existing->trashed() && $existing->user_id !== $user->id)) {
+            return $this->plateTaken($data['plate_number']);
         }
 
         if ($existing) {
@@ -65,9 +53,14 @@ class VehicleController extends Controller
             $vehicle = $user->vehicles()->create($data);
         }
 
-        ActivityLog::record('vehicle_added', $user, $request, $vehicle->plate_number, 'driver');
+        ActivityLog::record('vehicle_added', $user, $request, $vehicle->hasPlate() ? $vehicle->plate_number : 'no plate yet', 'driver');
 
-        return redirect()->route('driver.vehicles')->with('toast', ['Vehicle saved', Lot::plate($vehicle->plate_number).' was added.']);
+        return redirect()->route('driver.vehicles')->with('toast', [
+            'Vehicle saved',
+            $vehicle->hasPlate()
+                ? Lot::plate($vehicle->plate_number).($vehicle->hasTemporaryPlate() ? ' (temporary plate)' : '').' was added.'
+                : 'Your vehicle was added. Add its plate number here once the LTO has issued it.',
+        ]);
     }
 
     public function edit(Request $request, Vehicle $vehicle, DriverData $data): View
@@ -76,35 +69,71 @@ class VehicleController extends Controller
 
         return view('driver.app.vehicles.form', $this->formData($vehicle) + [
             'editing' => true,
-            'locked' => $data->vehicleUse($vehicle) !== null,
+            'locked' => $vehicle->plateCanBeSet() && $data->vehicleUse($vehicle) !== null,
         ]);
     }
 
     public function update(Request $request, Vehicle $vehicle, DriverData $data): RedirectResponse
     {
         $this->own($request, $vehicle);
-        $input = $this->validated($request, $vehicle);
+        $input = $this->validated($request, $vehicle, $entry);
 
-        if ($input['plate_number'] !== $vehicle->plate_number && $data->vehicleUse($vehicle)) {
+        $before = $vehicle->plate_number;
+        $changed = $entry->changing && $input['plate_number'] !== $before;
+
+        if ($changed && $before !== null && $data->vehicleUse($vehicle)) {
             return back()->withInput()->withErrors(['plate_number' => 'The plate cannot change while this vehicle has a reservation or a parking session.']);
         }
 
-        $duplicate = Vehicle::withTrashed()->where('plate_number', $input['plate_number'])->where('id', '!=', $vehicle->id)->first();
+        if ($changed) {
+            $duplicate = Vehicle::withTrashed()->where('plate_number', $input['plate_number'])->where('id', '!=', $vehicle->id)->exists()
+                || VehiclePreviousPlate::query()->where('plate_number', $input['plate_number'])->exists();
 
-        if ($duplicate) {
-            return back()->withInput()->with('modal', [
-                'title' => Lot::plate($input['plate_number']).' is already registered',
-                'body' => Lot::plate($input['plate_number']).' is already registered to an account. A plate can belong to one account only.',
-                'note' => 'If this is your vehicle, ask the booth attendant to check it.',
-                'primary' => ['label' => 'Edit plate', 'close' => true],
-                'secondary' => ['label' => 'Close', 'close' => true],
-            ]);
+            if ($duplicate) {
+                return $this->plateTaken($input['plate_number']);
+            }
         }
 
-        $vehicle->update($input);
-        ActivityLog::record('vehicle_updated', $request->user(), $request, $vehicle->plate_number, 'driver');
+        DB::transaction(function () use ($vehicle, $input, $changed, $before, $request) {
+            // A temporary plate that is replaced stays on record. Violations on it count for the same vehicle (BanService).
+            if ($changed && $before !== null) {
+                VehiclePreviousPlate::create([
+                    'vehicle_id' => $vehicle->id,
+                    'user_id' => $request->user()->id,
+                    'plate_number' => $before,
+                    'was_temporary' => (bool) $vehicle->plate_is_temporary,
+                    'replaced_at' => now(),
+                ]);
+            }
 
-        return redirect()->route('driver.vehicles')->with('toast', ['Vehicle saved', Lot::plate($vehicle->plate_number).' was updated.']);
+            $vehicle->update($input);
+        });
+
+        if ($changed && $before !== null) {
+            ActivityLog::record('vehicle_plate_replaced', $request->user(), $request, $before.' -> '.$vehicle->plate_number, 'driver');
+        } elseif ($changed) {
+            ActivityLog::record('vehicle_plate_set', $request->user(), $request, $vehicle->plate_number, 'driver');
+        } else {
+            ActivityLog::record('vehicle_updated', $request->user(), $request, $vehicle->hasPlate() ? $vehicle->plate_number : 'no plate yet', 'driver');
+        }
+
+        return redirect()->route('driver.vehicles')->with('toast', [
+            'Vehicle saved',
+            $vehicle->hasPlate()
+                ? Lot::plate($vehicle->plate_number).($vehicle->hasTemporaryPlate() ? ' (temporary plate)' : '').' was '.($changed ? 'saved.' : 'updated.')
+                : 'Your vehicle was updated.',
+        ]);
+    }
+
+    private function plateTaken(?string $plate): RedirectResponse
+    {
+        return back()->withInput()->with('modal', [
+            'title' => Lot::plate($plate).' is already registered',
+            'body' => Lot::plate($plate).' is already registered to an account. A plate can belong to one account only.',
+            'note' => 'If this is your vehicle, ask the booth attendant to check it.',
+            'primary' => ['label' => 'Edit plate', 'close' => true],
+            'secondary' => ['label' => 'Close', 'close' => true],
+        ]);
     }
 
     public function destroy(Request $request, Vehicle $vehicle, DriverData $data): RedirectResponse
@@ -146,24 +175,43 @@ class VehicleController extends Controller
             'catalog' => VehicleCatalog::forForm(),
             'colors' => VehicleCatalog::colors(),
             'form' => VehicleCatalog::formValues($vehicle),
+            'hasPlate' => $vehicle->hasPlate(),
+            'permanent' => $vehicle->hasPermanentPlate(),
+            'temporary' => $vehicle->hasTemporaryPlate(),
         ];
     }
 
-    /** @return array<string, mixed> */
-    private function validated(Request $request, ?Vehicle $vehicle = null): array
+    /**
+     * @return array<string, mixed>
+     */
+    private function validated(Request $request, ?Vehicle $vehicle = null, ?PlateEntry &$entry = null): array
     {
-        $request->merge([
-            'plate_number' => Vehicle::normalizePlate($request->input('plate_number')),
-            'contact_number' => Lot::normalizePhone($request->input('contact_number')),
-        ]);
+        $request->merge(['contact_number' => Lot::normalizePhone($request->input('contact_number'))]);
 
-        return VehicleCatalog::validate($request, [
-            'plate_number' => Rules::plate(),
+        $entry = PlateEntry::resolve($request, $vehicle);
+
+        $rules = [
+            'plate_number' => $entry->rules,
             'contact_number' => Rules::mobile(false),
-        ], [
-            'plate_number.required' => 'Enter the plate number.',
+        ];
+        $messages = [
+            'plate_number.required' => 'Enter the plate number, or tick "still in registration".',
             'plate_number.regex' => Rules::PLATE_MESSAGE,
             'contact_number.regex' => 'Enter 11 digits, for example 0917 555 0142.',
-        ]);
+        ];
+
+        // A new vehicle, and a plate that is being set or replaced, need the "all details are correct" confirmation.
+        if ($vehicle === null || $entry->changing) {
+            $rules['details_confirmed'] = ['accepted'];
+            $messages['details_confirmed.accepted'] = 'Check the details and confirm that they are all correct.';
+        }
+
+        $data = VehicleCatalog::validate($request, $rules, $messages);
+        unset($data['details_confirmed']);
+
+        $data['plate_number'] = $entry->plate;
+        $data['plate_is_temporary'] = $entry->temporary;
+
+        return $data;
     }
 }

@@ -43,7 +43,6 @@ Route::prefix('staff/attendant')->name('attendant.')->middleware(['area:staff', 
     Route::get('exit', [ExitController::class, 'index'])->name('exit.index');
     Route::get('exit/session/{session}', [ExitController::class, 'show'])->name('exit.show');
     Route::post('exit/session/{session}/verify-pin', [ExitController::class, 'verifyPin'])->name('exit.verify-pin');
-    Route::post('exit/session/{session}/add-penalty', [ExitController::class, 'addPenalty'])->name('exit.add-penalty');
     Route::post('exit/session/{session}/pay', [ExitController::class, 'pay'])->name('exit.pay');
     Route::get('exit/receipt/{payment}', [ExitController::class, 'receipt'])->name('exit.receipt');
 

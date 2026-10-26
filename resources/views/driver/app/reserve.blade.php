@@ -7,9 +7,7 @@
 
 @section('content')
 @php
-    $names = ['Date and time', 'Slot and vehicle', 'Review'];
-    $cls = ['available' => '', 'occupied' => 'occ', 'reserved' => 'res', 'pending_exit' => 'pend', 'out_of_service' => 'out'];
-    $label = ['available' => 'Available', 'occupied' => 'Occupied', 'reserved' => 'Reserved', 'pending_exit' => 'Pending exit', 'out_of_service' => 'Out of service'];
+    $names = ['Arrival time', 'Slot and vehicle', 'Review'];
 @endphp
 <div class="steps-bar" aria-label="Step {{ $step }} of 3">
   @foreach ($names as $i => $n)
@@ -24,11 +22,13 @@
 @if (! empty($blocking))
   <section class="dcard" aria-labelledby="busy-t">
     <h2 id="busy-t" style="margin:0 0 6px;font-size:18px">
-      {{ $blocking['kind'] === 'parked' ? 'Your car is still parked' : ($blocking['kind'] === 'checked_in' ? 'You are already checked in' : 'You already have a reservation') }}
+      {{ $blocking['kind'] === 'suspended' ? 'Reservations are paused' : ($blocking['kind'] === 'parked' ? 'Your car is still parked' : ($blocking['kind'] === 'checked_in' ? 'You are already checked in' : 'You already have a reservation')) }}
     </h2>
     <p style="margin:0 0 14px">{{ $blocking['message'] }}</p>
     <div class="actions">
-      @if ($blocking['kind'] === 'parked')
+      @if ($blocking['kind'] === 'suspended')
+        <a class="btn" href="{{ route('driver.bookings', ['tab' => 'past']) }}">See missed reservations</a>
+      @elseif ($blocking['kind'] === 'parked')
         <a class="btn" href="{{ route('driver.session') }}">View my ticket</a>
       @else
         <a class="btn" href="{{ route('driver.bookings.show', $blocking['reservation']) }}">View reservation</a>
@@ -40,20 +40,8 @@
   <form method="GET" action="{{ route('driver.reserve') }}" novalidate>
     <input type="hidden" name="step" value="2">
     @if ($slotId)<input type="hidden" name="slot" value="{{ $slotId }}">@endif
-    <div data-reserve-when data-today="{{ $today->format('Y-m-d') }}" data-now="{{ $nowTime }}">
-      <fieldset class="fld" style="border:0;padding:0;margin:0 0 16px">
-        <legend class="f" style="font-size:13px;font-weight:600;margin-bottom:6px">Which day?</legend>
-        <div class="chipgrid">
-          @foreach ($days->take(4) as $d)
-            <label class="cp"><input type="radio" name="date" value="{{ $d->format('Y-m-d') }}" @checked($date === $d->format('Y-m-d'))><span><small>{{ $loop->first ? 'Today' : $d->format('D') }}</small><b>{{ $d->format('j') }}</b><small>{{ $d->format('M') }}</small></span></label>
-          @endforeach
-        </div>
-      </fieldset>
-      <div class="fld">
-        <label class="f" for="other-date">Or pick another date</label>
-        <input id="other-date" name="other_date" type="date" min="{{ $today->format('Y-m-d') }}" max="{{ $latest->format('Y-m-d') }}" value="{{ $days->take(4)->contains(fn ($d) => $d->format('Y-m-d') === $date) ? '' : $date }}">
-        <p class="fine" style="margin-top:6px">You can reserve up to {{ $advanceDays }} days ahead.</p>
-      </div>
+    <div data-reserve-when data-now="{{ $nowTime }}" data-today="{{ $today->format('M j') }}" data-tomorrow="{{ $tomorrow->format('M j') }}">
+      <p class="sub" style="margin:0 0 12px">You can reserve any time from now until <b>{{ \App\Support\Lot::when($windowEnd) }}</b>, a window of {{ $windowHours }} hours.</p>
       <fieldset class="fld" style="border:0;padding:0;margin:0 0 16px">
         <legend class="f" style="font-size:13px;font-weight:600;margin-bottom:6px">What time will you arrive?</legend>
         <div class="chipgrid t" id="timechips" aria-live="polite"></div>
@@ -62,6 +50,7 @@
         <label class="f" for="time-input">Or enter a time</label>
         <input id="time-input" name="time" type="time" value="{{ $time }}" required>
       </div>
+      <p class="fine" id="when-preview" aria-live="polite" style="margin:6px 0 16px">@if ($time !== '') Arrival: <b>{{ \App\Support\Lot::when(\App\Support\Lot::parse($date, $time)) }}</b>@endif</p>
     </div>
     <section class="dcard paint" style="margin-top:6px" aria-labelledby="ontime-1">
       <p class="lab" id="ontime-1">Arrive on time</p>
@@ -78,41 +67,29 @@
   @if ($errors->has('slot') || $errors->has('vehicle'))
     <div class="err-box" role="alert"><b>One more thing</b>{{ $errors->first() }}</div>
   @endif
-  <form method="GET" action="{{ route('driver.reserve') }}" novalidate>
+  <form method="GET" action="{{ route('driver.reserve') }}" novalidate data-slot-pick>
     <input type="hidden" name="step" value="3">
     <input type="hidden" name="date" value="{{ $date }}">
     <input type="hidden" name="time" value="{{ $time }}">
-    <h2 class="f" style="font-size:15px;margin:4px 0 8px">1. Pick a slot <small style="font-weight:400;color:var(--muted)">({{ $zones->sum(fn ($group) => $group->where('state', 'available')->count()) }} free at this time)</small></h2>
-    <p class="fine" style="margin:0 0 10px">Only free slots can be picked. A slot marked <b>PWD</b> needs a photo of your PWD ID, which the booth attendant checks before approving.</p>
-    <div class="lot">
-      @foreach ($zones as $zone => $slots)
-        <div class="zl">{{ strtoupper($zone) }}</div>
-        <div class="g">
-          @foreach ($slots as $slot)
-            @php $free = $slot->state === 'available'; @endphp
-            <label class="sl pick {{ $cls[$slot->state] ?? '' }} {{ $free ? '' : 'off dim' }}">
-              <input type="radio" name="slot" value="{{ $slot->id }}" @disabled(! $free) @checked($free && $slotId === $slot->id) aria-label="Slot {{ $slot->code }}, {{ $label[$slot->state] ?? $slot->state }}">
-              <b>{{ $slot->code }}</b><span>{{ $label[$slot->state] ?? '' }}</span>
-              @if ($slot->type === 'PWD')<em class="pwdtag" title="PWD slot: needs a PWD ID photo">PWD</em>@endif
-            </label>
-          @endforeach
-        </div>
-      @endforeach
-      @include('driver.app.partials.legend')
-    </div>
 
-    <fieldset class="fld" style="border:0;padding:0;margin:22px 0 0">
-      <legend class="f" style="font-size:15px;font-weight:700;margin-bottom:8px">2. Pick the vehicle you will use</legend>
+    <fieldset class="fld" style="border:0;padding:0;margin:0 0 20px">
+      <legend class="f" style="font-size:15px;font-weight:700;margin-bottom:4px">1. Pick the vehicle you will use</legend>
+      <p class="fine" style="margin:0 0 8px">Choose the vehicle first. Motorcycles park in motorcycle zones. Cars, SUVs, vans, pickups and tricycles park in car zones.</p>
       @if ($noVehicle)
         <div class="alert">You have no saved vehicle. <a class="lnk" href="{{ route('driver.vehicles.create') }}">Add a vehicle</a></div>
       @else
         <div style="display:grid;gap:8px">
           @foreach ($vehicles as $v)
-            <label class="cp vh"><input type="radio" name="vehicle" value="{{ $v->id }}" @checked((int) $vehicleId === $v->id || ($loop->first && ! $vehicleId))><span><b style="font-size:24px">{{ $v->displayPlate() }}</b><small style="align-self:center">{{ $v->describe() }}</small></span></label>
+            <label class="cp vh"><input type="radio" name="vehicle" value="{{ $v->id }}" data-class="{{ $v->zoneClass() }}" data-type="{{ $v->vehicle_type }}" @checked((int) $vehicleId === $v->id) @disabled(! $v->hasPlate())><span><b style="font-size:24px">{{ $v->displayPlate() }}</b><small style="align-self:center">@if ($v->hasPlate()){{ $v->describe() }}@else{{ $v->describe() }} <a class="lnk" href="{{ route('driver.vehicles.edit', $v) }}">Add the plate to reserve</a>@endif</small></span></label>
           @endforeach
         </div>
       @endif
     </fieldset>
+
+    <h2 class="f" style="font-size:15px;margin:4px 0 8px">2. Pick a slot <small style="font-weight:400;color:var(--muted)" data-free-count data-total="{{ $zones->sum(fn ($group) => $group->where('state', 'available')->count()) }}">({{ $zones->sum(fn ($group) => $group->where('state', 'available')->count()) }} free at this time)</small></h2>
+    <p class="fine" data-pick-note style="margin:0 0 10px">Choose a vehicle above to see the slots it can use. The map is the same one the Parking Manager arranged. A slot marked <b>PWD</b> needs a photo of your PWD ID. It is not reserved until the booth attendant approves it, and shows as awaiting approval until then.</p>
+    @include('partials.slot-layout', ['zones' => $zones, 'item' => 'driver.app.partials.slot-item-pick', 'label' => 'Choose a slot'])
+    @include('driver.app.partials.legend', ['awaiting' => true])
     <p class="fine" style="margin-top:12px">The next screen asks you to confirm that you will arrive on time.</p>
     <div class="actions"><button class="btn" type="submit">Review reservation</button></div>
   </form>
@@ -161,7 +138,6 @@
       <input type="hidden" name="time" value="{{ $time }}">
       <input type="hidden" name="slot" value="{{ $slot->id }}">
       <input type="hidden" name="vehicle" value="{{ $vehicle->id }}">
-      <button class="x" type="button" data-close aria-label="Close">X</button>
       <h2 id="cr-t">Reserve slot {{ $slot->code }}?</h2>
       <p class="sub" style="color:var(--ink)">{{ \App\Support\Lot::when($at) }} for {{ $vehicle->displayPlate() }}. The reservation is free.@if ($slot->type === 'PWD') The booth attendant checks your PWD ID and approves it before your QR code appears.@else It is confirmed right away and your QR code appears as soon as you reserve.@endif</p>
       @if ($slot->type === 'PWD')

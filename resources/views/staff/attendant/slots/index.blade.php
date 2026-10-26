@@ -49,8 +49,9 @@
             @php
                 $curr = $slot->currentSession();
                 $booking = $slot->nextOpenBooking();
+                $isLong = $curr?->isLongParked() ?? false;
             @endphp
-            <div class="ba-slot {{ $slot->status }}"
+            <div class="ba-slot {{ $slot->status }} {{ $isLong ? 'long' : '' }}"
                  style="min-height:100px;padding:12px 8px;cursor:pointer;"
                  onclick="openSlotDetail({{ json_encode([
                      'id' => $slot->id,
@@ -72,11 +73,13 @@
                  ]) }})">
               @if ($slot->type === 'PWD')<span class="pwd-tag">PWD</span>@endif
               <b>{{ $slot->code }}</b>
-              <span class="st">{{ $slot->statusLabel() }}</span>
+              <span class="st">@if ($isLong)&#9201; Long parked @else {{ $slot->statusLabel() }} @endif</span>
               @if ($curr)
                 <span class="plt">{{ \App\Support\Lot::plate($curr->plate_number) }}</span>
+                <span class="plt">{{ \App\Support\Lot::duration($curr->parkedMinutes()) }}</span>
               @elseif ($booking)
                 <span class="plt" style="color:#92400E;">{{ \App\Support\Lot::plate($booking->plate_number) }}</span>
+                @if ($slot->status === 'reserved')<span class="plt" style="color:#92400E;">{{ \App\Support\SlotLayout::tileTime($booking->scheduled_at) }}</span>@endif
               @elseif ($slot->out_of_service_reason)
                 <span class="plt" style="font-size:10px;">{{ \Illuminate\Support\Str::limit($slot->out_of_service_reason, 15) }}</span>
               @endif
@@ -92,6 +95,7 @@
       <span><i class="r"></i>Reserved</span>
       <span><i class="o"></i>Occupied</span>
       <span><i class="p"></i>Pending exit</span>
+      <span><i class="lg"></i>Long parked</span>
       <span><i class="x"></i>Out of service</span>
     </div>
   </div>
@@ -125,7 +129,6 @@
 <!-- POP-UP BA-52: Slot Detail Modal -->
 <dialog class="badlg" id="slot-detail-dlg">
   <div class="in">
-    <button class="x" type="button" data-close aria-label="Close">X</button>
     <h2>Slot <span id="sd-code"></span></h2>
 
     <div class="ba-detail-box" style="display:flex;flex-direction:column;gap:10px;font-size:14px;margin-bottom:18px;">
@@ -166,7 +169,6 @@
 <dialog class="badlg" id="manual-correct-dlg">
   <form id="correct-form" class="in" method="POST" action="">
     @csrf
-    <button class="x" type="button" data-close aria-label="Close">X</button>
     <h2>Correct slot status</h2>
 
     <div class="ba-detail-box" style="margin-bottom:16px;font-size:14px;">
@@ -208,7 +210,6 @@
 @if(session('error_modal') && session('error_modal')['type'] === 'cannot_mark_available')
 <dialog class="badlg auto-open" id="cannot-available-dlg">
   <div class="in">
-    <button class="x" type="button" data-close aria-label="Close">&times;</button>
     <h2 style="color:var(--stop);">{{ session('error_modal')['slot'] }} cannot be marked Available</h2>
     
     @if(isset(session('error_modal')['ticket']))

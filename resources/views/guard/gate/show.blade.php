@@ -55,7 +55,6 @@
 <dialog class="gdlg" id="confirm-go" aria-labelledby="cg-t">
   <form class="in" id="confirm-form" method="POST" action="{{ route('guard.gate.approve', $s) }}">
     @csrf
-    <button class="x" type="button" data-close aria-label="Close">X</button>
     <h2 id="cg-t">Confirm Good to Go</h2>
     <p>Release slot {{ $s->slot?->code ?? $s->slot_code }} for {{ $plate }}? The gate opens and the slot becomes available.</p>
     <p class="note">This is logged under your name with the time.</p>
@@ -66,7 +65,6 @@
 <dialog class="gdlg stop" id="mismatch" aria-labelledby="mm-t">
   <form class="in g-form" method="POST" action="{{ route('guard.gate.mismatch', $s) }}">
     @csrf
-    <button class="x" type="button" data-close aria-label="Close">X</button>
     <h2 id="mm-t">Plate or details do not match</h2>
     <p>Tick what does not match. The slot stays Pending exit and you can write an incident report next.</p>
     <div style="margin-top:12px">

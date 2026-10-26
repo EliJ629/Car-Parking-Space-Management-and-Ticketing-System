@@ -25,8 +25,8 @@
   </div>
   <div class="fld">
     <label class="f" for="phone">Mobile number</label>
-    <input id="phone" name="phone" type="tel" inputmode="tel" maxlength="13" placeholder="09171234567" value="{{ old('phone', $user->phone) }}" autocomplete="tel" required @error('phone') aria-invalid="true" @enderror>
-    @error('phone')<p class="err">{{ $message }}</p>@else<p class="hint">Digits only. Start with 09 (11 digits) or +63 (13 characters).</p>@enderror
+    <input id="phone" name="phone" type="tel" data-mobile inputmode="tel" maxlength="13" placeholder="09171234567" value="{{ old('phone', $user->phone) }}" autocomplete="tel" required @error('phone') aria-invalid="true" @enderror>
+    @error('phone')<p class="err">{{ $message }}</p>@else<p class="hint">Digits only. Start with 09 (11 digits), 63 (12 digits) or +63 (13 characters).</p>@enderror
   </div>
   <div class="actions"><button class="btn" type="submit">Save changes</button><a class="btn ghost" href="{{ route('driver.account') }}">Cancel</a></div>
 </form>

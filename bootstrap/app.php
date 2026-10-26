@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\AjaxRedirects;
 use App\Http\Middleware\EnsureArea;
 use App\Http\Middleware\EnsureDriverActive;
 use App\Http\Middleware\EnsureRole;
@@ -23,6 +24,9 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->trustProxies(at: '*');
+
+        // Forms that send themselves in the background (data-ajax) get a redirect back as JSON.
+        $middleware->web(append: [AjaxRedirects::class]);
 
         $middleware->alias([
             'area' => EnsureArea::class,

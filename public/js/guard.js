@@ -156,45 +156,134 @@
     });
   }
 
-  /* Incident form: what the category requires, and a live check that the plate is parked now. */
+  /* Incident form: what the category requires, dependent fields, and live checks. */
   var inc = document.querySelector('[data-incident-form]');
   if (inc) {
     var rules = JSON.parse(inc.getAttribute('data-rules') || '{}');
     var plateIn = document.getElementById('plate_number'), placeIn = document.getElementById('location');
+    var respIn = document.getElementById('responsible_plate'), respBox = document.getElementById('responsible-wrap');
+    var unknownBox = document.getElementById('responsible_unknown');
+    var otherIn = document.getElementById('other_label'), otherBox = document.getElementById('other-wrap');
+    var textIn = document.getElementById('place_text'), textBox = document.getElementById('place-text-wrap');
     var plateTag = inc.querySelector('[data-need-plate]'), placeTag = inc.querySelector('[data-need-place]');
+    var plateLabel = inc.querySelector('[data-plate-label]');
     var live = document.getElementById('plate-live'), placeHint = document.getElementById('place-hint');
-    var timer = null, lastOk = false;
+    var respLive = document.getElementById('resp-live');
+    var timer = null, respTimer = null;
     var cat = function () { var r = inc.querySelector('input[name=category]:checked'); return r ? r.value : ''; };
     var need = function () { return rules[cat()] || { plate: 'optional', place: 'optional' }; };
+    var setErr = function (el, on) { if (el) el.setAttribute('aria-invalid', on ? 'true' : 'false'); };
+
     var applyRules = function () {
       var n = need(), c = cat();
       if (!c) return;
+      var damage = n.responsible === 'required', other = n.label === 'required';
+      plateLabel.textContent = damage ? 'Damaged vehicle plate' : 'Plate';
       plateTag.textContent = n.plate === 'required' ? '(required)' : '(optional)';
       plateIn.required = n.plate === 'required';
-      var names = { slot: ['(required)', 'Slot, for example B-03.'], location: ['(required)', 'Say where it is: a slot like B-03 or a place like Zone A lane.'], auto: ['(filled in from the plate)', 'Taken from the parked vehicle.'], optional: ['(optional)', ''] };
+      if (plateIn.hasAttribute('data-plate-optional') && n.plate === 'required') plateIn.removeAttribute('data-plate-optional');
+      if (!plateIn.hasAttribute('data-plate-optional') && n.plate !== 'required') plateIn.setAttribute('data-plate-optional', '');
+
+      respBox.hidden = !damage;
+      respIn.required = damage && !(unknownBox && unknownBox.checked);
+      otherBox.hidden = !other;
+      otherIn.required = other;
+
+      var names = {
+        slot: ['(required)', 'Only slots with a vehicle in them are listed.'],
+        location: ['(choose one, or type another place)', 'Only slots with a vehicle in them are listed. Use "Other place" for somewhere else in the lot.'],
+        auto: ['(filled in from the plate)', 'Taken from the parked vehicle.'],
+        optional: ['(optional)', 'Only slots with a vehicle in them are listed.']
+      };
       var p = names[n.place] || names.optional;
       placeTag.textContent = p[0]; if (placeHint) placeHint.textContent = p[1];
-      placeIn.required = n.place === 'slot' || n.place === 'location';
-      placeIn.readOnly = n.place === 'auto';
+      placeIn.required = n.place === 'slot';
+      textBox.hidden = !(n.place === 'location' || n.place === 'optional');
+      if (n.place === 'auto') placeIn.value = placeIn.value;
     };
-    var say = function (text, bad) { if (!live) return; live.textContent = text; live.className = bad ? 'g-err' : 'hint'; plateIn.setAttribute('aria-invalid', bad ? 'true' : 'false'); };
-    var check = function () {
+
+    var say = function (box, input, text, bad) { if (!box) return; box.textContent = text; box.className = bad ? 'g-err' : 'hint'; setErr(input, bad); };
+
+    var checkPlate = function () {
       var v = plateIn.value.trim();
-      if (!v) { say('Only a vehicle that is parked in the lot now can be reported.', false); return; }
+      if (!v) { say(live, plateIn, 'Only a vehicle that is parked in the lot now can be reported.', false); return; }
+      if (window.BaylinePlate && window.BaylinePlate.problem(v)) return; /* plate.js shows the format message */
       fetch(inc.getAttribute('data-check') + '?plate=' + encodeURIComponent(v), { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' })
         .then(function (r) { return r.json(); })
         .then(function (d) {
           if (plateIn.value.trim() !== v) return;
-          if (d.state === 'parked') { say(d.message, false); lastOk = true; if (placeIn && (need().place === 'auto' || !placeIn.value || placeIn.dataset.auto === '1')) { placeIn.value = d.slot; placeIn.dataset.auto = '1'; } }
-          else { lastOk = false; say(d.message || 'That vehicle is not parked now.', true); }
+          if (d.state === 'parked') {
+            say(live, plateIn, d.message, false);
+            if (d.slot) { placeIn.value = d.slot; }
+          } else { say(live, plateIn, d.message || 'That vehicle is not parked now.', true); }
         }).catch(function () {});
     };
-    plateIn.addEventListener('input', function () { clearTimeout(timer); timer = setTimeout(check, 350); });
-    plateIn.addEventListener('blur', check);
-    placeIn.addEventListener('input', function () { placeIn.dataset.auto = '0'; });
+
+    var checkResponsible = function () {
+      var v = respIn.value.trim();
+      if (!v || (unknownBox && unknownBox.checked)) { say(respLive, respIn, 'The report and any warning count against this vehicle, not the damaged one. It may have left already.', false); return; }
+      if (window.BaylinePlate && window.BaylinePlate.problem(v)) return;
+      if (plateIn.value.trim() && window.BaylinePlate && window.BaylinePlate.normalize(plateIn.value) === window.BaylinePlate.normalize(v)) {
+        say(respLive, respIn, 'The responsible vehicle cannot be the damaged vehicle. Check both plates.', true); return;
+      }
+      fetch(inc.getAttribute('data-check') + '?role=responsible&plate=' + encodeURIComponent(v), { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          if (respIn.value.trim() !== v) return;
+          say(respLive, respIn, d.message || '', d.state === 'unknown' || d.state === 'invalid');
+        }).catch(function () {});
+    };
+
+    /* The lookups run when the person leaves the field. While typing, the message goes back to its plain hint. */
+    plateIn.addEventListener('input', function () { clearTimeout(timer); say(live, plateIn, 'Only a vehicle that is parked in the lot now can be reported.', false); });
+    plateIn.addEventListener('blur', checkPlate);
+    respIn.addEventListener('input', function () { clearTimeout(respTimer); say(respLive, respIn, 'The report and any warning count against this vehicle, not the damaged one. It may have left already.', false); });
+    respIn.addEventListener('blur', checkResponsible);
+    if (unknownBox) unknownBox.addEventListener('change', function () {
+      respIn.disabled = unknownBox.checked;
+      if (unknownBox.checked) { respIn.value = ''; respIn.setCustomValidity(''); }
+      respIn.required = need().responsible === 'required' && !unknownBox.checked;
+      checkResponsible();
+    });
+
+    /* Choosing a slot fills in the plate of the vehicle parked there. */
+    placeIn.addEventListener('change', function () {
+      var opt = placeIn.options[placeIn.selectedIndex];
+      setErr(placeIn, false);
+      if (opt && opt.getAttribute('data-label') && !plateIn.value.trim()) {
+        plateIn.value = opt.getAttribute('data-label');
+        plateIn.dispatchEvent(new Event('input', { bubbles: true }));
+        say(live, plateIn, opt.getAttribute('data-label') + ' is parked in ' + opt.value + '.', false);
+      }
+    });
+
     inc.addEventListener('change', function (e) { if (e.target.name === 'category') applyRules(); });
+
+    /* Say what is missing before the form leaves the screen. The server checks it all again. */
+    inc.addEventListener('submit', function (e) {
+      var n = need(), c = cat(), problems = [];
+      if (!c) problems.push([inc.querySelector('input[name=category]'), 'Choose a category.']);
+      if (n.label === 'required' && !otherIn.value.trim()) problems.push([otherIn, 'Say what kind of incident this is.']);
+      var d = document.getElementById('description');
+      if (d && d.value.trim().length < 10) problems.push([d, 'Write at least 10 characters.']);
+      if (n.plate === 'required' && !plateIn.value.trim() && !(document.querySelector('input[name=session_id]') || {}).value) problems.push([plateIn, 'Enter the plate number.']);
+      if (n.place === 'slot' && !placeIn.value && !plateIn.value.trim()) problems.push([placeIn, 'Choose an occupied slot.']);
+      if (n.place === 'location' && !placeIn.value && !textIn.value.trim()) problems.push([placeIn, 'Choose a slot, or type another place.']);
+      if (n.responsible === 'required' && !respIn.value.trim() && !(unknownBox && unknownBox.checked)) problems.push([respIn, 'Enter the responsible plate, or tick "Responsible vehicle unknown".']);
+      if (!problems.length) return;
+      e.preventDefault();
+      problems.forEach(function (p) {
+        setErr(p[0], true);
+        var hint = p[0].closest('.fld, section') && p[0].closest('.fld, section').querySelector('.hint, .g-err');
+        if (hint && p[0].id) { hint.textContent = p[1]; hint.className = 'g-err'; }
+      });
+      if (problems[0][0].focus) problems[0][0].focus();
+    });
+
     applyRules();
-    if (plateIn.value) check();
+    if (respIn.value) checkResponsible();
+    if (unknownBox && unknownBox.checked) respIn.disabled = true;
+    if (plateIn.value) checkPlate();
   }
 
   /* Incident form: category radios and photo previews. */
@@ -215,6 +304,25 @@
     var custom = document.querySelectorAll('[data-custom]');
     var sync = function () { custom.forEach(function (el) { el.hidden = range.value !== 'custom'; }); };
     range.addEventListener('change', sync); sync();
+
+    /* Pick dates: no day after today in either box, and the start never after the end. */
+    var fromEl = document.getElementById('from'), toEl = document.getElementById('to');
+    if (fromEl && toEl) {
+      var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+      var d = new Date();
+      var today = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+      var guard = function (changed) {
+        [fromEl, toEl].forEach(function (el) { el.max = today; if (el.value && el.value > today) el.value = today; });
+        if (fromEl.value && toEl.value && fromEl.value > toEl.value) { if (changed === fromEl) toEl.value = fromEl.value; else fromEl.value = toEl.value; }
+        fromEl.max = toEl.value && toEl.value < today ? toEl.value : today;
+        toEl.min = fromEl.value || '';
+      };
+      [fromEl, toEl].forEach(function (el) {
+        el.addEventListener('input', function () { guard(el); });
+        el.addEventListener('change', function () { guard(el); });
+      });
+      guard(null);
+    }
   }
 
   /* Slots view: tap a slot for its detail. */
@@ -228,6 +336,8 @@
           var v = btn.getAttribute('data-' + k);
           if (row) { row.style.display = v ? 'contents' : 'none'; var dd = row.querySelector('dd'); if (dd) dd.textContent = v || ''; }
         });
+        var report = sheet.querySelector('[data-f=report]');
+        if (report) { var url = btn.getAttribute('data-report'); report.hidden = !url; if (url) report.setAttribute('href', url); }
         openDialog(sheet);
       });
     });

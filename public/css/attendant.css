@@ -559,3 +559,4 @@ dialog.badlg .actions .btn{min-height:44px}
   main#main .ba-tiles,main#main .ba-actions{grid-template-columns:1fr !important}
   main#main .ba-slot-grid,main#main .ba-slot-grid.zone-b{grid-template-columns:repeat(3,1fr) !important}
 }
+.ba-slot.long{background:#a3261b;border-color:#7a1810;color:#fff}.ba-slot.long span.st,.ba-slot.long span.plt{color:#fff}

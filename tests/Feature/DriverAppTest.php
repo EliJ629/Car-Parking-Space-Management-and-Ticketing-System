@@ -228,7 +228,8 @@ class DriverAppTest extends TestCase
         // A checked-in reservation blocks too, until it is completed.
         $reservation = ParkingReservation::first();
         $reservation->update(['status' => ParkingReservation::STATUS_CHECKED_IN]);
-        $again = ['date' => Lot::now()->addDays(1)->format('Y-m-d'), 'time' => '09:00'] + $q;
+        $later = Lot::now()->addHours(5);
+        $again = ['date' => $later->format('Y-m-d'), 'time' => $later->format('H:i')] + $q;
         $this->actingAs($driver)->post(route('driver.reserve.store'), $this->ack() + $again)->assertSessionHas('modal');
         $this->assertStringContainsString('already checked in', session('modal')['title']);
         $reservation->update(['status' => ParkingReservation::STATUS_COMPLETED]);
@@ -239,8 +240,8 @@ class DriverAppTest extends TestCase
     public function test_the_vehicle_model_is_required_when_a_driver_signs_up(): void
     {
         $base = [
-            'name' => 'Pedro Cruz', 'email' => 'pedro.cruz@gmail.com', 'phone' => '09171234567', 'plate_number' => 'KLM 4455',
-            'vehicle_type' => 'Car', 'color' => 'Black', 'password' => 'Driver123x!', 'password_confirmation' => 'Driver123x!',
+            'first_name' => 'Pedro', 'last_name' => 'Cruz', 'email' => 'pedro.cruz@gmail.com', 'phone' => '09171234567', 'plate_number' => 'KLM 4455',
+            'vehicle_type' => 'Car', 'color' => 'Black', 'password' => 'Driver123x!', 'password_confirmation' => 'Driver123x!', 'details_confirmed' => '1',
         ];
 
         $this->get(route('driver.register'))->assertOk()->assertSee('Vehicle model')->assertDontSee('Truck');
@@ -266,7 +267,7 @@ class DriverAppTest extends TestCase
         $this->actingAs($driver)->get(route('driver.reserve'))
             ->assertOk()->assertSee('Arrive on time')->assertSee("{$grace} minutes");
         $this->get(route('driver.reserve', ['step' => 2] + $q))
-            ->assertOk()->assertSee('1. Pick a slot')->assertSee('2. Pick the vehicle you will use')->assertSee('A-06');
+            ->assertOk()->assertSee('1. Pick the vehicle you will use')->assertSee('2. Pick a slot')->assertSee('A-06');
         $this->get(route('driver.reserve', ['step' => 3, 'slot' => $slot->id, 'vehicle' => $vehicle->id] + $q))
             ->assertOk()->assertSee('arrive on time')->assertSee('Last check in')->assertSee('the reservation expires')
             ->assertSee(Lot::time($at->copy()->addMinutes($grace)), false);
@@ -369,12 +370,12 @@ class DriverAppTest extends TestCase
         $driver = $this->driver('maria@example.com', null);
         $other = $this->driver('other@example.com', 'ZZZ1111');
 
-        $this->actingAs($driver)->post(route('driver.vehicles.store'), ['plate_number' => 'abc 1234', 'color' => 'Blue', 'vehicle_type' => 'SUV', 'make_model' => 'Honda CR-V', 'contact_number' => '09175550142'])
+        $this->actingAs($driver)->post(route('driver.vehicles.store'), ['plate_number' => 'abc 1234', 'details_confirmed' => '1', 'color' => 'Blue', 'vehicle_type' => 'SUV', 'make_model' => 'Honda CR-V', 'contact_number' => '09175550142'])
             ->assertRedirect(route('driver.vehicles'));
         $vehicle = Vehicle::where('plate_number', 'ABC1234')->first();
         $this->assertNotNull($vehicle);
 
-        $this->actingAs($driver)->post(route('driver.vehicles.store'), ['plate_number' => 'ZZZ1111', 'color' => 'Blue', 'vehicle_type' => 'SUV', 'make_model' => 'Honda CR-V'])
+        $this->actingAs($driver)->post(route('driver.vehicles.store'), ['plate_number' => 'ZZZ1111', 'details_confirmed' => '1', 'color' => 'Blue', 'vehicle_type' => 'SUV', 'make_model' => 'Honda CR-V'])
             ->assertSessionHas('modal');
         $this->actingAs($driver)->post(route('driver.vehicles.store'), ['plate_number' => '', 'color' => '', 'vehicle_type' => '', 'make_model' => ''])
             ->assertSessionHasErrors(['plate_number', 'color', 'vehicle_type', 'make_model']);

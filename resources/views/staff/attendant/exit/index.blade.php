@@ -29,7 +29,7 @@
 
           <div class="ba-predict-wrap">
             <input class="ba-input ba-predict-ghost" id="exit-ghost" type="text" readonly tabindex="-1" aria-hidden="true" style="font-size:20px;font-weight:700;text-transform:uppercase;">
-            <input class="ba-input" id="exit-q" name="q" type="text" value="{{ $q }}"
+            <input class="ba-input" id="exit-q" name="q" type="text" data-plate-or-ticket value="{{ $q }}"
                    placeholder="PK-0016 or HJK 4471" style="font-size:20px;font-weight:700;text-transform:uppercase;"
                    autocomplete="off" autofocus oninput="this.value = this.value.toUpperCase().replace(/[^A-Z0-9\s-]/g, '')">
           </div>
@@ -65,7 +65,7 @@
         <h2>{{ $results->count() }} {{ \Illuminate\Support\Str::plural('match', $results->count()) }} for {{ $q }}</h2>
 
         <div style="overflow-x:auto;">
-          <table style="width:100%;border-collapse:collapse;font-size:14px;text-align:left;">
+          <table data-paginate="10" style="width:100%;border-collapse:collapse;font-size:14px;text-align:left;">
             <thead>
               <tr style="border-bottom:2px solid var(--line);color:var(--muted);font-size:12px;text-transform:uppercase;">
                 <th style="padding:10px 8px;">Ticket</th>
@@ -135,7 +135,6 @@
 @if ($noMatch)
 <dialog class="badlg auto-open" id="no-match-dlg">
   <div class="in">
-    <button class="x" type="button" data-close aria-label="Close">&times;</button>
     <h2>No session found</h2>
     <p>No active session matches <b>{{ $q }}</b>.<br><br>Check the digits with the driver. Closed sessions are hidden. Tick <b>Include closed sessions</b> to search them.</p>
     <div class="actions">

@@ -16,7 +16,7 @@
 
     <div style="flex:1;min-width:240px;">
       <label class="ba-label" for="rec-q">Search</label>
-      <input class="ba-input" id="rec-q" name="q" type="text" value="{{ $q }}" placeholder="Ticket or plate">
+      <input class="ba-input" id="rec-q" name="q" type="text" maxlength="20" value="{{ $q }}" placeholder="Ticket or plate">
     </div>
 
     <div style="display:flex;gap:8px;">
@@ -116,7 +116,6 @@
 <!-- POP-UP BA-61: Record Detail Modal -->
 <dialog class="badlg" id="record-detail-dlg">
   <div class="in">
-    <button class="x" type="button" data-close aria-label="Close">&times;</button>
     <h2>Record <span id="rd-ticket"></span></h2>
 
     <div style="display:flex;flex-direction:column;gap:10px;font-size:14px;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;padding:16px;margin-bottom:18px;">

@@ -48,11 +48,15 @@
     <a class="btn ghost block" href="{{ route('driver.register') }}">Create an account</a>
   </div>
 
+  @if (\App\Support\LandingConfig::lookup()['on_login'])
   @include('partials.find-compact')
+  @endif
   <div class="cardfoot">@include('partials.theme-toggle')</div>
 </div>
 @endsection
 
 @push('scripts')
+@if (\App\Support\LandingConfig::lookup()['on_login'])
 <script src="{{ asset('js/find-my-car.js') }}?v={{ filemtime(public_path('js/find-my-car.js')) }}"></script>
+@endif
 @endpush

@@ -46,9 +46,9 @@ class AuditValidationTest extends TestCase
     private function signUp(array $override = []): array
     {
         return $override + [
-            'name' => 'Pedro Cruz', 'email' => 'pedro.cruz@gmail.com', 'phone' => '09171234567', 'plate_number' => 'KLM 4455',
+            'first_name' => 'Pedro', 'last_name' => 'Cruz', 'email' => 'pedro.cruz@gmail.com', 'phone' => '09171234567', 'plate_number' => 'KLM 4455',
             'vehicle_type' => 'Car', 'make_model' => 'Toyota Vios', 'color' => 'Black',
-            'password' => 'Driver123x!', 'password_confirmation' => 'Driver123x!',
+            'password' => 'Driver123x!', 'password_confirmation' => 'Driver123x!', 'details_confirmed' => '1',
         ];
     }
 
@@ -72,8 +72,16 @@ class AuditValidationTest extends TestCase
             ['plate_number' => 'ABCDEFGHI1'],
             ['plate_number' => '12345'],
             ['plate_number' => 'ABC 12 3 45'],
-            ['name' => 'Pedro 99'],
-            ['name' => 'P'],
+            ['first_name' => 'Pedro 99'],
+            ['first_name' => 'P'],
+            ['first_name' => ''],
+            ['last_name' => ''],
+            ['last_name' => 'Cruz3'],
+            ['first_name' => "O'Brien"],
+            ['last_name' => 'Dela-Cruz'],
+            ['first_name' => 'Maria.'],
+            ['middle_name' => 'Santos 2'],
+            ['middle_name' => 'A_B'],
             ['phone' => '12345'],
             ['email' => 'not-an-email'],
             ['color' => 'Plaid'],
@@ -98,25 +106,33 @@ class AuditValidationTest extends TestCase
         $this->assertSame(0, User::where('role', User::ROLE_DRIVER)->count());
     }
 
-    public function test_sign_up_accepts_short_numeric_and_government_style_plates(): void
+    public function test_sign_up_accepts_every_supported_plate_format(): void
     {
         $this->withoutMiddleware(ThrottleRequests::class);
 
-        foreach (['7', '12', 'SENATE 5', 'PNP 1234', 'ABC 1234', '1234 AB'] as $i => $plate) {
+        // Each plate with a vehicle type it suits. Motorcycle shapes go with a motorcycle, car shapes with a car.
+        $plates = [
+            ['7', 'Car'], ['17', 'SUV'], ['ABC 123', 'Car'], ['ABC 1234', 'Van'], ['1234 AB', 'Motorcycle'], ['A 123 BC', 'Motorcycle'],
+            ['12-3456', 'Car'], ['123 4567', 'Car'], ['1234-12345678901', 'Motorcycle'], ['T 1234', 'Pickup'],
+        ];
+
+        foreach ($plates as $i => [$plate, $type]) {
+            $model = \App\Support\VehicleCatalog::forForm()[$type][0];
             $this->post(route('driver.register'), $this->signUp([
-                'plate_number' => $plate, 'name' => 'Driver '.chr(65 + $i).'ero', 'email' => "vip.driver{$i}@gmail.com", 'phone' => '0917123456'.$i,
+                'plate_number' => $plate, 'vehicle_type' => $type, 'make_model' => $model,
+                'first_name' => 'Driver', 'last_name' => chr(65 + $i).'ero', 'email' => "vip.driver{$i}@gmail.com", 'phone' => '0917123456'.$i,
             ]))->assertSessionHasNoErrors();
         }
 
         // Each valid sign up waits for its link; nothing is saved as an account yet.
-        $this->assertSame(6, PendingRegistration::count());
+        $this->assertSame(10, PendingRegistration::count());
         $this->assertSame(0, Vehicle::count());
     }
 
     public function test_sign_up_stores_a_clean_record_and_refuses_a_plate_that_is_already_registered(): void
     {
         Mail::fake();
-        $this->post(route('driver.register'), $this->signUp(['name' => '  Pedro   Cruz ', 'email' => ' Pedro.Cruz@GMAIL.com ']))
+        $this->post(route('driver.register'), $this->signUp(['first_name' => '  Pedro ', 'last_name' => ' Cruz  ', 'email' => ' Pedro.Cruz@GMAIL.com ']))
             ->assertRedirect(route('driver.register.sent'));
         $this->assertNull(User::where('email', 'pedro.cruz@gmail.com')->first(), 'Nothing is saved before the link is clicked.');
 
@@ -135,7 +151,7 @@ class AuditValidationTest extends TestCase
         $this->assertSame('KLM4455', Vehicle::where('user_id', $user->id)->value('plate_number'));
 
         auth()->logout();
-        $this->post(route('driver.register'), $this->signUp(['email' => 'other.person@gmail.com', 'name' => 'Other Person', 'plate_number' => 'klm-4455']))
+        $this->post(route('driver.register'), $this->signUp(['email' => 'other.person@gmail.com', 'first_name' => 'Other', 'last_name' => 'Person', 'plate_number' => 'klm-4455']))
             ->assertSessionHasErrors('plate_number');
         $this->assertSame(1, Vehicle::count());
     }
@@ -277,7 +293,9 @@ class AuditValidationTest extends TestCase
     {
         $manager = $this->manager();
         $this->actingAs($manager);
-        $good = ['category' => 'Unauthorized parking', 'plate_number' => 'abc 1234', 'location' => 'Zone A lane', 'description' => 'A car is parked across two slots.'];
+        // A vehicle report needs a vehicle that is parked now, and the slot it is parked in.
+        $this->makeSession('PK-0001', now()->subHour())->update(['status' => 'active', 'exited_at' => null]);
+        $good = ['category' => 'Unauthorized parking', 'plate_number' => 'abc 1234', 'location' => 'A-01', 'description' => 'A car is parked across two slots.'];
 
         $this->post(route('manager.incidents.store'), ['description' => 'too short'] + $good)->assertSessionHasErrors('description');
         $this->post(route('manager.incidents.store'), ['description' => str_repeat('a', 501)] + $good)->assertSessionHasErrors('description');

@@ -54,6 +54,12 @@ class ParkingSlotController extends ManagerController
                 'zones' => ParkingSlot::query()->select('zone')->distinct()->orderBy('zone')->pluck('zone'),
                 'statuses' => ParkingSlot::statuses(),
                 'filters' => $filters,
+                'longParked' => \App\Models\ParkingSession::query()
+                    ->where('status', \App\Models\ParkingSession::STATUS_ACTIVE)
+                    ->where('entered_at', '<=', now()->subHours(\App\Support\Lot::longParkingHours()))
+                    ->whereIn('slot_id', $slots->pluck('id'))
+                    ->get()
+                    ->keyBy('slot_id'),
             ]),
         );
     }
@@ -82,12 +88,23 @@ class ParkingSlotController extends ManagerController
             'code' => ['required', 'string', 'max:10', 'regex:/^[A-Z]-\d{2}$/', 'unique:parking_slots,code'],
             'zone' => ['required', 'string', Rule::in($this->zoneOptions())],
             'type' => ['required', Rule::in([ParkingSlot::TYPE_STANDARD, ParkingSlot::TYPE_PWD])],
+            'vehicle_class' => ['nullable', Rule::in(array_keys(ParkingSlot::vehicleClasses()))],
             'notes' => ['nullable', 'string', 'max:1000'],
         ], $this->messages());
 
         $slot = DB::transaction(function () use ($validated, $request): ParkingSlot {
             $this->lockManagerSlotMutations();
             $this->assertZoneLimits($validated['zone']);
+
+            // A zone is for one kind of vehicle. A new slot cannot be the odd one out.
+            $zoneClass = ParkingSlot::query()->where('zone', $validated['zone'])->value('vehicle_class');
+            $validated['vehicle_class'] = $validated['vehicle_class'] ?? $zoneClass ?? ParkingSlot::CLASS_CAR;
+
+            if ($zoneClass !== null && $zoneClass !== $validated['vehicle_class']) {
+                throw ValidationException::withMessages([
+                    'vehicle_class' => "{$validated['zone']} is a ".strtolower(ParkingSlot::vehicleClasses()[$zoneClass]).'. Choose "'.ParkingSlot::vehicleClasses()[$zoneClass].'" for this slot, or use another zone.',
+                ]);
+            }
 
             $slot = ParkingSlot::create($validated + [
                 'status' => ParkingSlot::STATUS_AVAILABLE,
@@ -99,7 +116,7 @@ class ParkingSlotController extends ManagerController
                 $request,
                 $slot->code,
                 'manager',
-                ['slot' => $slot->only(['code', 'zone', 'type', 'status', 'notes'])],
+                ['slot' => $slot->only(['code', 'zone', 'type', 'vehicle_class', 'status', 'notes'])],
             );
 
             return $slot;
@@ -131,6 +148,7 @@ class ParkingSlotController extends ManagerController
         $validated = $request->validate([
             'zone' => ['required', 'string', Rule::in($this->zoneOptions($slot->zone))],
             'type' => ['required', Rule::in([ParkingSlot::TYPE_STANDARD, ParkingSlot::TYPE_PWD])],
+            'vehicle_class' => ['nullable', Rule::in(array_keys(ParkingSlot::vehicleClasses()))],
             'notes' => ['nullable', 'string', 'max:1000'],
         ], $this->messages());
 
@@ -143,7 +161,9 @@ class ParkingSlotController extends ManagerController
                 $this->assertZoneLimits($validated['zone'], $slot);
             }
 
-            $before = $slot->only(['code', 'zone', 'type', 'status', 'notes']);
+            $before = $slot->only(['code', 'zone', 'type', 'vehicle_class', 'status', 'notes']);
+            $validated['vehicle_class'] = $validated['vehicle_class'] ?? $slot->vehicle_class;
+            $this->applyZoneClass($slot, $validated['zone'], $validated['vehicle_class']);
             $slot->update($validated);
 
             ActivityLog::record(
@@ -285,6 +305,40 @@ class ParkingSlotController extends ManagerController
         }
     }
 
+    /**
+     * A zone is for one kind of vehicle. Giving a slot another class changes the whole zone, which is only allowed while
+     * no slot in it is in use or booked. A slot moved into a zone of the other class is refused.
+     *
+     * @throws ValidationException
+     */
+    private function applyZoneClass(ParkingSlot $slot, string $zone, string $class): void
+    {
+        $others = ParkingSlot::query()->where('zone', $zone)->where('id', '!=', $slot->id)->get();
+        $differs = $others->contains(fn (ParkingSlot $other) => $other->vehicle_class !== $class);
+
+        if (! $differs) {
+            return;
+        }
+
+        if ($zone !== $slot->zone) {
+            $zoneClass = $others->first()->vehicle_class;
+
+            throw ValidationException::withMessages([
+                'vehicle_class' => "{$zone} is a ".strtolower(ParkingSlot::vehicleClasses()[$zoneClass]).'. Choose "'.ParkingSlot::vehicleClasses()[$zoneClass].'" for this slot, or use another zone.',
+            ]);
+        }
+
+        $busy = $others->push($slot)->first(fn (ParkingSlot $s) => ! in_array($s->status, [ParkingSlot::STATUS_AVAILABLE, ParkingSlot::STATUS_OUT_OF_SERVICE], true) || $s->nextOpenBooking() !== null);
+
+        if ($busy) {
+            throw ValidationException::withMessages([
+                'vehicle_class' => "{$zone} cannot change its vehicle type while {$busy->code} is in use or booked. Wait until the zone is empty, or cancel the booking.",
+            ]);
+        }
+
+        ParkingSlot::query()->where('zone', $zone)->update(['vehicle_class' => $class]);
+    }
+
     private function lockManagerSlotMutations(): void
     {
         User::query()
@@ -325,6 +379,7 @@ class ParkingSlotController extends ManagerController
             'code.unique' => 'This slot code already exists.',
             'zone.required' => 'Choose a zone.',
             'zone.in' => 'Choose a zone from the list.',
+            'vehicle_class.in' => 'Choose a zone type from the list.',
             'type.required' => 'Choose a slot type.',
             'type.in' => 'Choose a slot type from the list.',
             'reason.required' => 'Choose a reason.',

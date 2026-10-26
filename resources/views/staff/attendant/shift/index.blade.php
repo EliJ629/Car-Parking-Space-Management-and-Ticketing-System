@@ -39,7 +39,7 @@
     <div class="ba-card" style="margin-bottom:20px;">
       <h2>Latest transactions</h2>
       <div style="overflow-x:auto;">
-        <table style="width:100%;border-collapse:collapse;font-size:14px;text-align:left;">
+        <table data-paginate="10" style="width:100%;border-collapse:collapse;font-size:14px;text-align:left;">
           <thead>
             <tr style="border-bottom:2px solid var(--line);color:var(--muted);font-size:12px;text-transform:uppercase;">
               <th style="padding:8px;">Receipt</th>
@@ -196,7 +196,6 @@
 @if(session('error_modal') && session('error_modal')['type'] === 'close_shift_note_required')
 <dialog class="badlg auto-open" id="close-note-required-dlg">
   <div class="in">
-    <button class="x" type="button" data-close aria-label="Close">&times;</button>
     <h2 style="color:var(--stop);">Note required for cash difference</h2>
     <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;padding:14px;font-size:14px;margin-bottom:16px;">
       <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span style="color:var(--muted);">Expected in drawer</span><b>{{ \App\Support\Lot::peso(session('error_modal')['expected']) }}</b></div>
@@ -218,7 +217,6 @@
 <dialog class="badlg" id="close-shift-dlg">
   <form class="in" method="POST" action="{{ route('attendant.shift.close') }}">
     @csrf
-    <button class="x" type="button" data-close aria-label="Close">&times;</button>
     <h2>Close shift</h2>
 
     <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;padding:14px;font-size:14px;margin-bottom:18px;">

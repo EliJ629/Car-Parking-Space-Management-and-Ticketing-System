@@ -84,8 +84,33 @@ class ParkingSession extends Model
         return $this->hasOne(ParkingReservation::class, 'session_id');
     }
 
+    public function exitAuthorizations(): HasMany
+    {
+        return $this->hasMany(ExitAuthorization::class, 'session_id')->orderBy('sequence');
+    }
+
+    /** The exit permission in force right now, or null. */
+    public function activeAuthorization(): HasOne
+    {
+        return $this->hasOne(ExitAuthorization::class, 'session_id')->where('status', ExitAuthorization::ACTIVE)->latest('sequence');
+    }
+
     public function incidents(): HasMany
     {
         return $this->hasMany(Incident::class, 'session_id');
+    }
+
+    /** Still parked and past the Manager's long-parking limit. The detection job and every slot board use this one rule. */
+    public function isLongParked(?int $hours = null): bool
+    {
+        return $this->status === self::STATUS_ACTIVE
+            && $this->entered_at !== null
+            && $this->entered_at->lte(now()->subHours($hours ?? \App\Support\Lot::longParkingHours()));
+    }
+
+    /** Whole minutes since the vehicle entered. */
+    public function parkedMinutes(): int
+    {
+        return $this->entered_at ? \App\Support\Lot::minutesBetween($this->entered_at) : 0;
     }
 }

@@ -44,7 +44,7 @@ class SessionController extends Controller
 
         return view('driver.app.locate', [
             'session' => $session,
-            'zones' => ParkingSlot::query()->orderBy('zone')->orderBy('code')->get()->groupBy('zone'),
+            'zones' => \App\Support\SlotLayout::decorate(ParkingSlot::query()->orderBy('zone')->orderBy('code')->get())->groupBy('zone'),
             'vehicle' => Vehicle::withTrashed()->where('user_id', $user->id)->where('plate_number', $session->plate_number)->first(),
         ]);
     }

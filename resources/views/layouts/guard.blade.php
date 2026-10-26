@@ -2,6 +2,7 @@
 
 @push('head')
 <link rel="stylesheet" href="/css/guard.css?v={{ filemtime(public_path('css/guard.css')) }}">
+<link rel="stylesheet" href="/css/pager.css?v={{ filemtime(public_path('css/pager.css')) }}">
 @endpush
 
 @section('body')
@@ -37,6 +38,7 @@
     <time class="g-clock" id="clock" datetime="{{ now()->toIso8601String() }}">{{ \App\Support\Lot::now()->format('D, M j, Y') }} <b>{{ \App\Support\Lot::now()->format('g:i A') }}</b></time>
     <span class="g-chip">{{ $me->name }} <small>Security guard</small></span>
     <button class="g-alertbtn" type="button" id="alert-btn" data-open="#alerts" aria-haspopup="dialog">Alerts <span class="g-badge" id="alert-count" @if ($alertCount < 1) hidden @endif>{{ $alertCount }}</span></button>
+    <button class="tt g-theme" id="theme" type="button" aria-label="Switch to dark mode" title="Switch to dark mode"><svg class="ico" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg></button>
     <button class="btn ghost sm" type="button" data-open="#logout-dlg">Log out</button>
   </div></header>
 
@@ -55,7 +57,6 @@
 {{-- A new alert arriving while the guard works opens this pop-up (filled by guard.js). --}}
 <dialog class="gdlg" id="live-dlg" aria-labelledby="live-t">
   <div class="in">
-    <button class="x" type="button" data-close aria-label="Close">X</button>
     <h2 id="live-t">New alert</h2>
     <p id="live-body"></p>
     <div class="actions"><a class="btn" id="live-open" href="#">Open</a><button class="btn ghost" type="button" data-close>Later</button></div>
@@ -71,7 +72,6 @@
 
 <dialog class="gdlg wide" id="alerts" aria-labelledby="alerts-t">
   <div class="in">
-    <button class="x" type="button" data-close aria-label="Close">X</button>
     <h2 id="alerts-t">Alerts</h2>
     <ul class="g-alerts" id="alert-list" data-keys="{{ $alertItems->pluck('key')->implode(',') }}">
       @forelse ($alertItems as $a)
@@ -105,5 +105,7 @@
 @endsection
 
 @push('scripts')
+<script src="{{ asset('js/plate.js') }}?v={{ filemtime(public_path('js/plate.js')) }}"></script>
 <script src="{{ asset('js/guard.js') }}?v={{ filemtime(public_path('js/guard.js')) }}"></script>
+<script src="{{ asset('js/table-pager.js') }}?v={{ filemtime(public_path('js/table-pager.js')) }}"></script>
 @endpush

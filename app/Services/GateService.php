@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\ActivityLog;
+use App\Models\ExitAuthorization;
 use App\Models\Incident;
 use App\Models\IncidentNote;
 use App\Models\ParkingReservation;
@@ -11,6 +12,8 @@ use App\Models\ParkingSlot;
 use App\Models\User;
 use App\Models\Vehicle;
 use App\Support\Lot;
+use App\Support\PlateNumber;
+use App\Support\TicketNumber;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -22,13 +25,19 @@ use Illuminate\Support\Facades\DB;
  */
 class GateService
 {
-    public function __construct(private NoticeService $notices, private FeeCalculator $fees) {}
+    public function __construct(private NoticeService $notices, private FeeCalculator $fees, private ExitAuthorizationService $authorizations) {}
 
     /** The three things the Guard ticks before approving. */
     public const CHECKS = ['plate', 'details', 'ticket'];
 
     public function windowEnd(ParkingSession $session): ?Carbon
     {
+        // The permission carries its own end time, fixed when the payment was taken from the Manager's exit window.
+        // A session paid before permissions were recorded has none, so its payment time and the current window decide.
+        if ($authorization = $this->authorizations->active($session)) {
+            return $authorization->expires_at->copy();
+        }
+
         $paidAt = $session->payment?->paid_at;
 
         return $paidAt ? $paidAt->copy()->addMinutes(Lot::exitWindowMinutes()) : null;
@@ -107,6 +116,9 @@ class GateService
                 'exit_approved_by' => $guard->id,
             ]);
 
+            // The permission is used up here, in the same transaction as the exit, so it can never be used twice.
+            $this->authorizations->markUsed($fresh, $guard);
+
             if ($fresh->slot_id) {
                 ParkingSlot::query()->whereKey($fresh->slot_id)
                     ->whereIn('status', [ParkingSlot::STATUS_PENDING_EXIT, ParkingSlot::STATUS_OCCUPIED])
@@ -166,20 +178,37 @@ class GateService
     {
         $count = 0;
 
+        // Paid sessions whose permission has run out, plus (for rows from before permissions were recorded)
+        // paid sessions with no permission whose payment is older than the window. Re-running the job is harmless:
+        // expireOne locks the session and does nothing unless it is still paid and past its end time.
+        $withPermission = ExitAuthorization::query()->active()->where('expires_at', '<', now())->pluck('session_id');
+
         ParkingSession::query()
             ->where('status', ParkingSession::STATUS_PAID)
-            ->whereHas('payment', fn ($query) => $query->where('paid_at', '<', now()->subMinutes(Lot::exitWindowMinutes())))
+            ->where(function ($query) use ($withPermission): void {
+                $query->whereIn('id', $withPermission)
+                    ->orWhere(function ($old): void {
+                        $old->whereDoesntHave('exitAuthorizations', fn ($a) => $a->where('status', ExitAuthorization::ACTIVE))
+                            ->whereHas('payment', fn ($payment) => $payment->where('paid_at', '<', now()->subMinutes(Lot::exitWindowMinutes())));
+                    });
+            })
             ->pluck('id')
             ->each(function (int $id) use (&$count): void {
-                if ($this->expireOne($id)) {
-                    $count++;
+                try {
+                    if ($this->expireOne($id)) {
+                        $count++;
+                    }
+                } catch (\Throwable $e) {
+                    // One failing session must not stop the others. The next run picks it up again.
+                    report($e);
                 }
             });
 
         return $count;
     }
 
-    private function expireOne(int $id): bool
+    /** Expire this session's exit permission if its time is up. Safe to call twice: the second call finds nothing to do. */
+    public function expireOne(int $id): bool
     {
         $expired = DB::transaction(function () use ($id) {
             $session = ParkingSession::query()->lockForUpdate()->with('payment')->find($id);
@@ -192,24 +221,33 @@ class GateService
                 return null;
             }
 
+            $authorization = $this->authorizations->expire($session);
             $session->update(['status' => ParkingSession::STATUS_ACTIVE, 'exit_window_expired_at' => now()]);
 
+            // Back in the lot: the slot is occupied again, never released. It is released only when the Guard confirms the exit.
             if ($session->slot_id) {
                 ParkingSlot::query()->whereKey($session->slot_id)
                     ->where('status', ParkingSlot::STATUS_PENDING_EXIT)
                     ->update(['status' => ParkingSlot::STATUS_OCCUPIED]);
             }
 
-            return $session;
+            return ['session' => $session, 'authorization' => $authorization];
         });
 
         if (! $expired) {
             return false;
         }
 
-        $this->notices->exitWindowEnded($expired);
+        ['session' => $expired, 'authorization' => $authorization] = $expired;
+
+        if ($authorization) {
+            $this->authorizations->notifyExpired($authorization);
+        }
+
         $this->notices->staffExitWindowEnded($expired);
-        ActivityLog::record('exit_window_ended', null, null, $expired->ticket_number, 'system', ['plate' => $expired->plate_number]);
+        ActivityLog::record('exit_window_ended', null, null, $expired->ticket_number, 'system', [
+            'plate' => $expired->plate_number, 'authorization' => $authorization?->code,
+        ]);
 
         return true;
     }
@@ -217,11 +255,7 @@ class GateService
     /** A booked reservation for today still holds this slot, so it goes back to Reserved, not Available. */
     private function heldToday(int $slotId): bool
     {
-        return ParkingReservation::query()
-            ->where('slot_id', $slotId)
-            ->where('status', ParkingReservation::STATUS_BOOKED)
-            ->whereBetween('scheduled_at', [Lot::dayStart(), Lot::dayEnd()])
-            ->exists();
+        return ParkingReservation::slotHeldNow($slotId);
     }
 
     /** Look up a session by ticket number or plate. A plate with an open session wins over older ones. */
@@ -235,11 +269,17 @@ class GateService
 
         $sessions = ParkingSession::query()->with(['payment', 'slot', 'exitApprover', 'incidents']);
 
-        if (preg_match('/^PK-?(\d+)$/i', $query, $m)) {
-            $ticket = 'PK-'.str_pad($m[1], 4, '0', STR_PAD_LEFT);
+        if (TicketNumber::looksLikeTicket($query)) {
+            foreach (TicketNumber::lookupCandidates($query) as $ticket) {
+                if ($found = (clone $sessions)->where('ticket_number', $ticket)->first()) {
+                    return $found;
+                }
+            }
 
-            return (clone $sessions)->where('ticket_number', $ticket)->first()
-                ?? (clone $sessions)->where('ticket_number', strtoupper($query))->first();
+            // "PK 1234" is also a valid plate (two letters and four digits). When no ticket has that number, it may be a plate.
+            if (! PlateNumber::isValid($query)) {
+                return null;
+            }
         }
 
         $plate = Vehicle::normalizePlate($query);

@@ -50,8 +50,8 @@ class GoogleSignInTest extends TestCase
     private function details(array $override = []): array
     {
         return $override + [
-            'name' => 'Ana Reyes', 'phone' => '09171234567', 'plate_number' => 'QRS 7788',
-            'vehicle_type' => 'Car', 'make_model' => 'Toyota Vios', 'color' => 'Black',
+            'first_name' => 'Ana', 'last_name' => 'Reyes', 'phone' => '09171234567', 'plate_number' => 'QRS 7788',
+            'vehicle_type' => 'Car', 'make_model' => 'Toyota Vios', 'color' => 'Black', 'details_confirmed' => '1',
         ];
     }
 
@@ -226,7 +226,8 @@ class GoogleSignInTest extends TestCase
         $this->comeBack($this->begin())->assertRedirect(route('driver.google.complete'));
         $this->get(route('driver.google.complete'))->assertOk()
             ->assertSee('value="ana.reyes@gmail.com" readonly', false)
-            ->assertSee('value="Ana Reyes"', false)
+            ->assertSee('value="Ana"', false)
+            ->assertSee('value="Reyes"', false)
             ->assertSee('Signed in with Google');
 
         $this->post(route('driver.google.store'), $this->details())->assertRedirect(route('driver.home'));
@@ -244,13 +245,13 @@ class GoogleSignInTest extends TestCase
         $this->fakeGoogle();
         $this->comeBack($this->begin());
 
-        $other = User::factory()->create(['role' => User::ROLE_DRIVER]);
+        $other = User::factory()->create(['role' => User::ROLE_DRIVER, 'name' => 'Juan Dela Cruz']);
         $other->vehicles()->create(['plate_number' => 'QRS7788', 'vehicle_type' => 'Car', 'color' => 'Black', 'make_model' => 'Toyota Vios', 'contact_number' => '09170000000']);
 
         $this->post(route('driver.google.store'), $this->details())->assertSessionHasErrors('plate_number');
         $this->post(route('driver.google.store'), $this->details(['plate_number' => 'TUV 1122', 'vehicle_type' => 'Truck']))->assertSessionHasErrors('vehicle_type');
         $this->post(route('driver.google.store'), $this->details(['plate_number' => 'TUV 1122', 'phone' => '123']))->assertSessionHasErrors('phone');
-        $this->post(route('driver.google.store'), $this->details(['plate_number' => 'TUV 1122', 'name' => $other->name]))->assertSessionHasErrors('name');
+        $this->post(route('driver.google.store'), $this->details(['plate_number' => 'TUV 1122', ] + \App\Support\Rules::splitName($other->name)))->assertSessionHasErrors('name');
 
         $this->assertDatabaseMissing('users', ['email' => 'ana.reyes@gmail.com']);
         $this->assertGuest();

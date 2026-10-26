@@ -287,6 +287,7 @@ class ManagerWorkspaceTest extends TestCase
                 'maximum_slots_per_zone' => 20,
                 'maximum_active_zones' => 26,
                 'exit_window_minutes' => 18,
+                'ban_incident_threshold' => 4,
                 'reservation_reminder_minutes' => 20,
                 'notify_reservation_confirmed' => '1',
                 'notify_reservation_expired' => '1',
@@ -299,6 +300,7 @@ class ManagerWorkspaceTest extends TestCase
             ->assertRedirect(route('manager.settings.index'));
 
         $this->assertSame(14, SystemSetting::value('long_parking_threshold_hours'));
+        $this->assertSame(4, SystemSetting::value('ban_incident_threshold'));
         $this->assertSame('Bayline Test Lot', SystemSetting::value('lot_name'));
         $this->assertDatabaseHas('activity_logs', ['action' => 'settings_updated']);
     }
@@ -375,11 +377,17 @@ class ManagerWorkspaceTest extends TestCase
     public function test_manager_can_report_and_progress_incidents_and_view_activity_details(): void
     {
         $manager = $this->manager();
+        $slot = ParkingSlot::firstOrCreate(['code' => 'A-01'], ['zone' => 'Zone A', 'type' => ParkingSlot::TYPE_STANDARD, 'status' => ParkingSlot::STATUS_AVAILABLE]);
+        ParkingSession::create([
+            'ticket_number' => 'PK-0001', 'slot_id' => $slot->id, 'slot_code' => 'A-01', 'plate_number' => 'ABC1234',
+            'vehicle_color' => 'White', 'vehicle_type' => 'Car', 'entered_at' => now()->subHour(), 'status' => 'active',
+        ]);
         $this->actingAs($manager)
             ->post(route('manager.incidents.store'), [
                 'category' => 'Vehicle damage',
                 'plate_number' => 'ABC1234',
-                'location' => 'Zone A',
+                'location' => 'A-01',
+                'responsible_unknown' => '1',
                 'description' => 'Scratched panel by A-01',
             ])
             ->assertRedirect(route('manager.incidents.index'));

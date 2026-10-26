@@ -9,12 +9,18 @@ use App\Models\ParkingSession;
 use App\Models\ParkingSlot;
 use App\Models\Vehicle;
 use App\Services\NoticeService;
+use App\Services\BanService;
+use App\Services\VehicleBanned;
 use App\Support\Lot;
+use App\Support\PlateNumber;
 use App\Support\Rules;
+use App\Support\TicketNumber;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class EntryController extends Controller
@@ -76,10 +82,18 @@ class EntryController extends Controller
         $rawPlate = trim((string) $request->input('plate', ''));
         $normPlate = Vehicle::normalizePlate($rawPlate);
 
-        if (! preg_match(Vehicle::PLATE_PATTERN, $normPlate)) {
+        if (! PlateNumber::isValid($normPlate)) {
             return response()->json([
                 'ok' => false,
-                'error' => 'Enter a valid Philippine plate (e.g. ABC 1234, AB 12345, or 1).',
+                'error' => PlateNumber::problem($rawPlate),
+            ], 422);
+        }
+
+        if (app(BanService::class)->isBanned($normPlate)) {
+            return response()->json([
+                'ok' => false,
+                'status' => 'banned',
+                'error' => VehicleBanned::MESSAGE,
             ], 422);
         }
 
@@ -153,10 +167,15 @@ class EntryController extends Controller
         ]);
 
         $validated = $request->validate([
-            'plate' => Rules::plate(true),
+            'plate' => Rules::parkablePlate(true),
             'phone' => Rules::mobile(false),
             'color' => ['required', 'string'],
-            'type' => ['required', 'string'],
+            'type' => ['required', 'string', Rule::in(Vehicle::TYPES), function (string $attribute, mixed $value, \Closure $fail) use ($request): void {
+                // The plate must be a shape this kind of vehicle may carry (a car plate on a motorcycle is a mistake at the booth).
+                if (! \App\Support\PlateNumber::isValid((string) $request->input('plate'), (string) $value)) {
+                    $fail(\App\Support\PlateNumber::problem((string) $request->input('plate'), (string) $value) ?? 'The plate does not match the vehicle type.');
+                }
+            }],
             'slot_code' => ['required', 'string'],
             'driver_id' => ['nullable', 'exists:users,id'],
         ]);
@@ -183,8 +202,13 @@ class EntryController extends Controller
                 ->lockForUpdate()
                 ->first();
 
-            if (! $slot || $slot->status !== ParkingSlot::STATUS_AVAILABLE) {
-                return false; // Slot taken (BA-22)
+            if (! $slot || $slot->status !== ParkingSlot::STATUS_AVAILABLE || \App\Models\ParkingReservation::slotHeldNow($slot->id, true)) {
+                return false; // Slot taken (BA-22), or a booking is about to arrive
+            }
+
+            // Motorcycles park in motorcycle zones, every other vehicle in car zones.
+            if ($zoneProblem = $slot->wrongZoneMessage($validated['type'])) {
+                throw ValidationException::withMessages(['slot_code' => $zoneProblem]);
             }
 
             $ticketNumber = $this->generateNextTicketNumber();
@@ -490,6 +514,16 @@ class EntryController extends Controller
             ]);
         }
 
+        // A vehicle banned after it reserved cannot check in. The reservation is left as it is.
+        if (app(BanService::class)->isBanned($enteredPlate)) {
+            return back()->with('modal', [
+                'title' => 'This vehicle cannot park',
+                'body' => VehicleBanned::MESSAGE,
+                'primary' => ['label' => 'OK', 'close' => true],
+                'tone' => 'stop',
+            ]);
+        }
+
         // Process check-in inside transaction
         $session = DB::transaction(function () use ($rsv, $attendant, $notices, $request) {
             $slot = ParkingSlot::query()->whereKey($rsv->slot_id)->lockForUpdate()->first();
@@ -534,25 +568,6 @@ class EntryController extends Controller
 
     private function generateNextTicketNumber(): string
     {
-        $all = ParkingSession::query()
-            ->where('ticket_number', 'like', 'PK-%')
-            ->pluck('ticket_number');
-
-        $max = 0;
-        foreach ($all as $tk) {
-            if (preg_match('/^PK-(\d+)$/', $tk, $m)) {
-                $num = (int) $m[1];
-                if ($num > $max) {
-                    $max = $num;
-                }
-            }
-        }
-
-        $next = $max + 1;
-        while (ParkingSession::where('ticket_number', 'PK-'.str_pad((string) $next, 4, '0', STR_PAD_LEFT))->exists()) {
-            $next++;
-        }
-
-        return 'PK-'.str_pad((string) $next, 4, '0', STR_PAD_LEFT);
+        return TicketNumber::next();
     }
 }

@@ -29,9 +29,9 @@ class SignUpVerificationTest extends TestCase
     private function form(array $override = []): array
     {
         return $override + [
-            'name' => 'Pedro Cruz', 'email' => 'pedro.cruz@gmail.com', 'phone' => '09171234567', 'plate_number' => 'KLM 4455',
+            'first_name' => 'Pedro', 'last_name' => 'Cruz', 'email' => 'pedro.cruz@gmail.com', 'phone' => '09171234567', 'plate_number' => 'KLM 4455',
             'vehicle_type' => 'Car', 'make_model' => 'Toyota Vios', 'color' => 'Black',
-            'password' => 'Driver123x!', 'password_confirmation' => 'Driver123x!',
+            'password' => 'Driver123x!', 'password_confirmation' => 'Driver123x!', 'details_confirmed' => '1',
         ];
     }
 
@@ -120,7 +120,7 @@ class SignUpVerificationTest extends TestCase
         $first = $this->signUpLink('pedro.cruz@gmail.com');
 
         Mail::fake();
-        $this->post(route('driver.register'), $this->form(['name' => 'Pedro Santos']))->assertRedirect(route('driver.register.sent'));
+        $this->post(route('driver.register'), $this->form(['first_name' => 'Pedro', 'last_name' => 'Santos']))->assertRedirect(route('driver.register.sent'));
         $this->assertSame(1, PendingRegistration::count());
 
         $this->get($first);
@@ -191,7 +191,7 @@ class SignUpVerificationTest extends TestCase
 
         // 2. The plate is taken by someone else first.
         Mail::fake();
-        $this->post(route('driver.register'), $this->form(['email' => 'second.person@gmail.com', 'name' => 'Second Person', 'plate_number' => 'ZZZ 9999']))
+        $this->post(route('driver.register'), $this->form(['email' => 'second.person@gmail.com', 'first_name' => 'Second', 'last_name' => 'Person', 'plate_number' => 'ZZZ 9999']))
             ->assertRedirect(route('driver.register.sent'));
         $link = $this->signUpLink('second.person@gmail.com');
         $other = User::factory()->create(['role' => User::ROLE_DRIVER]);
@@ -242,13 +242,13 @@ class SignUpVerificationTest extends TestCase
         $this->flushSession();
 
         // Gmail ignores dots and capital letters, so these are the same mailbox.
-        $this->post(route('driver.register'), $this->form(['email' => 'Pedro.Cruz@gmail.com', 'name' => 'Other One', 'plate_number' => 'ABC 1234']))->assertSessionHasErrors('email');
-        $this->post(route('driver.register'), $this->form(['email' => 'pedrocruz@gmail.com', 'name' => 'Other One', 'plate_number' => 'ABC 1234']))->assertSessionHasErrors('email');
-        $this->post(route('driver.register'), $this->form(['email' => 'someone.else@gmail.com', 'name' => '  pedro   CRUZ ', 'plate_number' => 'ABC 1234']))->assertSessionHasErrors('name');
-        $this->post(route('driver.register'), $this->form(['email' => 'someone.else@gmail.com', 'name' => 'Other One', 'plate_number' => 'klm-4455']))->assertSessionHasErrors('plate_number');
+        $this->post(route('driver.register'), $this->form(['email' => 'Pedro.Cruz@gmail.com', 'first_name' => 'Other', 'last_name' => 'One', 'plate_number' => 'ABC 1234']))->assertSessionHasErrors('email');
+        $this->post(route('driver.register'), $this->form(['email' => 'pedrocruz@gmail.com', 'first_name' => 'Other', 'last_name' => 'One', 'plate_number' => 'ABC 1234']))->assertSessionHasErrors('email');
+        $this->post(route('driver.register'), $this->form(['email' => 'someone.else@gmail.com', 'first_name' => '  pedro ', 'last_name' => ' CRUZ ', 'plate_number' => 'ABC 1234']))->assertSessionHasErrors('name');
+        $this->post(route('driver.register'), $this->form(['email' => 'someone.else@gmail.com', 'first_name' => 'Other', 'last_name' => 'One', 'plate_number' => 'klm-4455']))->assertSessionHasErrors('plate_number');
 
         $this->assertSame(1, User::where('role', 'driver')->count());
-        $this->post(route('driver.register'), $this->form(['email' => 'someone.else@gmail.com', 'name' => 'Other One', 'plate_number' => 'ABC 1234']))->assertSessionHasNoErrors();
+        $this->post(route('driver.register'), $this->form(['email' => 'someone.else@gmail.com', 'first_name' => 'Other', 'last_name' => 'One', 'plate_number' => 'ABC 1234']))->assertSessionHasNoErrors();
         $this->confirmSignUp('someone.else@gmail.com');
         $this->assertSame(2, User::where('role', 'driver')->count());
     }

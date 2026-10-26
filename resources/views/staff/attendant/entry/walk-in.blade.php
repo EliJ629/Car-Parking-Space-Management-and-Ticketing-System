@@ -43,10 +43,10 @@
         
         <div class="ba-form-group">
           <label class="ba-label" for="plate-input">Plate number</label>
-          <input class="ba-input" id="plate-input" name="plate" type="text"
-                 placeholder="e.g. ABC 1234, AB 12345, or 1" style="font-size:24px;font-weight:800;letter-spacing:1px;text-transform:uppercase;"
-                 autocomplete="off" autofocus oninput="this.value = this.value.toUpperCase().replace(/[^A-Z0-9\s-]/g, '')">
-          <p style="font-size:12px;color:var(--muted);margin-top:4px;">Philippine standard (ABC 1234, AB 12345), legacy, vintage, or protocol plates (e.g. 1 for President).</p>
+          <input class="ba-input" id="plate-input" name="plate" type="text" data-plate
+                 placeholder="e.g. ABC 1234, A 123 BC, or 1" style="font-size:24px;font-weight:800;letter-spacing:1px;text-transform:uppercase;"
+                 autocomplete="off" autofocus>
+          <p style="font-size:12px;color:var(--muted);margin-top:4px;">Standard, motorcycle, legacy, vintage, temporary, diplomatic, or government plates (1 to 17).</p>
           <div class="ba-err-msg" id="plate-err" hidden></div>
         </div>
 
@@ -192,12 +192,12 @@
           <div class="ba-lot-map">
             @foreach ($slots->groupBy('zone') as $zoneName => $zoneSlots)
               <div class="ba-zone">
-                <div class="ba-zone-title">{{ $zoneName }}</div>
+                <div class="ba-zone-title">{{ $zoneName }} <small style="font-weight:600;color:var(--muted)">{{ ($zoneSlots->first()?->vehicle_class ?? 'car') === 'motorcycle' ? 'Motorcycles only' : 'Cars, SUVs, vans, pickups, tricycles' }}</small></div>
                 <div class="ba-slot-grid" style="grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px;">
                   @foreach ($zoneSlots as $s)
                     @php $isAvail = ($s->status === 'available'); @endphp
                     <div class="ba-slot {{ $s->status }} @if(!$isAvail) dimmed @endif"
-                         data-slot="{{ $s->code }}" data-zone="{{ $s->zone }}" data-type="{{ $s->type }}"
+                         data-slot="{{ $s->code }}" data-zone="{{ $s->zone }}" data-type="{{ $s->type }}" data-class="{{ $s->vehicle_class ?: 'car' }}"
                          @if($isAvail) onclick="selectSlot(this)" @endif>
                        @if($s->type === 'PWD')<span class="pwd-tag">PWD</span>@endif
                       <b>{{ $s->code }}</b>
@@ -294,7 +294,6 @@
   <!-- POP-UP BA-17: Confirm Slot Modal -->
   <dialog class="badlg" id="confirm-slot-dlg">
     <div class="in">
-      <button class="x" type="button" data-close aria-label="Close">&times;</button>
       <h2>Assign slot <span id="dlg-slot-code"></span>?</h2>
       
       <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;padding:16px;margin-bottom:16px;font-size:14px;">
@@ -340,7 +339,6 @@
 <!-- POP-UP BA-21: Active Session Already Exists -->
 <dialog class="badlg {{ (session('error_modal') && session('error_modal')['type'] === 'active_session_exists') ? 'auto-open' : '' }}" id="active-session-dlg">
   <div class="in">
-    <button class="x" type="button" data-close aria-label="Close">&times;</button>
     <h2 style="color:var(--stop);">This plate already has an active session</h2>
     
     <div style="background:#F8FAFC;border:1.5px dashed #94A3B8;border-radius:8px;padding:18px;margin-bottom:16px;font-family:'Courier New',Courier,monospace;">
@@ -366,7 +364,6 @@
 @if(session('error_modal') && session('error_modal')['type'] === 'slot_just_taken')
 <dialog class="badlg auto-open" id="slot-taken-dlg">
   <div class="in">
-    <button class="x" type="button" data-close aria-label="Close">&times;</button>
     <h2 style="color:var(--stop);">{{ session('error_modal')['slot'] }} was just taken</h2>
     <p>Another entry started a session on {{ session('error_modal')['slot'] }} while you were choosing. The slot is now Occupied.<br><br>Your vehicle details are kept. Pick another Available slot.</p>
     <div class="actions">
@@ -399,7 +396,7 @@ async function doLookup() {
   const plate = plateInput.value.trim();
   plateErr.hidden = true;
   if (!plate) {
-    plateErr.textContent = 'Enter a valid Philippine plate (e.g. ABC 1234, AB 12345, or 1).';
+    plateErr.textContent = 'Enter a valid Philippine plate (e.g. ABC 1234, A 123 BC, or 1).';
     plateErr.hidden = false;
     return;
   }
@@ -551,6 +548,25 @@ function goToSlot() {
   // Synchronize and apply PWD highlight (do NOT auto-select; attendant picks the slot)
   const isPwd = document.getElementById('det-pwd').checked;
   applyPwdFilter(isPwd);
+  applyClassFilter();
+}
+
+// Motorcycles park in motorcycle zones. Every other vehicle (cars, SUVs, vans, pickups, tricycles) parks in car zones.
+function applyClassFilter() {
+  const cls = vehicleState.type === 'Motorcycle' ? 'motorcycle' : 'car';
+  document.querySelectorAll('.ba-slot').forEach(s => {
+    const wrong = (s.dataset.class || 'car') !== cls;
+    s.dataset.blocked = wrong ? '1' : '0';
+    s.classList.toggle('dimmed', wrong || !s.classList.contains('available'));
+    s.title = wrong ? (cls === 'motorcycle' ? 'Car zone: not for motorcycles' : 'Motorcycle zone: motorcycles only') : '';
+    if (wrong && s.classList.contains('selected')) {
+      s.classList.remove('selected');
+      selectedSlot = null;
+      document.getElementById('hidden-slot-code').value = '';
+      document.getElementById('btn-confirm-slot').disabled = true;
+      document.getElementById('sum-slot').textContent = 'None picked';
+    }
+  });
 }
 
 function applyPwdFilter(isPwd) {
@@ -605,7 +621,7 @@ document.getElementById('btn-back-to-details').addEventListener('click', () => {
 
 // Slot click selection
 window.selectSlot = function(el) {
-  if (!el || !el.classList.contains('available')) return;
+  if (!el || !el.classList.contains('available') || el.dataset.blocked === '1') return;
   document.querySelectorAll('.ba-slot.selected').forEach(s => s.classList.remove('selected'));
   el.classList.add('selected');
 

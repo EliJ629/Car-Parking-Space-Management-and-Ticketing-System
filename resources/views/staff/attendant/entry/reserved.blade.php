@@ -180,7 +180,7 @@
 
         <div class="ba-form-group">
           <label class="ba-label" for="plate-seen-input">Plate seen on the vehicle</label>
-          <input class="ba-input" id="plate-seen-input" type="text" style="font-weight:800;letter-spacing:1px;text-transform:uppercase;">
+          <input class="ba-input" id="plate-seen-input" type="text" data-plate data-plate-optional autocomplete="off" style="font-weight:800;letter-spacing:1px;text-transform:uppercase;">
           <div class="ba-err-msg" id="plate-mismatch-msg" hidden>Does not match reservation plate</div>
         </div>
 
@@ -200,7 +200,6 @@
   <!-- POP-UP BA-32: Confirm Check-in Modal -->
   <dialog class="badlg" id="confirm-checkin-dlg">
     <div class="in">
-      <button class="x" type="button" data-close aria-label="Close">&times;</button>
       <h2>Confirm check-in</h2>
 
       <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;padding:16px;margin-bottom:16px;font-size:14px;">
@@ -240,7 +239,6 @@
 <!-- POP-UP BA-28: Plate Does Not Match -->
 <dialog class="badlg {{ (session('error_modal') && session('error_modal')['type'] === 'plate_mismatch') ? 'auto-open' : '' }}" id="plate-mismatch-dlg">
   <div class="in">
-    <button class="x" type="button" data-close aria-label="Close">&times;</button>
     <h2 style="color:var(--stop);">Plate does not match</h2>
 
     <div style="background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;padding:16px;margin-bottom:16px;font-size:14px;">
@@ -266,7 +264,6 @@
 <!-- POP-UP BA-29: Reservation Expired -->
 <dialog class="badlg" id="rsv-expired-dlg">
   <div class="in">
-    <button class="x" type="button" data-close aria-label="Close">&times;</button>
     <h2 style="color:var(--stop);">Reservation expired</h2>
 
     <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;padding:16px;margin-bottom:16px;font-size:14px;">
@@ -288,7 +285,6 @@
 <!-- POP-UP BA-30: Reservation Invalid or Canceled -->
 <dialog class="badlg" id="rsv-canceled-dlg">
   <div class="in">
-    <button class="x" type="button" data-close aria-label="Close">&times;</button>
     <h2 style="color:var(--stop);">Reservation not valid</h2>
 
     <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;padding:16px;margin-bottom:16px;font-size:14px;">
@@ -309,7 +305,6 @@
 <!-- Not approved yet, or turned down -->
 <dialog class="badlg" id="rsv-appr-dlg">
   <div class="in">
-    <button class="x" type="button" data-close aria-label="Close">&times;</button>
     <h2 id="appr-title">Reservation is not approved yet</h2>
     <p id="appr-msg"></p>
     <div class="actions">
@@ -322,7 +317,6 @@
 <!-- POP-UP: Reservation Already Used, Exited, or Pending Exit -->
 <dialog class="badlg" id="rsv-used-dlg">
   <div class="in">
-    <button class="x" type="button" data-close aria-label="Close">&times;</button>
     <h2 style="color:var(--stop);" id="used-dlg-title">Reservation already used</h2>
 
     <div style="background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;padding:16px;margin-bottom:16px;font-size:14px;" id="used-dlg-box">
@@ -347,7 +341,6 @@
 <!-- POP-UP: Reservation Not Bookable Server Redirect -->
 <dialog class="badlg {{ (session('error_modal') && session('error_modal')['type'] === 'reservation_not_bookable') ? 'auto-open' : '' }}" id="rsv-not-bookable-dlg">
   <div class="in">
-    <button class="x" type="button" data-close aria-label="Close">&times;</button>
     <h2 style="color:var(--stop);">Cannot check in reservation</h2>
 
     <div style="background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;padding:16px;margin-bottom:16px;font-size:14px;">
@@ -374,7 +367,6 @@
 <!-- POP-UP BA-31: Too Early to Check In -->
 <dialog class="badlg" id="rsv-early-dlg">
   <div class="in">
-    <button class="x" type="button" data-close aria-label="Close">&times;</button>
     <h2>Too early to check in</h2>
 
     <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;padding:16px;margin-bottom:16px;font-size:14px;">
@@ -710,7 +702,8 @@ function showVerifyScreen(r) {
 // Plate seen change
 document.getElementById('plate-seen-input').addEventListener('input', (e) => {
   document.getElementById('hidden-rsv-plate').value = e.target.value;
-  const match = e.target.value.replace(/[\s-]+/g, '').toUpperCase() === activeReservation.plate_raw.replace(/[\s-]+/g, '').toUpperCase();
+  const key = (v) => window.BaylinePlate ? window.BaylinePlate.normalize(v) : String(v || '').replace(/[\s-]+/g, '').toUpperCase();
+  const match = key(e.target.value) === key(activeReservation.plate_raw);
   document.getElementById('plate-mismatch-msg').hidden = match;
   document.getElementById('btn-open-confirm-checkin').disabled = !match;
 });

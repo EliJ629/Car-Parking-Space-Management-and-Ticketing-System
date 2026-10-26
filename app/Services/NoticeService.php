@@ -9,6 +9,7 @@ use App\Models\ParkingReservation;
 use App\Models\ParkingSession;
 use App\Models\User;
 use App\Models\Vehicle;
+use App\Models\VehiclePreviousPlate;
 use App\Support\Lot;
 use Illuminate\Database\Eloquent\Model;
 
@@ -21,6 +22,8 @@ use Illuminate\Database\Eloquent\Model;
  */
 class NoticeService
 {
+    public function __construct(private TextBee $textBee) {}
+
     /** Which Settings switch controls which kind of notice. Kinds not listed are always created. */
     private const SWITCHES = [
         'reservation_confirmed' => 'notify_reservation_confirmed',
@@ -40,7 +43,14 @@ class NoticeService
             return null;
         }
 
-        $vehicle = Vehicle::query()->where('plate_number', Vehicle::normalizePlate($plate))->with('user')->first();
+        $key = Vehicle::normalizePlate($plate);
+        $vehicle = Vehicle::query()->where('plate_number', $key)->with('user')->first();
+
+        // A plate the vehicle carried before (a replaced temporary plate) still belongs to the same driver.
+        if (! $vehicle) {
+            $previous = VehiclePreviousPlate::query()->where('plate_number', $key)->latest('id')->first();
+            $vehicle = $previous ? Vehicle::query()->with('user')->find($previous->vehicle_id) : null;
+        }
 
         return $vehicle?->user?->isDriver() ? $vehicle->user : null;
     }
@@ -129,12 +139,20 @@ class NoticeService
             $s, [], "balance-{$s->id}-".now()->format('YmdHi'));
     }
 
-    public function exitWindowEnded(ParkingSession $s): ?Notice
+    /**
+     * The exit permission ended. A registered driver gets an in-app notice, a walk-in gets a text message.
+     * One delivery per authorization: the group key makes a repeat harmless.
+     *
+     * @return array{ok:bool,channel:?string,result:string,at:?\Illuminate\Support\Carbon}
+     */
+    public function exitWindowEnded(ParkingSession $s, ?\App\Models\ExitAuthorization $authorization = null): array
     {
-        return $this->toDriver($this->driverForSession($s), 'N-08', 'exit_window_ended', 'Exit window ended',
-            'The '.Lot::exitWindowMinutes()." minute exit window for ticket {$s->ticket_number} has ended. "
-            .'The session is open again. See the booth attendant for the updated amount.',
-            $s);
+        $minutes = $authorization ? max(1, (int) round($authorization->issued_at->diffInMinutes($authorization->expires_at))) : Lot::exitWindowMinutes();
+
+        return $this->deliverToVehicle($s->plate_number, 'N-08', 'exit_window_ended', 'Exit window ended',
+            "The {$minutes} minute exit window for ticket {$s->ticket_number} has ended. "
+            .'Your exit permission '.($authorization ? "{$authorization->code} " : '').'is no longer valid. The session is open again. See the booth attendant for the updated amount, then pay to get a new permission.',
+            $s, $authorization ? "exit-expired-{$authorization->id}" : "exit-expired-{$s->id}-".now()->format('YmdHi'), $s);
     }
 
     public function parkingCompleted(ParkingSession $s): ?Notice
@@ -152,20 +170,71 @@ class NoticeService
             $s, ['incident' => $incident->code, 'automatic' => true], "long-parking-{$s->id}");
     }
 
-    public function longParkedReported(ParkingSession $s, Incident $incident): ?Notice
-    {
-        return $this->toDriver($this->driverForSession($s), 'N-11', 'long_parking_report', 'Long parking notice',
-            'A security guard reported your vehicle '.Lot::plate($s->plate_number)." as long-parked in slot {$this->slotCode($s)}. "
-            .'Please collect it or contact the booth.',
-            $s, ['incident' => $incident->code, 'automatic' => false], "long-parking-{$s->id}");
-    }
-
     public function incidentAboutVehicle(User $driver, Incident $incident): ?Notice
     {
         return $this->toDriver($driver, 'N-12', 'incident_report', 'Security report about your vehicle',
             "Security report {$incident->code} mentions your vehicle ".Lot::plate($incident->plate_number).': '
             .strtolower(Incident::guardLabel($incident->category)).'. Please contact the booth.',
             $incident, ['incident' => $incident->code]);
+    }
+
+    /**
+     * Tell the owner of a vehicle. A driver account gets an in-app notice. A walk-in with a mobile number on a
+     * parking session gets a text through TextBee. Nobody else is contacted.
+     *
+     * "ok" means the notice was created in the app, or TextBee accepted the text. A text accepted by TextBee has not
+     * necessarily reached the phone, and the result says so; this method never reports a text as delivered.
+     *
+     * @return array{ok:bool,channel:?string,result:string,at:?\Illuminate\Support\Carbon}
+     */
+    public function deliverToVehicle(?string $plate, string $code, string $kind, string $title, string $body, ?Model $subject = null, ?string $groupKey = null, ?ParkingSession $session = null): array
+    {
+        $session ??= $plate ? $this->latestSessionFor($plate) : null;
+        $driver = $session ? $this->driverForSession($session) : $this->driverForPlate($plate);
+
+        if ($driver) {
+            $already = $groupKey && Notice::query()->where('user_id', $driver->id)->where('group_key', $groupKey)->first();
+
+            if ($already) {
+                return ['ok' => true, 'channel' => 'app', 'result' => 'The driver already has this notice in the app.', 'at' => $already->created_at];
+            }
+
+            $notice = $this->toDriver($driver, $code, $kind, $title, $body, $subject, [], $groupKey);
+
+            return $notice
+                ? ['ok' => true, 'channel' => 'app', 'result' => 'Sent to the driver in the app.', 'at' => $notice->created_at]
+                : ['ok' => false, 'channel' => 'app', 'result' => 'This kind of notice is switched off in Settings, so nothing was sent.', 'at' => null];
+        }
+
+        if (! $this->enabled($kind)) {
+            return ['ok' => false, 'channel' => 'sms', 'result' => 'This kind of notice is switched off in Settings, so no text was sent.', 'at' => null];
+        }
+
+        $phone = $session?->driver_phone;
+
+        if (! $phone) {
+            return ['ok' => false, 'channel' => null, 'result' => 'No driver account and no mobile number on record, so nobody could be notified.', 'at' => null];
+        }
+
+        try {
+            $batch = $this->textBee->send($phone, mb_substr($title.'. '.$body, 0, 300));
+        } catch (TextBeeFailed $e) {
+            return ['ok' => false, 'channel' => 'sms', 'result' => 'The text was not sent. '.$e->getMessage(), 'at' => null];
+        }
+
+        return [
+            'ok' => true, 'channel' => 'sms', 'at' => now(),
+            'result' => 'Text sent to TextBee'.($batch !== '' ? " (batch {$batch})" : '').'. TextBee has not confirmed that it reached the phone.',
+        ];
+    }
+
+    /** The most recent session of a plate, an open one first, for its mobile number. */
+    private function latestSessionFor(string $plate): ?ParkingSession
+    {
+        $key = Vehicle::normalizePlate($plate);
+
+        return ParkingSession::query()->where('plate_number', $key)->whereIn('status', ParkingSession::OPEN_STATUSES)->latest('entered_at')->first()
+            ?? ParkingSession::query()->where('plate_number', $key)->whereNotNull('driver_phone')->latest('entered_at')->first();
     }
 
     // ------------------------------------------------------------------

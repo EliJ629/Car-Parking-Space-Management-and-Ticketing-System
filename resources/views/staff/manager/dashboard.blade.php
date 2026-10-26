@@ -66,6 +66,8 @@
                    aria-label="{{ $slot->code }}, {{ $slot->statusLabel() }}, {{ $slot->type }}">
                   <strong>{{ $slot->code }}</strong>
                   <span>{{ $slot->statusLabel() }}</span>
+                  @if (in_array($slot->status, ['occupied', 'pending_exit'], true) && $slot->parked_label)<small class="manager-slot-extra" title="Parked for">{{ $slot->parked_label }}</small>
+                  @elseif ($slot->status === 'reserved' && $slot->booked_label)<small class="manager-slot-extra" title="Reserved for">{{ $slot->booked_label }}</small>@endif
                 </a>
               @endforeach
             @endforeach

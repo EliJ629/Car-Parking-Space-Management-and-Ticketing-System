@@ -94,44 +94,39 @@
   /* Reserve step 1: time chips follow the chosen day. */
   var when = document.querySelector('[data-reserve-when]');
   if (when) {
+    /* A reservation is for the next time the clock reads the chosen time, always within the next 24 hours.
+       The page only previews that; the server works out the date and checks the window again. */
     var holder = document.getElementById('timechips');
     var timeInput = document.getElementById('time-input');
-    var other = document.getElementById('other-date');
-    var today = when.getAttribute('data-today');
+    var preview = document.getElementById('when-preview');
     var nowTime = when.getAttribute('data-now');
     var pad = function (n) { return (n < 10 ? '0' : '') + n; };
     var label = function (h, m) { var ap = h >= 12 ? 'PM' : 'AM'; var hh = h % 12 || 12; return hh + ':' + pad(m) + ' ' + ap; };
-    var chosenDay = function () {
-      if (other && other.value) return other.value;
-      var r = when.querySelector('input[name=date]:checked');
-      return r ? r.value : today;
+    var dayOf = function (v) { return v >= nowTime ? 'Today, ' + when.getAttribute('data-today') : 'Tomorrow, ' + when.getAttribute('data-tomorrow'); };
+    var show = function () {
+      var v = timeInput.value;
+      if (!preview) return;
+      if (!/^\d{2}:\d{2}$/.test(v)) { preview.textContent = ''; return; }
+      var h = parseInt(v.slice(0, 2), 10), m = parseInt(v.slice(3), 10);
+      preview.innerHTML = 'Arrival: <b>' + dayOf(v) + ' at ' + label(h, m) + '</b>';
     };
     var build = function () {
-      var isToday = chosenDay() === today, h, m, step;
-      if (isToday) {
-        var parts = nowTime.split(':'); h = parseInt(parts[0], 10); m = Math.ceil((parseInt(parts[1], 10) + 1) / 15) * 15; step = 15;
-        if (m >= 60) { h += 1; m -= 60; }
-      } else { h = 7; m = 0; step = 30; }
-      var html = '';
-      for (var i = 0; i < 6 && h < 24; i++) {
-        var v = pad(h) + ':' + pad(m);
-        html += '<label class="cp"><input type="radio" name="timechip" value="' + v + '"' + (timeInput.value === v ? ' checked' : '') + '><span>' + label(h, m) + '</span></label>';
-        m += step; if (m >= 60) { h += 1; m -= 60; }
+      var parts = nowTime.split(':'), h = parseInt(parts[0], 10), m = Math.ceil((parseInt(parts[1], 10) + 1) / 15) * 15, html = '';
+      if (m >= 60) { h += 1; m -= 60; }
+      for (var i = 0; i < 6; i++) {
+        var hh = h % 24, v = pad(hh) + ':' + pad(m);
+        html += '<label class="cp"><input type="radio" name="timechip" value="' + v + '"' + (timeInput.value === v ? ' checked' : '') + '><span>' + label(hh, m) + (h >= 24 ? '<small style="display:block;font-size:10px">Tomorrow</small>' : '') + '</span></label>';
+        m += 15; if (m >= 60) { h += 1; m -= 60; }
       }
       holder.innerHTML = html;
     };
-    holder.addEventListener('change', function (e) { if (e.target.name === 'timechip') timeInput.value = e.target.value; });
+    holder.addEventListener('change', function (e) { if (e.target.name === 'timechip') { timeInput.value = e.target.value; show(); } });
     timeInput.addEventListener('input', function () {
       holder.querySelectorAll('input').forEach(function (r) { r.checked = r.value === timeInput.value; });
-    });
-    when.querySelectorAll('input[name=date]').forEach(function (r) {
-      r.addEventListener('change', function () { if (other) other.value = ''; build(); });
-    });
-    if (other) other.addEventListener('change', function () {
-      when.querySelectorAll('input[name=date]').forEach(function (r) { r.checked = false; });
-      build();
+      show();
     });
     build();
+    show();
   }
 
   /* PWD ID photo: preview the chosen file. A file over the size limit is refused here, with the reason
@@ -182,4 +177,68 @@
       });
     });
   }
+})();
+
+/* Reserve, step 2: the vehicle is chosen first. Only slots in a zone for that vehicle can be picked
+   (motorcycles in motorcycle zones, every other vehicle in car zones). The server checks the same rule. */
+(function () {
+  'use strict';
+  var form = document.querySelector('form[data-slot-pick]');
+  if (!form) return;
+  var vehicles = form.querySelectorAll('input[name=vehicle]');
+  var slots = form.querySelectorAll('label.sl.pick');
+  var count = form.querySelector('[data-free-count]');
+  var note = form.querySelector('[data-pick-note]');
+  var noteText = note ? note.innerHTML : '';
+  var NAMES = { car: 'Cars', motorcycle: 'Motorcycles' };
+
+  function chosen() {
+    var found = null;
+    vehicles.forEach(function (v) { if (v.checked) found = v; });
+    return found;
+  }
+
+  function apply() {
+    var v = chosen();
+    var cls = v ? v.getAttribute('data-class') : null;
+    var free = 0;
+    slots.forEach(function (label) {
+      var input = label.querySelector('input');
+      var text = label.querySelector('span');
+      var state = label.getAttribute('data-state');
+      var mine = label.getAttribute('data-class');
+      var ok = !!cls && mine === cls && state === 'available';
+      if (ok) free++;
+      input.disabled = !ok;
+      label.classList.toggle('off', !ok);
+      label.classList.toggle('dim', !ok);
+      if (!ok && input.checked) input.checked = false;
+      if (ok && label.getAttribute('data-want') === '1' && !form.querySelector('label.sl.pick input:checked')) input.checked = true;
+      if (text) {
+        var orig = text.getAttribute('data-orig') || '';
+        text.textContent = (state === 'available' && cls && mine !== cls) ? (NAMES[mine] + ' only') : orig;
+      }
+    });
+    if (count) count.textContent = cls ? '(' + free + ' free for this vehicle)' : '(' + count.getAttribute('data-total') + ' free at this time)';
+    if (note) {
+      note.innerHTML = cls
+        ? 'Showing the slots for your ' + v.getAttribute('data-type').toLowerCase() + ' (' + (NAMES[cls] || '').toLowerCase() + ' zones). Slots in the other zones are dimmed. A slot marked <b>PWD</b> needs a photo of your PWD ID. It is not reserved until the booth attendant approves it, and shows as awaiting approval until then.'
+        : noteText;
+    }
+    form.classList.toggle('need-vehicle', !cls);
+  }
+
+  vehicles.forEach(function (v) { v.addEventListener('change', apply); });
+  form.addEventListener('submit', function (e) {
+    if (!chosen()) {
+      e.preventDefault();
+      var first = vehicles[0];
+      if (first) first.focus();
+      if (note) note.innerHTML = '<b style="color:var(--stop)">Choose your vehicle first.</b> The vehicle decides which zones you can use.';
+    } else if (!form.querySelector('label.sl.pick input:checked')) {
+      e.preventDefault();
+      if (note) note.innerHTML = '<b style="color:var(--stop)">Pick a free slot on the map.</b>';
+    }
+  });
+  apply();
 })();

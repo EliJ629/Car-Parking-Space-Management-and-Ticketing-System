@@ -32,7 +32,7 @@
   </div>
 </section>
 <section class="manager-panel manager-section-gap"><p class="eyebrow">Shift totals</p><h2>Sales by attendant</h2>
-  <div class="manager-table-wrap"><table class="manager-table"><thead><tr><th>Attendant</th><th>Paid sessions</th><th>Cash collected</th><th>Discounts</th><th>Penalties</th></tr></thead><tbody>
+  <div class="manager-table-wrap"><table class="manager-table" data-paginate="10"><thead><tr><th>Attendant</th><th>Paid sessions</th><th>Cash collected</th><th>Discounts</th><th>Penalties</th></tr></thead><tbody>
   @forelse ($attendants as $attendant)<tr><th scope="row">{{ $attendant['name'] }}</th><td>{{ $attendant['sessions'] }}</td><td>₱{{ number_format($attendant['cash'], 2) }}</td><td>₱{{ number_format($attendant['discounts'], 2) }}</td><td>₱{{ number_format($attendant['penalties'], 2) }}</td></tr>@empty<tr><td colspan="5" class="manager-table-empty">No paid sessions in the selected range.</td></tr>@endforelse
   </tbody></table></div>
 </section>

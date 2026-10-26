@@ -10,6 +10,7 @@ use App\Models\ParkingSlot;
 use App\Models\User;
 use App\Models\Vehicle;
 use App\Support\Lot;
+use App\Support\PlateNumber;
 use Database\Seeders\ManagerDefaultsSeeder;
 use Database\Seeders\ParkingSlotSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -384,24 +385,26 @@ class BoothAttendantTest extends TestCase
             'status' => ParkingSession::STATUS_ACTIVE,
         ]);
 
+        $manager->forceFill(['manager_pin_hash' => Hash::make('987654')])->save();
+
         // Wrong PIN attempt 1 (2 left)
         $wrong1 = $this->actingAs($attendant)->postJson(route('attendant.exit.verify-pin', $session), [
             'manager_id' => $manager->id,
-            'pin' => '00000',
+            'pin' => '000000',
         ]);
         $wrong1->assertJson(['ok' => false, 'attempts_left' => 2]);
 
         // Wrong PIN attempt 2 (1 left)
         $wrong2 = $this->actingAs($attendant)->postJson(route('attendant.exit.verify-pin', $session), [
             'manager_id' => $manager->id,
-            'pin' => '00000',
+            'pin' => '000000',
         ]);
         $wrong2->assertJson(['ok' => false, 'attempts_left' => 1]);
 
         // Wrong PIN attempt 3 (blocked)
         $wrong3 = $this->actingAs($attendant)->postJson(route('attendant.exit.verify-pin', $session), [
             'manager_id' => $manager->id,
-            'pin' => '00000',
+            'pin' => '000000',
         ]);
         $wrong3->assertJson(['ok' => false, 'blocked' => true, 'attempts_left' => 0]);
         $this->assertDatabaseHas('activity_logs', ['action' => 'manager_pin_failed']);
@@ -415,12 +418,12 @@ class BoothAttendantTest extends TestCase
             'status' => ParkingSession::STATUS_ACTIVE,
         ]);
 
-        // Correct demo PIN
-        $correctRes = $this->actingAs($attendant)->postJson(route('attendant.exit.verify-pin', $session2), [
-            'manager_id' => $manager->id,
-            'pin' => '12345',
-        ]);
-        $correctRes->assertJson(['ok' => true]);
+        // There is no demo or master PIN: the old shipped PINs and the account password are refused, and a manager
+        // who has not set a PIN cannot approve anything.
+        foreach (['741963', '123456'] as $demo) {
+            $this->actingAs($attendant)->postJson(route('attendant.exit.verify-pin', $session2), ['manager_id' => $manager->id, 'pin' => $demo])
+                ->assertJson(['ok' => false]);
+        }
 
         // Manager's configured 6-digit PIN
         $manager->forceFill(['manager_pin_hash' => Hash::make('987654')])->save();
@@ -510,21 +513,33 @@ class BoothAttendantTest extends TestCase
         $this->lot();
         $attendant = $this->attendant();
 
+        // Typed form => how it is shown. The same list drives PlateNumberTest.
         $validPlates = [
-            'ABC 1234' => 'ABC 1234',   // Current Standard Car (MVSP)
-            'AB 12345' => 'AB 12345',   // Current Standard Motorcycle (MVSP)
-            'ABC 123' => 'ABC 123',    // Legacy Car (1981-2014)
-            'AB 1234' => 'AB 1234',    // Legacy Motorcycle
-            '1234 AB' => '1234 AB',    // Regional Motorcycle
-            'A-123-BC' => 'A-123-BC',   // Vintage L-DDD-LL
-            '123-ABC' => '123 ABC',    // Vintage DDD-LLL
-            '1' => '1',          // Protocol: President of the Philippines
-            '7' => '7',          // Protocol: Senator
-            '16' => '16',         // Protocol: Regional Trial Court Judge
+            'ABC 1234' => 'ABC 1234',     // current standard four-wheel (LLL DDDD)
+            'asd1234' => 'ASD 1234',      // typed without a space, in lower case
+            'a123bc' => 'A 123 BC',       // current standard motorcycle (L DDD LL)
+            '123 abc' => '123 ABC',       // current standard motorcycle (DDD LLL)
+            'ABC 123' => 'ABC 123',       // legacy four-wheel (LLL DDD)
+            'AB 1234' => 'AB 1234',       // legacy motorcycle or tricycle (LL DDDD)
+            '1234 AB' => '1234 AB',       // legacy motorcycle or tricycle (DDDD LL)
+            'A-1234-BC' => 'A 1234 BC',   // vintage (L DDDD LL)
+            '123-ABC' => '123 ABC',       // vintage (DDD LLL)
+            'AB 123' => 'AB 123',         // pre-1981 (LL DDD)
+            'A 12345' => 'A 12345',       // pre-1981 (L DDDDD)
+            '12-3456' => '12-3456',       // pre-1981 (DD-DDDD)
+            'ZEN 88' => 'ZEN 88',         // vanity (LLL DD)
+            '1234567' => '123 4567',      // foreign and diplomatic (DDD DDDD)
+            '123 456' => '123 456',       // foreign and diplomatic (DDD DDD)
+            'T 1234' => 'T 1234',         // temporary transit, cars (L DDDD)
+            '1234-12345678901' => '1234-12345678901', // temporary transit, motorcycles
+            '1' => '1',                   // government protocol: President
+            '7' => '7',                   // government protocol
+            '17' => '17',                 // government protocol
         ];
 
         foreach ($validPlates as $rawPlate => $expectedDisplay) {
             $norm = Vehicle::normalizePlate($rawPlate);
+            $this->assertTrue(PlateNumber::isValid($rawPlate), "Failed on {$rawPlate}");
             $this->assertMatchesRegularExpression(Vehicle::PLATE_PATTERN, $norm, "Failed on {$rawPlate}");
             $this->assertSame($expectedDisplay, Lot::plate($norm), "Formatting mismatch on {$rawPlate}");
 
@@ -551,11 +566,10 @@ class BoothAttendantTest extends TestCase
         $this->assertSame('1', $presSession->plate_number);
         $this->assertSame('1', Lot::plate($presSession->plate_number));
 
-        // Invalid plate rejection
-        $invalidPlates = ['AB12', 'ABCD123', 'ABC 12', '0', '18', '99', 'ZZ'];
+        // Invalid plate rejection. Government plates stop at 17; AB 12345 and PANGULO are not on the current list.
+        $invalidPlates = ['AB12', 'ABCD123', 'A12', '0', '18', '99', 'ZZ', 'AB C 1234', 'ABC 12 34', 'ABC@1234', 'AB 12345', 'PANGULO', '1234'];
         foreach ($invalidPlates as $badPlate) {
-            $badNorm = Vehicle::normalizePlate($badPlate);
-            $this->assertDoesNotMatchRegularExpression(Vehicle::PLATE_PATTERN, $badNorm, "Should reject {$badPlate}");
+            $this->assertFalse(PlateNumber::isValid($badPlate), "Should reject {$badPlate}");
 
             $res = $this->actingAs($attendant)->postJson(route('attendant.entry.walk-in.lookup'), [
                 'plate' => $badPlate,
@@ -584,7 +598,7 @@ class BoothAttendantTest extends TestCase
         // 2. Valid 11-digit mobile starting with 09
         $goodRes = $this->actingAs($attendant)->post(route('attendant.entry.walk-in.store'), [
             'plate' => 'ABC 1234',
-            'phone' => '0917 555 0199',
+            'phone' => '09175550199',
             'color' => 'White',
             'type' => 'Car',
             'slot_code' => 'A-01',
@@ -898,6 +912,8 @@ class BoothAttendantTest extends TestCase
 
     public function test_shift_summary_accurately_reflects_cash_discounts_and_penalties_even_after_relogin(): void
     {
+        // The sessions start 2 and 3 hours ago. Fix the clock at 2 PM Manila time so they stay inside the same day.
+        $this->travelTo(Lot::now()->setTime(14, 0));
         $this->lot();
         $attendant = $this->attendant();
 
