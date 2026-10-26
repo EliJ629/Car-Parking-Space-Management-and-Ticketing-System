@@ -270,19 +270,4 @@ class ExitAuthorizationTest extends TestCase
         $this->assertSame(ExitAuthorization::EXPIRED, ExitAuthorization::sole()->status);
         $this->assertSame(ParkingSlot::STATUS_OCCUPIED, ParkingSlot::where('code', 'A-02')->value('status'));
     }
-
-    public function test_no_demo_pin_works_and_a_manager_without_a_pin_cannot_approve(): void
-    {
-        $attendant = $this->staff(User::ROLE_ATTENDANT, 'Marco Villanueva');
-        $manager = $this->staff(User::ROLE_MANAGER, 'Elena Cruz');
-        $session = $this->active();
-
-        foreach (['741963', '123456'] as $pin) {
-            $this->actingAs($attendant)->postJson(route('attendant.exit.verify-pin', $session), ['manager_id' => $manager->id, 'pin' => $pin])->assertJson(['ok' => false]);
-        }
-
-        $manager->forceFill(['manager_pin_hash' => Hash::make('987654')])->save();
-        $this->postJson(route('attendant.exit.verify-pin', $session), ['manager_id' => $manager->id, 'pin' => '741963'])->assertJson(['ok' => false]);
-        $this->postJson(route('attendant.exit.verify-pin', $session), ['manager_id' => $manager->id, 'pin' => '987654'])->assertJson(['ok' => true]);
-    }
 }

@@ -9,14 +9,12 @@ use App\Models\ParkingPayment;
 use App\Models\ParkingRateSet;
 use App\Models\ParkingSession;
 use App\Models\ParkingSlot;
-use App\Models\User;
 use App\Models\Vehicle;
 use App\Services\ExitAuthorizationService;
 use App\Services\FeeCalculator;
 use App\Services\GateService;
 use App\Services\NoticeService;
 use App\Support\Lot;
-use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use App\Support\TicketNumber;
 use Illuminate\Http\Request;
@@ -30,8 +28,8 @@ class ExitController extends Controller
     /** BA-34 to BA-36: Exit search */
     public function index(Request $request): View
     {
-        $q = mb_substr(trim((string) $request->query('q', '')), 0, 20);
-        $includeClosed = $request->boolean('include_closed', false);
+        $rawQ = trim((string) $request->query('q', ''));
+        $q = substr(preg_replace('/[^A-Za-z0-9\s-]/', '', $rawQ), 0, 20);
 
         // Pending exit queue on the right
         $waitingForGuard = ParkingSession::query()
@@ -51,23 +49,9 @@ class ExitController extends Controller
             // Normalize ticket numbers (e.g. PK0016, PK 16, PK-16 -> PK-0016)
             $cleanTicket = TicketNumber::looksLikeTicket($q) ? TicketNumber::normalize($q) : null;
 
-            $query = ParkingSession::query()->with(['slot', 'payment', 'driver']);
-
-            if (! $includeClosed) {
-                $query->whereIn('status', ParkingSession::OPEN_STATUSES);
-            } else {
-                $cutoff = now()->subHours(24);
-                $query->where(function ($b) use ($cutoff) {
-                    $b->whereIn('status', ParkingSession::OPEN_STATUSES)
-                        ->orWhere(function ($closed) use ($cutoff) {
-                            $closed->where('status', ParkingSession::STATUS_COMPLETED)
-                                ->where(function ($time) use ($cutoff) {
-                                    $time->where('exited_at', '>=', $cutoff)
-                                        ->orWhere('updated_at', '>=', $cutoff);
-                                });
-                        });
-                });
-            }
+            $query = ParkingSession::query()
+                ->with(['slot', 'payment', 'driver'])
+                ->whereIn('status', ParkingSession::OPEN_STATUSES);
 
             $query->where(function ($w) use ($q, $normPlate, $cleanTicket) {
                 $w->where('ticket_number', 'like', "%{$q}%")
@@ -115,7 +99,6 @@ class ExitController extends Controller
 
         return view('staff.attendant.exit.index', [
             'q' => $q,
-            'includeClosed' => $includeClosed,
             'waitingForGuard' => $waitingForGuard,
             'results' => $results,
             'searched' => $searched,
@@ -172,97 +155,13 @@ class ExitController extends Controller
         $estimate['total'] = max(0.0, round($estimate['parking_charge'] - ($estimate['already_paid'] ?? 0.0), 2));
 
         $discounts = ParkingDiscount::query()->where('active', true)->get();
-        $managers = User::query()->where('role', User::ROLE_MANAGER)->where('status', User::STATUS_ACTIVE)->get();
 
         return view('staff.attendant.exit.show', [
             'session' => $session,
             'estimate' => $estimate,
             'discounts' => $discounts,
-            'managers' => $managers,
             'isReserved' => $session->reservation !== null,
             'currentRate' => ParkingRateSet::current(),
-        ]);
-    }
-
-    /** BA-40 & BA-41: Verify manager PIN */
-    public function verifyPin(Request $request, ParkingSession $session): JsonResponse
-    {
-        $validated = $request->validate([
-            'manager_id' => ['required', 'exists:users,id'],
-            'pin' => ['required', 'string', 'regex:/^[0-9]{6}$/'],
-        ], [
-            'pin.regex' => 'The manager PIN is 6 numbers.',
-        ]);
-
-        $manager = User::query()
-            ->whereKey($validated['manager_id'])
-            ->where('role', User::ROLE_MANAGER)
-            ->first();
-
-        if (! $manager) {
-            return response()->json(['ok' => false, 'message' => 'Manager not found.'], 404);
-        }
-
-        $sessionKey = "mgr_pin_fails_{$session->id}_{$manager->id}";
-        $fails = (int) session()->get($sessionKey, 0);
-
-        if ($fails >= 3) {
-            return response()->json([
-                'ok' => false,
-                'blocked' => true,
-                'attempts_left' => 0,
-                'message' => 'Approval blocked. 3 wrong PINs entered. Request written to activity log.',
-            ]);
-        }
-
-        // Only the PIN this manager set in their account counts. There is no master PIN and the sign-in password is not a PIN.
-        if (! $manager->hasManagerPin()) {
-            return response()->json(['ok' => false, 'blocked' => false, 'attempts_left' => 3 - $fails, 'message' => $manager->name.' has not set an approval PIN yet. Ask the Manager to set one in their account.']);
-        }
-
-        $pin = trim($validated['pin']);
-        $valid = $manager->managerPinMatches($pin);
-
-        if (! $valid) {
-            $fails++;
-            session()->put($sessionKey, $fails);
-            $attemptsLeft = max(0, 3 - $fails);
-
-            if ($attemptsLeft <= 0) {
-                ActivityLog::record(
-                    action: 'manager_pin_failed',
-                    user: $manager,
-                    request: $request,
-                    subject: "Ticket {$session->ticket_number}",
-                    area: 'attendant',
-                    details: [
-                        'ticket' => $session->ticket_number,
-                        'approving_manager' => $manager->name,
-                        'reason' => 'Three wrong PIN attempts. Approval blocked.',
-                    ],
-                );
-
-                return response()->json([
-                    'ok' => false,
-                    'blocked' => true,
-                    'attempts_left' => 0,
-                    'message' => 'Approval blocked. 3 wrong PINs entered. Request written to activity log.',
-                ]);
-            }
-
-            return response()->json([
-                'ok' => false,
-                'blocked' => false,
-                'attempts_left' => $attemptsLeft,
-                'message' => "Wrong PIN. {$attemptsLeft} attempt".($attemptsLeft === 1 ? '' : 's').' left.',
-            ]);
-        }
-
-        session()->forget($sessionKey);
-
-        return response()->json([
-            'ok' => true,
-            'manager_name' => $manager->name,
         ]);
     }
 
@@ -277,13 +176,17 @@ class ExitController extends Controller
     public function pay(Request $request, ParkingSession $session, FeeCalculator $calculator, NoticeService $notices, GateService $gate, ExitAuthorizationService $authorizations): RedirectResponse
     {
         $validated = $request->validate([
-            'cash_received' => ['required', 'numeric', 'min:0', 'max:1000000'],
+            'cash_received' => ['required', 'numeric', 'min:0', 'max:9999999.99'],
             'discount_id' => ['nullable', 'exists:parking_discounts,id'],
             'discount_proof' => ['nullable', 'string', 'max:80'],
             'discount_note' => ['nullable', 'string', 'max:255'],
-            'approving_manager' => ['nullable', 'string', 'max:120'],
             'lost_ticket' => ['nullable', 'boolean'],
             'overstay' => ['nullable', 'boolean'],
+        ], [
+            'cash_received.required' => 'Please enter the cash received.',
+            'cash_received.numeric' => 'Cash received must be a valid number.',
+            'cash_received.min' => 'Cash received cannot be negative.',
+            'cash_received.max' => 'Cash received cannot exceed ₱9,999,999.99.',
         ]);
 
         $attendant = $request->user();
@@ -394,7 +297,6 @@ class ExitController extends Controller
                     'discount_name' => $discountName,
                     'discount_amount' => $discountAmount,
                     'discount_proof' => $validated['discount_proof'] ?? null,
-                    'approving_manager' => $validated['approving_manager'] ?? null,
                     'penalties' => $penalties,
                     'cash_received' => $cashReceived,
                     'change_given' => $changeGiven,
@@ -458,7 +360,7 @@ class ExitController extends Controller
 
         $redirect = redirect()->route('attendant.exit.receipt', $outcome['payment']);
 
-        return empty($outcome['repeat']) ? $redirect : $redirect->with('modal', [
+        return empty($outcome['repeat']) ? $redirect->with('fresh_payment', true) : $redirect->with('modal', [
             'title' => 'Already paid', 'body' => 'This vehicle was already paid and its exit permission is still valid. No second charge was made.', 'primary' => ['label' => 'OK', 'close' => true],
         ]);
     }

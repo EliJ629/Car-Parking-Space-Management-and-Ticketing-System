@@ -68,7 +68,7 @@
         'lost_ticket_penalty' => 'Lost ticket penalty (₱)',
         'overstay_penalty' => 'Overstay penalty (₱)',
       ] as $field => $label)
-        <div class="manager-field"><label class="f" for="{{ $field }}">{{ $label }}</label><input id="{{ $field }}" name="{{ $field }}" type="number" min="0" max="1000000" step="0.01" value="{{ old($field, $currentRate?->$field ?? 0) }}" required></div>
+        <div class="manager-field"><label class="f" for="{{ $field }}">{{ $label }}</label><input id="{{ $field }}" name="{{ $field }}" type="number" min="0" max="1000000" step="0.01" inputmode="decimal" data-rate-amount value="{{ old($field, $currentRate?->$field ?? 0) }}" required><p class="err" data-rate-error hidden></p></div>
       @endforeach
       <div class="manager-field"><label class="f" for="effective_at">Effective from</label><input id="effective_at" name="effective_at" type="datetime-local" min="{{ \App\Support\Lot::now()->format('Y-m-d\TH:i') }}" value="{{ old('effective_at', \App\Support\Lot::now()->addDay()->startOfDay()->format('Y-m-d\TH:i')) }}" data-range-start required><p class="hint">Lot time (Asia/Manila). The new rates start at this time.</p></div>
       <div class="manager-field"><label class="f" for="ends_at">Ends at <span class="manager-muted">(optional)</span></label><input id="ends_at" name="ends_at" type="datetime-local" min="{{ \App\Support\Lot::now()->format('Y-m-d\TH:i') }}" value="{{ old('ends_at') }}" data-range-end><p class="hint">For a temporary rate. Leave empty to keep the rate until it is replaced.</p></div>
@@ -88,14 +88,13 @@
   </div>
   <div class="manager-table-wrap">
     <table class="manager-table" data-paginate="10">
-      <thead><tr><th>Name</th><th>Value</th><th>Required proof</th><th>Manager PIN</th><th>Status</th><th>Actions</th></tr></thead>
+      <thead><tr><th>Name</th><th>Value</th><th>Required proof</th><th>Status</th><th>Actions</th></tr></thead>
       <tbody>
       @forelse ($discounts as $discount)
         <tr>
           <td><strong>{{ $discount->name }}</strong></td>
           <td>{{ $discount->percent }}%</td>
           <td>{{ $discount->proof_label }}</td>
-          <td>{{ $discount->requires_manager_pin ? 'Required' : 'No' }}</td>
           <td>{{ $discount->active ? 'Active' : 'Inactive' }}</td>
           <td>
             <div class="manager-row-actions">
@@ -107,7 +106,7 @@
           </td>
         </tr>
       @empty
-        <tr><td class="manager-table-empty" colspan="6">No discounts have been added.</td></tr>
+        <tr><td class="manager-table-empty" colspan="5">No discounts have been added.</td></tr>
       @endforelse
       </tbody>
     </table>
@@ -131,7 +130,7 @@
         </div>
         <div class="manager-field">
           <label class="f" for="discount-percent">Percent (0 to 100)</label>
-          <input id="discount-percent" name="percent" type="number" min="0" max="100" step="1" value="{{ old('_form') === 'add' ? old('percent') : '' }}" required>
+          <input id="discount-percent" name="percent" type="number" min="0" max="100" step="1" inputmode="numeric" data-discount-percent value="{{ old('_form') === 'add' ? old('percent') : '' }}" required>
           @if (old('_form') === 'add') @error('percent')<p class="err">{{ $message }}</p>@enderror @endif
         </div>
         <div class="manager-field">
@@ -139,7 +138,6 @@
           <input id="discount-proof" name="proof_label" maxlength="80" value="{{ old('_form') === 'add' ? old('proof_label') : '' }}" required>
           @if (old('_form') === 'add') @error('proof_label')<p class="err">{{ $message }}</p>@enderror @endif
         </div>
-        <label class="ck"><input type="checkbox" name="requires_manager_pin" value="1" @checked(old('_form') === 'add' && old('requires_manager_pin'))>Require manager PIN</label>
       </div>
       <div class="manager-dialog-actions">
         <button class="btn sm" type="submit">Add discount</button>
@@ -168,7 +166,7 @@
           </div>
           <div class="manager-field">
             <label class="f" for="discount-percent-{{ $discount->id }}">Percent (0 to 100)</label>
-            <input id="discount-percent-{{ $discount->id }}" name="percent" type="number" min="0" max="100" step="1" value="{{ $editing ? old('percent') : $discount->percent }}" required>
+            <input id="discount-percent-{{ $discount->id }}" name="percent" type="number" min="0" max="100" step="1" inputmode="numeric" data-discount-percent value="{{ $editing ? old('percent') : $discount->percent }}" required>
             @if ($editing) @error('percent')<p class="err">{{ $message }}</p>@enderror @endif
           </div>
           <div class="manager-field">
@@ -176,7 +174,6 @@
             <input id="discount-proof-{{ $discount->id }}" name="proof_label" maxlength="80" value="{{ $editing ? old('proof_label') : $discount->proof_label }}" required>
             @if ($editing) @error('proof_label')<p class="err">{{ $message }}</p>@enderror @endif
           </div>
-          <label class="ck"><input type="checkbox" name="requires_manager_pin" value="1" @checked($editing ? old('requires_manager_pin') : $discount->requires_manager_pin)>Manager PIN required</label>
           <label class="ck"><input type="checkbox" name="active" value="1" @checked($editing ? old('active') : $discount->active)>Active</label>
         </div>
         <div class="manager-dialog-actions">
@@ -187,53 +184,6 @@
     </div>
   </dialog>
 @endforeach
-
-<section class="manager-panel manager-section-gap">
-  <div class="manager-panel-heading">
-    <div><p class="eyebrow">Approval credentials</p><h2>Manager PIN</h2></div>
-    <span class="badge {{ $managerPinIsSet ? 'b-ok' : 'b-warn' }}">{{ $managerPinIsSet ? 'Set' : 'Not set' }}</span>
-  </div>
-  <p class="manager-muted">Create or update your six-digit PIN. You must confirm your current password each time. The PIN is stored as a one-way hash and cannot be viewed after saving.</p>
-  <p class="manager-hint-panel">Discounts marked as requiring a manager PIN are not yet connected to an attendant-side PIN verification flow.</p>
-  <div class="manager-form-actions">
-    <button class="btn sm" type="button" data-open-dialog="manager-pin-dialog">
-      {{ $managerPinIsSet ? 'Edit manager PIN' : 'Create manager PIN' }}
-    </button>
-  </div>
-</section>
-
-<dialog class="manager-dialog" id="manager-pin-dialog" aria-labelledby="manager-pin-title"
-  @if ($errors->has('manager_pin') || $errors->has('manager_pin_confirmation') || $errors->has('current_password')) data-open-on-load @endif>
-  <div class="manager-dialog-inner">
-    <p class="eyebrow">Approval credentials</p>
-    <h2 id="manager-pin-title">{{ $managerPinIsSet ? 'Edit manager PIN' : 'Create manager PIN' }}</h2>
-    <p class="manager-muted">Choose a six-digit PIN and confirm it. Your current account password is required to save.</p>
-    <form method="POST" action="{{ route('manager.rates.manager-pin') }}" data-busy data-busy-label="Saving PIN">
-      @csrf
-      @method('PUT')
-      <div class="manager-dialog-fields">
-        <div class="manager-field">
-          <label class="f" for="manager-pin">New six-digit PIN</label>
-          <input id="manager-pin" name="manager_pin" type="password" inputmode="numeric" pattern="[0-9]{6}" minlength="6" maxlength="6" autocomplete="new-password" required autofocus>
-          @error('manager_pin')<p class="err">{{ $message }}</p>@enderror
-        </div>
-        <div class="manager-field">
-          <label class="f" for="manager-pin-confirmation">Retype PIN</label>
-          <input id="manager-pin-confirmation" name="manager_pin_confirmation" type="password" inputmode="numeric" pattern="[0-9]{6}" minlength="6" maxlength="6" autocomplete="new-password" required>
-        </div>
-        <div class="manager-field">
-          <label class="f" for="manager-pin-current-password">Current account password</label>
-          <input id="manager-pin-current-password" name="current_password" type="password" autocomplete="current-password" required>
-          @error('current_password')<p class="err">{{ $message }}</p>@enderror
-        </div>
-      </div>
-      <div class="manager-dialog-actions">
-        <button class="btn sm" type="submit">Save manager PIN</button>
-        <button class="btn ghost sm" type="button" data-close-dialog>Cancel</button>
-      </div>
-    </form>
-  </div>
-</dialog>
 
 <section class="manager-panel manager-section-gap">
   <p class="eyebrow">Reservation and exit rules</p><h2>Current operational settings</h2>
@@ -259,14 +209,20 @@
 </section>
 
 <script>
-document.querySelectorAll('input[name="percent"]').forEach(function (el) {
+document.querySelectorAll('input[data-discount-percent]').forEach(function (el) {
   el.addEventListener('input', function () {
-    var val = parseInt(this.value, 10);
-    if (!isNaN(val)) {
-      if (val > 100) this.value = 100;
-      if (val < 0) this.value = 0;
+    this.value = this.value.replace(/\D/g, '');
+    var val = parseInt(this.value || '0', 10);
+    if (val > 100) {
+      this.value = '100';
+    } else if (val < 0) {
+      this.value = '0';
+    }
+  });
+  el.addEventListener('keydown', function (event) {
+    if (['e', 'E', '+', '-', '.', ','].includes(event.key)) {
+      event.preventDefault();
     }
   });
 });
 </script>
-

@@ -17,7 +17,7 @@
 </div>
 
 @if ($errors->any())
-  <div style="background:#FEF2F2;border-left:5px solid #EF4444;border-radius:0 8px 8px 0;padding:14px 18px;margin-bottom:20px;color:#991B1B;">
+  <div style="background:var(--stop-bg);border-left:5px solid var(--stop);border-radius:0 8px 8px 0;padding:14px 18px;margin-bottom:20px;color:var(--stop);">
     <b style="font-size:15px;display:block;margin-bottom:4px;">Cannot check in reservation &mdash; please check details:</b>
     <ul style="margin:0;padding-left:18px;font-size:13px;">
       @foreach ($errors->all() as $err)
@@ -69,7 +69,8 @@
             <input class="ba-input" id="rsv-code-input" type="text" placeholder="RSV-4F7K29"
                    value="{{ $code }}"
                    style="font-size:24px;font-weight:800;letter-spacing:1px;text-transform:uppercase;" autocomplete="off" autofocus
-                   maxlength="10">
+                   maxlength="10"
+                   oninput="this.value = this.value.toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 10);">
             <p style="font-size:12px;color:var(--muted);margin-top:4px;">RSV, a dash and 6 letters or numbers. Not case sensitive.</p>
             <div class="ba-err-msg" id="rsv-err" hidden></div>
           </div>
@@ -173,25 +174,30 @@
             Color and type match the vehicle at the booth
           </label>
           <label style="display:flex;gap:10px;align-items:center;">
-            <input type="checkbox" id="chk-plate-match" checked style="width:18px;height:18px;accent-color:var(--paint-deep);">
+            <input type="checkbox" id="chk-plate-match" style="width:18px;height:18px;accent-color:var(--paint-deep);">
             Plate on the vehicle matches the reservation
           </label>
         </div>
 
         <div class="ba-form-group">
           <label class="ba-label" for="plate-seen-input">Plate seen on the vehicle</label>
-          <input class="ba-input" id="plate-seen-input" type="text" data-plate data-plate-optional autocomplete="off" style="font-weight:800;letter-spacing:1px;text-transform:uppercase;">
+          <input class="ba-input" id="plate-seen-input" type="text" data-plate data-plate-optional autocomplete="off" placeholder="Enter plate seen (e.g. ABC 1234)" style="font-weight:800;letter-spacing:1px;text-transform:uppercase;">
           <div class="ba-err-msg" id="plate-mismatch-msg" hidden>Does not match reservation plate</div>
         </div>
 
-        <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:6px;padding:12px;margin-bottom:20px;font-size:13px;">
+        <div id="verify-lockout-notice" style="display:none;background:var(--stop-bg);border:1px solid var(--stop);border-radius:6px;padding:12px;margin-bottom:16px;color:var(--stop);font-size:13px;">
+          <b>Verification locked (3/3 warnings).</b><br>
+          Plate does not match the reservation. Start a walk-in entry or cancel to scan the next vehicle.
+        </div>
+
+        <div class="ba-detail-box" style="background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:12px;margin-bottom:20px;font-size:13px;color:var(--ink);">
           <b>Payment at exit</b><br>
           Reservations are free. The driver pays only the remaining balance when leaving.
         </div>
 
         <div style="display:flex;gap:10px;">
-          <button class="btn primary" type="button" id="btn-open-confirm-checkin" data-open="#confirm-checkin-dlg">Confirm check-in</button>
-          <button class="btn ghost" type="button" id="btn-trigger-mismatch">Plate does not match</button>
+          <button class="btn primary" type="button" id="btn-open-confirm-checkin">Confirm check-in</button>
+          <a class="btn ghost" href="{{ route('attendant.entry.reserved') }}">Cancel</a>
         </div>
       </div>
     </div>
@@ -202,7 +208,7 @@
     <div class="in">
       <h2>Confirm check-in</h2>
 
-      <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;padding:16px;margin-bottom:16px;font-size:14px;">
+      <div class="ba-detail-box" style="background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:16px;font-size:14px;color:var(--ink);">
         <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
           <span style="color:var(--muted);">Reservation</span>
           <b id="dlg-rsv-code"></b>
@@ -239,9 +245,22 @@
 <!-- POP-UP BA-28: Plate Does Not Match -->
 <dialog class="badlg {{ (session('error_modal') && session('error_modal')['type'] === 'plate_mismatch') ? 'auto-open' : '' }}" id="plate-mismatch-dlg">
   <div class="in">
-    <h2 style="color:var(--stop);">Plate does not match</h2>
+    <h2 style="color:var(--stop);margin:0 0 14px;">Plate does not match</h2>
 
-    <div style="background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;padding:16px;margin-bottom:16px;font-size:14px;">
+    <!-- Visual Warning Segmented Progress Tracker -->
+    <div id="mismatch-tracker-bar" style="display:flex;align-items:center;justify-content:space-between;background:var(--stop-bg);border:1px solid var(--stop);border-radius:8px;padding:9px 14px;margin-bottom:16px;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span id="mismatch-tracker-icon" style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:var(--surface);border:1.5px solid var(--stop);color:var(--stop);font-size:11px;font-weight:900;">!</span>
+        <span id="mismatch-tracker-text" style="font-size:13px;font-weight:700;color:var(--stop);">Warning attempt 1 of 3</span>
+      </div>
+      <div style="display:flex;gap:5px;align-items:center;" id="mismatch-pills">
+        <span id="mpill-1" style="width:22px;height:6px;border-radius:3px;background:var(--stop);transition:all .2s;"></span>
+        <span id="mpill-2" style="width:22px;height:6px;border-radius:3px;background:var(--line);transition:all .2s;"></span>
+        <span id="mpill-3" style="width:22px;height:6px;border-radius:3px;background:var(--line);transition:all .2s;"></span>
+      </div>
+    </div>
+
+    <div class="ba-detail-box" style="background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:16px;font-size:14px;color:var(--ink);">
       <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
         <span style="color:var(--muted);">Reservation plate</span>
         <b id="mismatch-exp">{{ session('error_modal')['expected'] ?? '' }}</b>
@@ -252,11 +271,27 @@
       </div>
     </div>
 
-    <p>Do not check in this vehicle. Ask the driver to show the registration or the app profile. A reservation cannot be moved to another plate at the booth.</p>
+    <!-- Warning message for Attempts 1 & 2 -->
+    <p id="mismatch-msg-normal" style="margin-bottom:18px;">
+      Do not check in this vehicle. Ask the driver to show the registration or app profile, or verify if the plate was mistyped.
+    </p>
 
-    <div class="actions">
-      <button class="btn ghost" type="button" data-close>Cancel check-in</button>
-      <button class="btn primary" type="button" data-close onclick="document.getElementById('plate-seen-input').focus()">Check plate again</button>
+    <!-- Locked message for Attempt 3 -->
+    <div id="mismatch-msg-locked" style="display:none;background:var(--stop-bg);border:1px solid var(--stop);border-radius:6px;padding:12px;margin-bottom:18px;color:var(--stop);font-size:13px;">
+      <b>Maximum verification attempts reached (3/3).</b><br>
+      This reservation is locked for check-in because the plate does not match. You can start a walk-in entry for this vehicle, or cancel and clear the booth for the next car.
+    </div>
+
+    <!-- Actions for Attempts 1 & 2 -->
+    <div class="actions" id="mismatch-actions-normal">
+      <a class="btn ghost" href="{{ route('attendant.entry.reserved') }}">Cancel check-in</a>
+      <button class="btn primary" type="button" id="btn-mismatch-retry">Check plate again</button>
+    </div>
+
+    <!-- Actions for Attempt 3 (Final lockout) -->
+    <div class="actions" id="mismatch-actions-locked" style="display:none;">
+      <a class="btn ghost" href="{{ route('attendant.entry.reserved') }}">Cancel & next car</a>
+      <a class="btn primary" id="btn-mismatch-walkin" href="{{ route('attendant.entry.walk-in') }}">Start walk-in entry</a>
     </div>
   </div>
 </dialog>
@@ -266,7 +301,7 @@
   <div class="in">
     <h2 style="color:var(--stop);">Reservation expired</h2>
 
-    <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;padding:16px;margin-bottom:16px;font-size:14px;">
+    <div class="ba-detail-box" style="background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:16px;font-size:14px;color:var(--ink);">
       <div style="display:flex;justify-content:space-between;margin-bottom:8px;"><span style="color:var(--muted);">Code</span><b id="exp-code"></b></div>
       <div style="display:flex;justify-content:space-between;margin-bottom:8px;"><span style="color:var(--muted);">Driver</span><b id="exp-driver"></b></div>
       <div style="display:flex;justify-content:space-between;margin-bottom:8px;"><span style="color:var(--muted);">Scheduled</span><b id="exp-sched"></b></div>
@@ -287,7 +322,7 @@
   <div class="in">
     <h2 style="color:var(--stop);">Reservation not valid</h2>
 
-    <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;padding:16px;margin-bottom:16px;font-size:14px;">
+    <div class="ba-detail-box" style="background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:16px;font-size:14px;color:var(--ink);">
       <div style="display:flex;justify-content:space-between;margin-bottom:8px;"><span style="color:var(--muted);">Code</span><b id="canc-code"></b></div>
       <div style="display:flex;justify-content:space-between;margin-bottom:8px;"><span style="color:var(--muted);">Status</span><b style="color:var(--stop);" id="canc-st"></b></div>
       <div style="display:flex;justify-content:space-between;"><span style="color:var(--muted);">Details</span><span id="canc-by"></span></div>
@@ -319,13 +354,13 @@
   <div class="in">
     <h2 style="color:var(--stop);" id="used-dlg-title">Reservation already used</h2>
 
-    <div style="background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;padding:16px;margin-bottom:16px;font-size:14px;" id="used-dlg-box">
+    <div class="ba-detail-box" style="background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:16px;font-size:14px;color:var(--ink);" id="used-dlg-box">
       <div style="display:flex;justify-content:space-between;margin-bottom:8px;"><span style="color:var(--muted);">Code</span><b id="used-code"></b></div>
       <div style="display:flex;justify-content:space-between;margin-bottom:8px;"><span style="color:var(--muted);">Status</span><b style="color:var(--stop);" id="used-st"></b></div>
       <div style="display:flex;justify-content:space-between;margin-bottom:8px;"><span style="color:var(--muted);">Driver</span><b id="used-driver"></b></div>
-      <div style="display:flex;flex-direction:column;gap:4px;margin-top:8px;border-top:1px dashed #FECACA;padding-top:8px;">
+      <div style="display:flex;flex-direction:column;gap:4px;margin-top:8px;border-top:1px dashed var(--line);padding-top:8px;">
         <span style="color:var(--muted);">Details:</span>
-        <span id="used-details" style="font-weight:600;color:#991B1B;"></span>
+        <span id="used-details" style="font-weight:600;color:var(--stop);"></span>
       </div>
     </div>
 
@@ -343,7 +378,7 @@
   <div class="in">
     <h2 style="color:var(--stop);">Cannot check in reservation</h2>
 
-    <div style="background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;padding:16px;margin-bottom:16px;font-size:14px;">
+    <div class="ba-detail-box" style="background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:16px;font-size:14px;color:var(--ink);">
       <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
         <span style="color:var(--muted);">Reservation code</span>
         <b>{{ session('error_modal')['code'] ?? '' }}</b>
@@ -369,7 +404,7 @@
   <div class="in">
     <h2>Too early to check in</h2>
 
-    <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;padding:16px;margin-bottom:16px;font-size:14px;">
+    <div class="ba-detail-box" style="background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:16px;font-size:14px;color:var(--ink);">
       <div style="display:flex;justify-content:space-between;margin-bottom:8px;"><span style="color:var(--muted);">Driver</span><b id="early-driver"></b></div>
       <div style="display:flex;justify-content:space-between;margin-bottom:8px;"><span style="color:var(--muted);">Scheduled</span><b id="early-sched"></b></div>
       <div style="display:flex;justify-content:space-between;margin-bottom:8px;"><span style="color:var(--muted);">Check-in opens</span><b id="early-opens" style="color:var(--paint-deep);"></b></div>
@@ -670,7 +705,51 @@ if (rsvCodeInput && rsvCodeInput.value.trim() !== '') {
   doRsvLookup();
 }
 
+let mismatchAttempts = 0;
+
+function updateMismatchTracker(attempts) {
+  const bar = document.getElementById('mismatch-tracker-bar');
+  const txt = document.getElementById('mismatch-tracker-text');
+  const icon = document.getElementById('mismatch-tracker-icon');
+  const p1 = document.getElementById('mpill-1');
+  const p2 = document.getElementById('mpill-2');
+  const p3 = document.getElementById('mpill-3');
+
+  if (!bar || !txt) return;
+
+  if (attempts <= 1) {
+    txt.textContent = 'Warning attempt 1 of 3';
+    txt.style.color = 'var(--stop)';
+    bar.style.background = 'var(--stop-bg)';
+    bar.style.borderColor = 'var(--stop)';
+    if (icon) { icon.textContent = '!'; icon.style.borderColor = 'var(--stop)'; icon.style.color = 'var(--stop)'; }
+    if (p1) p1.style.background = 'var(--stop)';
+    if (p2) p2.style.background = 'var(--line)';
+    if (p3) p3.style.background = 'var(--line)';
+  } else if (attempts === 2) {
+    txt.textContent = 'Warning attempt 2 of 3';
+    txt.style.color = 'var(--stop)';
+    bar.style.background = 'var(--stop-bg)';
+    bar.style.borderColor = 'var(--stop)';
+    if (icon) { icon.textContent = '!'; icon.style.borderColor = 'var(--stop)'; icon.style.color = 'var(--stop)'; }
+    if (p1) p1.style.background = 'var(--stop)';
+    if (p2) p2.style.background = 'var(--stop)';
+    if (p3) p3.style.background = 'var(--line)';
+  } else {
+    txt.textContent = 'Maximum attempts reached (3/3)';
+    txt.style.color = 'var(--stop)';
+    bar.style.background = 'var(--stop-bg)';
+    bar.style.borderColor = 'var(--stop)';
+    if (icon) { icon.textContent = '✕'; icon.style.borderColor = 'var(--stop)'; icon.style.color = 'var(--stop)'; }
+    if (p1) p1.style.background = 'var(--stop)';
+    if (p2) p2.style.background = 'var(--stop)';
+    if (p3) p3.style.background = 'var(--stop)';
+  }
+}
+
 function showVerifyScreen(r) {
+  mismatchAttempts = 0;
+
   document.getElementById('section-rsv-lookup').style.display = 'none';
   document.getElementById('section-rsv-verify').style.display = 'block';
   document.getElementById('step-rsv-code').classList.remove('active');
@@ -689,32 +768,141 @@ function showVerifyScreen(r) {
   document.getElementById('v-type').textContent = r.type;
 
   const plateSeen = document.getElementById('plate-seen-input');
-  plateSeen.value = r.plate;
-  document.getElementById('hidden-rsv-plate').value = r.plate;
+  plateSeen.value = '';
+  plateSeen.disabled = false;
+  document.getElementById('hidden-rsv-plate').value = '';
+  document.getElementById('chk-plate-match').checked = false;
+  document.getElementById('plate-mismatch-msg').hidden = true;
+
+  const btnConfirm = document.getElementById('btn-open-confirm-checkin');
+  if (btnConfirm) btnConfirm.disabled = false;
+
+  const lockoutNotice = document.getElementById('verify-lockout-notice');
+  if (lockoutNotice) lockoutNotice.style.display = 'none';
+
+  // Reset tracker state
+  updateMismatchTracker(1);
+  const normalMsg = document.getElementById('mismatch-msg-normal');
+  if (normalMsg) normalMsg.style.display = 'block';
+  const lockedMsg = document.getElementById('mismatch-msg-locked');
+  if (lockedMsg) lockedMsg.style.display = 'none';
+  const normalActions = document.getElementById('mismatch-actions-normal');
+  if (normalActions) normalActions.style.display = 'flex';
+  const lockedActions = document.getElementById('mismatch-actions-locked');
+  if (lockedActions) lockedActions.style.display = 'none';
 
   // Fill confirm modal
   document.getElementById('dlg-rsv-code').textContent = r.code;
   document.getElementById('dlg-rsv-driver').textContent = r.driver;
   document.getElementById('dlg-rsv-plate').textContent = `${r.plate}, ${r.color} ${r.type}`;
   document.getElementById('dlg-rsv-slot').value = `${r.slot_code}, ${r.slot_zone}, ${r.slot_type}`;
+
+  setTimeout(() => plateSeen.focus(), 150);
 }
 
-// Plate seen change
-document.getElementById('plate-seen-input').addEventListener('input', (e) => {
-  document.getElementById('hidden-rsv-plate').value = e.target.value;
-  const key = (v) => window.BaylinePlate ? window.BaylinePlate.normalize(v) : String(v || '').replace(/[\s-]+/g, '').toUpperCase();
-  const match = key(e.target.value) === key(activeReservation.plate_raw);
-  document.getElementById('plate-mismatch-msg').hidden = match;
-  document.getElementById('btn-open-confirm-checkin').disabled = !match;
-});
+// Two plates are the same when they match once spaces and dashes are dropped (the same rule as the server).
+const plateKey = (v) => window.BaylinePlate ? window.BaylinePlate.normalize(v) : String(v || '').replace(/[\s-]+/g, '').toUpperCase();
 
-// Trigger Plate Does Not Match Modal (BA-28)
-document.getElementById('btn-trigger-mismatch').addEventListener('click', () => {
-  const entered = document.getElementById('plate-seen-input').value;
-  document.getElementById('mismatch-exp').textContent = activeReservation.plate;
-  document.getElementById('mismatch-got').textContent = entered || 'None';
-  document.getElementById('plate-mismatch-dlg').showModal();
-});
+// Plate seen change with validation (uppercase, no special characters, max 20)
+const plateSeenInput = document.getElementById('plate-seen-input');
+if (plateSeenInput) {
+  plateSeenInput.addEventListener('input', (e) => {
+    // Disallow special characters: allow only letters, numbers, spaces, and hyphens
+    let clean = e.target.value.toUpperCase().replace(/[^A-Z0-9 -]/g, '').slice(0, 20);
+    if (e.target.value !== clean) {
+      e.target.value = clean;
+    }
+    document.getElementById('hidden-rsv-plate').value = clean;
+
+    const normEntered = plateKey(clean);
+    const normExpected = plateKey(activeReservation?.plate_raw || '');
+    const match = normEntered.length > 0 && normEntered === normExpected;
+
+    document.getElementById('chk-plate-match').checked = match;
+    document.getElementById('plate-mismatch-msg').hidden = !clean || match;
+  });
+
+  plateSeenInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      document.getElementById('btn-open-confirm-checkin').click();
+    }
+  });
+}
+
+// Confirm check-in button click
+const btnOpenConfirm = document.getElementById('btn-open-confirm-checkin');
+if (btnOpenConfirm) {
+  btnOpenConfirm.addEventListener('click', () => {
+    const entered = (document.getElementById('plate-seen-input').value || '').trim();
+    const normEntered = plateKey(entered);
+    const normExpected = plateKey(activeReservation?.plate_raw || '');
+    const match = normEntered.length > 0 && normEntered === normExpected;
+
+    if (!match) {
+      mismatchAttempts++;
+
+      document.getElementById('mismatch-exp').textContent = activeReservation ? activeReservation.plate : '';
+      document.getElementById('mismatch-got').textContent = entered || 'None entered';
+
+      const normalMsg = document.getElementById('mismatch-msg-normal');
+      const lockedMsg = document.getElementById('mismatch-msg-locked');
+      const normalActions = document.getElementById('mismatch-actions-normal');
+      const lockedActions = document.getElementById('mismatch-actions-locked');
+      const walkinBtn = document.getElementById('btn-mismatch-walkin');
+
+      updateMismatchTracker(mismatchAttempts);
+
+      if (mismatchAttempts < 3) {
+        if (normalMsg) normalMsg.style.display = 'block';
+        if (lockedMsg) lockedMsg.style.display = 'none';
+        if (normalActions) normalActions.style.display = 'flex';
+        if (lockedActions) lockedActions.style.display = 'none';
+      } else {
+        // Reached 3 warnings! Lock out
+        if (normalMsg) normalMsg.style.display = 'none';
+        if (lockedMsg) lockedMsg.style.display = 'block';
+        if (normalActions) normalActions.style.display = 'none';
+        if (lockedActions) lockedActions.style.display = 'flex';
+
+        if (walkinBtn) {
+          walkinBtn.href = `{{ route('attendant.entry.walk-in') }}?plate=` + encodeURIComponent(entered);
+        }
+
+        // Lock form on verify card
+        document.getElementById('btn-open-confirm-checkin').disabled = true;
+        document.getElementById('plate-seen-input').disabled = true;
+        const lockoutNotice = document.getElementById('verify-lockout-notice');
+        if (lockoutNotice) lockoutNotice.style.display = 'block';
+      }
+
+      document.getElementById('plate-mismatch-dlg').showModal();
+      return;
+    }
+
+    // Plate matched! Populate confirm modal and open it (BA-32)
+    document.getElementById('hidden-rsv-plate').value = entered;
+    document.getElementById('dlg-rsv-code').textContent = activeReservation.code;
+    document.getElementById('dlg-rsv-driver').textContent = activeReservation.driver;
+    document.getElementById('dlg-rsv-plate').textContent = `${activeReservation.plate}, ${activeReservation.color} ${activeReservation.type}`;
+    document.getElementById('dlg-rsv-slot').value = `${activeReservation.slot_code}, ${activeReservation.slot_zone}, ${activeReservation.slot_type}`;
+    document.getElementById('confirm-checkin-dlg').showModal();
+  });
+}
+
+// "Check plate again" retry button in mismatch modal
+const btnMismatchRetry = document.getElementById('btn-mismatch-retry');
+if (btnMismatchRetry) {
+  btnMismatchRetry.addEventListener('click', () => {
+    document.getElementById('plate-mismatch-dlg').close();
+    const plateInput = document.getElementById('plate-seen-input');
+    plateInput.value = '';
+    document.getElementById('hidden-rsv-plate').value = '';
+    document.getElementById('chk-plate-match').checked = false;
+    document.getElementById('plate-mismatch-msg').hidden = true;
+    plateInput.focus();
+  });
+}
 </script>
 @endpush
 @endsection

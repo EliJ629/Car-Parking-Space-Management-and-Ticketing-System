@@ -20,14 +20,11 @@
         'exit' => ['Exit and payment', route('attendant.exit.index')],
         'slots' => ['Parking slots', route('attendant.slots.index')],
         'records' => ['Parking records', route('attendant.records.index')],
-        'shift' => ['Shift summary', route('attendant.shift.index')],
+        'shift' => ['Shift sale summary', route('attendant.shift.index')],
     ];
     $idleMinutes = (int) \App\Models\SystemSetting::value('idle_timeout_minutes', 15);
     $flashModal = session('modal');
-    // A short message is shown as a pop-up the attendant closes, not as a toast that disappears by itself.
-    if (! $flashModal && ($flashToast = session('toast'))) {
-        $flashModal = ['title' => $flashToast[0], 'body' => $flashToast[1] ?? '', 'primary' => ['label' => 'OK', 'close' => true]];
-    }
+    $flashToast = session('toast');
     $errorModal = session('error_modal');
 @endphp
 
@@ -74,6 +71,30 @@
     </main>
   </div>
 </div>
+
+@if ($flashToast)
+  <div class="ba-toasts" id="ba-toasts" aria-live="polite">
+    <div class="ba-toast" id="session-toast" style="background:#0F172A;color:#fff;border-left:4px solid #22C55E;display:flex;align-items:center;gap:12px;padding:12px 18px;border-radius:8px;box-shadow:0 12px 28px rgba(0,0,0,0.28);min-width:300px;animation:slideIn .25s ease-out;">
+      <span style="background:#22C55E;color:#fff;width:26px;height:26px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;flex-shrink:0;">✓</span>
+      <div style="flex:1;">
+        <b style="font-size:14px;display:block;margin:0 0 2px;color:#F8FAFC;">{{ $flashToast[0] }}</b>
+        <span style="font-size:12.5px;color:#94A3B8;">{{ $flashToast[1] ?? '' }}</span>
+      </div>
+      <button type="button" onclick="this.closest('.ba-toast').remove()" style="background:none;border:none;color:#94A3B8;font-size:20px;cursor:pointer;padding:0 2px;line-height:1;" aria-label="Close">&times;</button>
+    </div>
+  </div>
+  <script>
+    setTimeout(() => {
+      const t = document.getElementById('session-toast');
+      if (t) {
+        t.style.transition = 'opacity .4s ease, transform .4s ease';
+        t.style.opacity = '0';
+        t.style.transform = 'translateX(100%)';
+        setTimeout(() => t.remove(), 400);
+      }
+    }, 4500);
+  </script>
+@endif
 
 @if ($flashModal)
   @include('partials.ba-modal', ['modal' => $flashModal, 'id' => 'flash-modal', 'auto' => true])

@@ -62,11 +62,9 @@ class ManagerWorkspaceTest extends TestCase
             'name' => 'Community day',
             'percent' => 15,
             'proof_label' => 'Validation card',
-            'requires_manager_pin' => '1',
         ])->assertRedirect(route('manager.rates.index'));
 
         $discount = ParkingDiscount::where('name', 'Community day')->firstOrFail();
-        $this->assertTrue($discount->requires_manager_pin);
         $this->patch(route('manager.discounts.update', $discount), [
             'name' => 'Community day',
             'percent' => 10,
@@ -150,66 +148,6 @@ class ManagerWorkspaceTest extends TestCase
             ->assertSessionHasErrors('to');
     }
 
-    public function test_manager_can_create_and_update_a_private_pin_after_confirming_password(): void
-    {
-        $manager = $this->manager();
-        $this->actingAs($manager)
-            ->put(route('manager.rates.manager-pin'), [
-                'manager_pin' => '028419',
-                'manager_pin_confirmation' => '028419',
-                'current_password' => 'password',
-            ])
-            ->assertRedirect(route('manager.rates.index'));
-
-        $manager->refresh();
-        $this->assertTrue($manager->hasManagerPin());
-        $this->assertTrue($manager->managerPinMatches('028419'));
-        $this->assertFalse($manager->managerPinMatches('123456'));
-        $this->assertNotSame('028419', $manager->manager_pin_hash);
-        $this->assertArrayNotHasKey('manager_pin_hash', $manager->toArray());
-        $this->assertDatabaseHas('activity_logs', ['action' => 'manager_pin_created']);
-
-        $this->put(route('manager.rates.manager-pin'), [
-            'manager_pin' => '731905',
-            'manager_pin_confirmation' => '731905',
-            'current_password' => 'password',
-        ])->assertRedirect(route('manager.rates.index'));
-
-        $manager->refresh();
-        $this->assertTrue($manager->managerPinMatches('731905'));
-        $this->assertFalse($manager->managerPinMatches('028419'));
-        $this->assertDatabaseHas('activity_logs', ['action' => 'manager_pin_updated']);
-    }
-
-    public function test_manager_pin_requires_current_password_matching_confirmation_and_a_nontrivial_pin(): void
-    {
-        $manager = $this->manager();
-        $this->actingAs($manager);
-
-        $this->put(route('manager.rates.manager-pin'), [
-            'manager_pin' => '028419',
-            'manager_pin_confirmation' => '028419',
-            'current_password' => 'wrong-password',
-        ])->assertSessionHasErrors('current_password');
-        $this->assertFalse($manager->fresh()->hasManagerPin());
-
-        $this->put(route('manager.rates.manager-pin'), [
-            'manager_pin' => '028419',
-            'manager_pin_confirmation' => '028418',
-            'current_password' => 'password',
-        ])->assertSessionHasErrors('manager_pin');
-        $this->assertFalse($manager->fresh()->hasManagerPin());
-        $this->assertArrayNotHasKey('manager_pin', session('_old_input', []));
-        $this->assertArrayNotHasKey('manager_pin_confirmation', session('_old_input', []));
-
-        $this->put(route('manager.rates.manager-pin'), [
-            'manager_pin' => '123456',
-            'manager_pin_confirmation' => '123456',
-            'current_password' => 'password',
-        ])->assertSessionHasErrors('manager_pin');
-        $this->assertFalse($manager->fresh()->hasManagerPin());
-    }
-
     public function test_manager_can_create_edit_reset_and_deactivate_staff_account(): void
     {
         $manager = $this->manager();
@@ -284,7 +222,7 @@ class ManagerWorkspaceTest extends TestCase
                 'reservation_grace_minutes' => 12,
                 'early_check_in_minutes' => 25,
                 'maximum_advance_booking_days' => 2,
-                'maximum_slots_per_zone' => 20,
+                'maximum_slots_per_zone' => 16,
                 'maximum_active_zones' => 26,
                 'exit_window_minutes' => 18,
                 'ban_incident_threshold' => 4,
@@ -427,9 +365,8 @@ class ManagerWorkspaceTest extends TestCase
         $this->get(route('manager.rates.index'))
             ->assertOk()
             ->assertSee('Rates and policies')
-            ->assertSee('manager-pin-dialog')
-            ->assertSee('Create manager PIN')
-            ->assertSee('Current account password');
+            ->assertDontSee('Manager PIN')
+            ->assertSee('data-discount-percent');
         $this->get(route('manager.accounts.index'))->assertOk()->assertSee('Staff accounts');
         $this->get(route('manager.accounts.create'))->assertOk()->assertSee('Create staff account');
         $this->get(route('manager.drivers.index'))->assertOk()->assertSee('Driver accounts');

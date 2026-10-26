@@ -43,6 +43,10 @@ class EmailVerification
             'verification_sent_at' => now(),
         ])->save();
 
+        if (app()->isLocal()) {
+            session(['pending_verification_dev_code' => $code]);
+        }
+
         try {
             Mail::to($this->address($user))->send(new VerifyEmailMail($user->name, $code, $this->link($user), self::CODE_MINUTES, $purpose));
         } catch (Throwable $e) {

@@ -133,6 +133,107 @@ document.querySelectorAll('input[data-live-gmail]').forEach(function(input){
   input.addEventListener('blur',run);
   if(input.value)run();
 });
+/* Slot create/edit: floor choice drives the four zones on that floor. */
+document.querySelectorAll('[data-slot-floor-form]').forEach(function(root){
+  var floorSelect=root.querySelector('[name=floor]');
+  var zoneSelect=root.querySelector('[name=zone]');
+  var numberSelect=root.querySelector('[data-slot-number]');
+  var codePreview=root.querySelector('[data-slot-code-preview]');
+  var vehicleTypeSelect=root.querySelector('[name=vehicle_type]');
+  var vehicleTypeField=root.querySelector('[data-zone-category-field]');
+  var countEl=root.querySelector('[data-zone-count]');
+  var addBtn=root.querySelector('[data-add-zone]');
+  var limitEl=root.querySelector('[data-floor-limit]');
+  var mapEl=root.querySelector('[data-floor-map]');
+  var map={};
+  var vehicleMap={};
+  var max=parseInt(root.getAttribute('data-max-zones-per-floor'),10)||4;
+  try{map=mapEl?JSON.parse(mapEl.textContent):{}}catch(e){map={}}
+  try{vehicleMap=JSON.parse((root.querySelector('[data-zone-vehicle-map]')||{}).textContent||'{}')}catch(e){vehicleMap={}}
+
+  function infoFor(floor){
+    return map[floor]||map[String(floor)]||{zones:[],active:[],count:0};
+  }
+  function updateCodePreview(){
+    if(!codePreview||!zoneSelect||!numberSelect)return;
+    var match=zoneSelect.value.match(/([A-Za-z])$/),number=parseInt(numberSelect.value,10);
+    codePreview.value=match&&number>=1&&number<=16
+      ? match[1].toUpperCase()+'-'+String(number).padStart(2,'0')
+      : '';
+  }
+  function updateVehicleType(){
+    if(!vehicleTypeSelect||!zoneSelect)return;
+    var type=vehicleMap[zoneSelect.value];
+    if(type)vehicleTypeSelect.value=type;
+    var isExisting=Object.prototype.hasOwnProperty.call(vehicleMap,zoneSelect.value);
+    if(vehicleTypeField){
+      vehicleTypeField.hidden=isExisting;
+      vehicleTypeSelect.disabled=isExisting;
+      vehicleTypeSelect.required=!isExisting;
+    }
+  }
+
+  function sync(){
+    if(!floorSelect||!zoneSelect)return;
+    var info=infoFor(floorSelect.value);
+    var current=zoneSelect.value||root.getAttribute('data-selected-zone')||'';
+    zoneSelect.innerHTML='';
+    info.zones.forEach(function(zone){
+      var active=info.active.indexOf(zone)!==-1;
+      var option=document.createElement('option');
+      option.value=zone;
+      option.textContent=zone;
+      if(!active&&info.count>=max&&zone!==current)option.disabled=true;
+      if(zone===current)option.selected=true;
+      zoneSelect.appendChild(option);
+    });
+    if(!zoneSelect.value){
+      var first=[].find.call(zoneSelect.options,function(option){return !option.disabled});
+      if(first)zoneSelect.value=first.value;
+    }
+    if(countEl)countEl.textContent='Zones: '+info.count+' / '+max;
+    var full=info.count>=max;
+    if(addBtn){
+      addBtn.disabled=full;
+      addBtn.setAttribute('aria-disabled',full?'true':'false');
+    }
+    if(limitEl)limitEl.hidden=!full;
+    root.setAttribute('data-selected-zone',zoneSelect.value);
+  }
+
+  if(addBtn){
+    addBtn.addEventListener('click',function(){
+      var info=infoFor(floorSelect.value);
+      if(info.count>=max)return;
+      var next=info.zones.find(function(zone){return info.active.indexOf(zone)===-1});
+      if(next){
+        zoneSelect.value=next;
+        root.setAttribute('data-selected-zone',next);
+      }
+    });
+  }
+
+  if(floorSelect){
+    floorSelect.addEventListener('change',function(){
+      root.setAttribute('data-selected-zone','');
+      if(zoneSelect)zoneSelect.value='';
+      sync();
+      updateCodePreview();
+      updateVehicleType();
+    });
+  }
+  if(zoneSelect){
+    zoneSelect.addEventListener('change',function(){
+      root.setAttribute('data-selected-zone',zoneSelect.value);
+      updateCodePreview();
+      updateVehicleType();
+    });
+  }
+  if(numberSelect)numberSelect.addEventListener('change',updateCodePreview);
+  sync();
+  updateCodePreview();
+  updateVehicleType();
+});
 /* Filter panels update themselves: <form data-auto-filter>.
    Selects and dates submit straight away; typed searches wait briefly so each key does not send a request.
    Paired date inputs marked data-range-start / data-range-end validate the range before submitting. */
@@ -217,6 +318,25 @@ document.querySelectorAll('form[data-range-check]').forEach(function(form){
       if(message){ok=false;if(show)end.reportValidity()}
     });
 
+    document.querySelectorAll('input[data-rate-amount]').forEach(function(input){
+      var error=input.parentElement.querySelector('[data-rate-error]');
+      function validate(){
+        var value=input.value.trim(),number=Number(value),message='';
+        if(value!==''&&(!Number.isFinite(number)||number<0||number>1000000)){
+          message='Enter an amount from ₱0.00 to ₱1,000,000.00.';
+        }else if(value!==''&&!/^\d+(?:\.\d{0,2})?$/.test(value)){
+          message='Use a whole amount or up to 2 decimal places.';
+        }
+        input.setCustomValidity(message);
+        if(error){error.textContent=message;error.hidden=!message}
+      }
+      input.addEventListener('keydown',function(event){
+        if(['e','E','+','-'].indexOf(event.key)!==-1)event.preventDefault();
+      });
+      input.addEventListener('input',validate);
+      validate();
+    });
+
     return ok;
   }
 
@@ -228,6 +348,25 @@ document.querySelectorAll('form[data-range-check]').forEach(function(form){
   check(false);
 });
 
+document.querySelectorAll('input[data-setting-number]').forEach(function(input){
+  var error=input.parentElement.querySelector('[data-setting-error]');
+  function validate(){
+    var value=input.value.trim(),number=Number(value),min=Number(input.min),max=Number(input.max),message='';
+    if(value!==''&&(!/^\d+$/.test(value)||!Number.isInteger(number))){
+      message='Enter a whole number.';
+    }else if(value!==''&&(number<min||number>max)){
+      message='Enter a value from '+min+' to '+max+'.';
+    }
+    input.setCustomValidity(message);
+    if(error){error.textContent=message;error.hidden=!message}
+  }
+  input.addEventListener('keydown',function(event){
+    if(['e','E','+','-','.'].indexOf(event.key)!==-1)event.preventDefault();
+  });
+  input.addEventListener('input',validate);
+  validate();
+});
+
 document.querySelectorAll('[data-layout-canvas]').forEach(function(canvas){
   var editor=canvas.closest('[data-layout-editor]'),editorHome=editor&&editor.parentNode,formHome=null,actionsHome=null,editorWidth='';
   var modal=document.getElementById('layout-editor-dialog'),modalContent=modal&&modal.querySelector('[data-layout-modal-content]');
@@ -235,6 +374,8 @@ document.querySelectorAll('[data-layout-canvas]').forEach(function(canvas){
   var actions=panel&&panel.querySelector('[data-layout-actions]'),edit=actions&&actions.querySelector('[data-layout-edit]');
   var auto=actions&&actions.querySelector('[data-layout-auto]'),cancel=actions&&actions.querySelector('[data-layout-cancel]');
   var save=actions&&actions.querySelector('[data-layout-save]'),form=panel&&panel.querySelector('[data-layout-form]');
+  var gate=modal&&modal.querySelector('[data-layout-occupied-gate]'),gateForm=gate&&gate.querySelector('[data-layout-occupied-form]');
+  var gateError=gate&&gate.querySelector('[data-layout-occupied-error]'),gateCancel=gate&&gate.querySelector('[data-layout-gate-cancel]');
   var inputs=form&&form.querySelector('[data-layout-inputs]'),editing=false,snapshot={slots:[],labels:[]};
   if(editor&&modalContent){
     formHome=form&&form.parentNode;actionsHome=actions&&actions.parentNode;
@@ -302,7 +443,34 @@ document.querySelectorAll('[data-layout-canvas]').forEach(function(canvas){
     snapshot.slots=slots.map(function(slot){return {slot:slot,left:slot.style.left,top:slot.style.top}});
     snapshot.labels=labels.map(function(label){return {label:label,left:label.style.left,top:label.style.top}});
     moveToModal();
+    if(slots.some(function(slot){return slot.classList.contains('manager-slot-occupied')})){
+      if(gate){gate.hidden=false;gate.querySelector('input[name=password]').focus()}
+      return;
+    }
     editingState(true);
+  });
+  if(gateCancel)gateCancel.addEventListener('click',function(){if(modal&&modal.open)modal.close()});
+  if(gateForm)gateForm.addEventListener('submit',function(event){
+    event.preventDefault();
+    var password=gateForm.querySelector('input[name=password]'),token=form&&form.querySelector('input[name="_token"]');
+    if(gateError){gateError.hidden=true;gateError.textContent=''}
+    fetch(editor.dataset.authorizeUrl,{
+      method:'POST',
+      headers:{'Accept':'application/json','Content-Type':'application/json','X-CSRF-TOKEN':token?token.value:''},
+      credentials:'same-origin',
+      body:JSON.stringify({password:password.value})
+    }).then(function(response){
+      return response.json().then(function(data){return {ok:response.ok,data:data}});
+    }).then(function(result){
+      if(!result.ok){
+        var message=result.data.errors&&result.data.errors.password?result.data.errors.password[0]:'The manager password could not be verified.';
+        if(gateError){gateError.textContent=message;gateError.hidden=false}
+        return;
+      }
+      gate.hidden=true;password.value='';editingState(true);
+    }).catch(function(){
+      if(gateError){gateError.textContent='Unable to verify the manager password. Try again.';gateError.hidden=false}
+    });
   });
   cancel.addEventListener('click',function(){
     snapshot.slots.forEach(function(item){item.slot.style.left=item.left;item.slot.style.top=item.top});
@@ -370,6 +538,7 @@ document.querySelectorAll('[data-layout-canvas]').forEach(function(canvas){
         snapshot.labels.forEach(function(item){item.label.style.left=item.left;item.label.style.top=item.top});
         editingState(false);
       }
+      if(gate){gate.hidden=true;var password=gate.querySelector('input[name=password]');if(password)password.value='';if(gateError){gateError.hidden=true;gateError.textContent=''}}
       restoreFromModal();
     });
   }

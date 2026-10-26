@@ -5,7 +5,6 @@ use App\Http\Controllers\Driver\LoginController as DriverLoginController;
 use App\Http\Controllers\Driver\PasswordResetController;
 use App\Http\Controllers\Driver\RegisterController;
 use App\Http\Controllers\Driver\VerifyEmailController;
-use App\Http\Controllers\Staff\PasswordResetController as StaffPasswordResetController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\LandingController;
 use App\Http\Controllers\FindMyCarController;
@@ -22,6 +21,7 @@ use App\Http\Controllers\Manager\SalesReportController;
 use App\Http\Controllers\Manager\SettingsController;
 use App\Http\Controllers\Staff\LoginController as StaffLoginController;
 use App\Http\Controllers\Staff\PasswordChangeController;
+use App\Http\Controllers\Staff\PasswordResetController as StaffPasswordResetController;
 use Illuminate\Support\Facades\Route;
 
 // The first page people see is the driver page. Staff have their own address.
@@ -59,9 +59,15 @@ Route::prefix('staff')->name('staff.')->group(function () {
 
 Route::prefix('staff/manager')->name('manager.')->middleware(['area:staff', 'role:manager'])->group(function () {
     Route::get('/', [ManagerDashboardController::class, 'index'])->name('dashboard');
+    Route::get('map', [ManagerDashboardController::class, 'map'])->name('map');
+    Route::post('layout/authorize', [ManagerDashboardController::class, 'authorizeLayoutEdit'])
+        ->middleware('throttle:5,1')
+        ->name('layout.authorize');
     Route::put('layout', [ManagerDashboardController::class, 'saveLayout'])->name('layout.update');
     Route::get('slots', [ParkingSlotController::class, 'index'])->name('slots.index');
     Route::get('slots/create', [ParkingSlotController::class, 'create'])->name('slots.create');
+    Route::get('zone-categories', [ParkingSlotController::class, 'zoneCategories'])->name('slots.categories');
+    Route::patch('zone-categories', [ParkingSlotController::class, 'updateZoneCategories'])->name('slots.categories.update');
     Route::post('slots', [ParkingSlotController::class, 'store'])->name('slots.store');
     Route::get('slots/{slot}/edit', [ParkingSlotController::class, 'edit'])->name('slots.edit');
     Route::patch('slots/{slot}', [ParkingSlotController::class, 'update'])->name('slots.update');
@@ -74,9 +80,6 @@ Route::prefix('staff/manager')->name('manager.')->middleware(['area:staff', 'rol
     Route::get('rates', [RatePolicyController::class, 'index'])->name('rates.index');
     Route::post('rates', [RatePolicyController::class, 'storeRate'])->name('rates.store');
     Route::delete('rates/{rate}', [RatePolicyController::class, 'destroyRate'])->name('rates.destroy');
-    Route::put('rates/manager-pin', [RatePolicyController::class, 'saveManagerPin'])
-        ->middleware('throttle:5,1')
-        ->name('rates.manager-pin');
     Route::post('discounts', [RatePolicyController::class, 'storeDiscount'])->name('discounts.store');
     Route::patch('discounts/{discount}', [RatePolicyController::class, 'updateDiscount'])->name('discounts.update');
     Route::delete('discounts/{discount}', [RatePolicyController::class, 'destroyDiscount'])->name('discounts.destroy');

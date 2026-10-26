@@ -5,7 +5,10 @@
       <h1>Dashboard</h1>
       <p class="manager-page-lede">Live view of the lot and the slots that need attention.</p>
     </div>
-    <a class="btn sm" href="{{ route('manager.slots.index') }}">Manage slots</a>
+    <div class="manager-heading-actions">
+      <a class="btn ghost sm" href="{{ route('manager.map') }}">Live parking map</a>
+      <a class="btn sm" href="{{ route('manager.slots.index') }}">Manage slots</a>
+    </div>
   </div>
 </section>
 
@@ -26,68 +29,54 @@
   </a>
 </section>
 
+<section class="manager-panel manager-dashboard-analytics" aria-labelledby="dashboard-analytics-title">
+  <div class="manager-panel-heading">
+    <div>
+      <p class="eyebrow">Last seven days</p>
+      <h2 id="dashboard-analytics-title">Reports snapshot</h2>
+    </div>
+    <a class="manager-text-link" href="{{ route('manager.reports.index') }}">Open full report</a>
+  </div>
+  <div class="manager-stat-grid manager-dashboard-report-stats">
+    <div class="manager-stat"><strong>₱{{ number_format($analytics['revenue'], 2) }}</strong><span>Revenue</span></div>
+    <div class="manager-stat"><strong>{{ $analytics['sessionCount'] }}</strong><span>Parking sessions</span></div>
+    <div class="manager-stat"><strong>{{ $analytics['averageOccupancy'] }}%</strong><span>Average occupancy</span></div>
+    <div class="manager-stat"><strong>{{ $analytics['peakHour'] ?? '—' }}</strong><span>Peak entry hour</span></div>
+    <div class="manager-stat"><strong>{{ $analytics['averageStayMinutes'] > 0 ? floor($analytics['averageStayMinutes'] / 60).' h '.((int) $analytics['averageStayMinutes'] % 60).' min' : '—' }}</strong><span>Average stay</span></div>
+    <div class="manager-stat"><strong>{{ $analytics['reservationTotal'] > 0 ? round($analytics['reservationsKept'] / $analytics['reservationTotal'] * 100).'%' : '—' }}</strong><span>Reservations checked in</span></div>
+    <div class="manager-stat"><strong>{{ $analytics['incidents'] }}</strong><span>Incidents</span></div>
+  </div>
+  <div class="manager-dashboard-analytics-grid">
+    <div>
+      <p class="eyebrow">Arrival activity</p>
+      <div class="manager-chart manager-hour-chart">
+        @foreach ($analytics['hourly'] as $hour => $count)
+          <div class="manager-chart-column"><strong>{{ $count }}</strong><i style="height:{{ max(4, min(110, $count * 12)) }}px"></i><span>{{ \Illuminate\Support\Carbon::createFromTime($hour)->format('ga') }}</span></div>
+        @endforeach
+      </div>
+    </div>
+    <div class="manager-dashboard-report-summary">
+      <p class="eyebrow">Reservation results</p>
+      <div class="manager-summary-row"><span>Checked in</span><strong>{{ $analytics['reservationsKept'] }}</strong></div>
+      <div class="manager-summary-row"><span>Other reservation statuses</span><strong>{{ max(0, $analytics['reservationTotal'] - $analytics['reservationsKept']) }}</strong></div>
+      <p class="manager-muted">Data from {{ $analytics['from']->format('M j') }} to {{ $analytics['to']->format('M j, Y') }}.</p>
+    </div>
+  </div>
+</section>
+
 <section class="manager-dashboard-grid">
   <div class="manager-panel manager-lot-panel">
     <div class="manager-panel-heading">
       <div>
         <p class="eyebrow">Current layout</p>
-        <h2>Live lot map</h2>
+        <h2>Live parking map</h2>
       </div>
-      <div class="manager-layout-actions" data-layout-actions>
-        <button class="btn ghost sm" type="button" data-layout-edit data-open-dialog="layout-editor-dialog">Edit Layout</button>
-        <button class="btn ghost sm" type="button" data-layout-auto hidden>Auto Layout</button>
-        <button class="btn ghost sm" type="button" data-layout-cancel hidden>Cancel</button>
-        <button class="btn sm" type="button" data-layout-save hidden>Save Layout</button>
-        <a class="manager-text-link" href="{{ route('manager.slots.index') }}">All slots</a>
-      </div>
+      <a class="btn sm" href="{{ route('manager.map') }}">Open live map</a>
     </div>
-
-    @if ($slotsByZone->isEmpty())
-      <div class="manager-empty">
-        <h3>Your lot is ready to set up</h3>
-        <p>Add the first parking slot to start building the live map.</p>
-        <a class="btn sm" href="{{ route('manager.slots.create') }}">Add your first slot</a>
-      </div>
-    @else
-      <div class="manager-layout-workspace">
-        <div class="manager-lot manager-layout" data-layout-editor data-save-url="{{ route('manager.layout.update') }}">
-          <div class="manager-layout-canvas" data-layout-canvas>
-            @foreach ($slotsByZone as $zone => $zoneSlots)
-              @php($zonePosition = $zonePositions[$zone] ?? null)
-              <span class="manager-layout-zone-label" data-layout-zone-label data-zone="{{ $zone }}"
-                    data-x="{{ $zonePosition?->label_x ?? '' }}" data-y="{{ $zonePosition?->label_y ?? '' }}">{{ $zone }}</span>
-            @endforeach
-            @foreach ($slotsByZone as $zone => $zoneSlots)
-              @foreach ($zoneSlots as $slot)
-                <a class="manager-slot manager-layout-slot manager-slot-{{ str_replace('_', '-', $slot->status) }}"
-                   href="{{ route('manager.slots.edit', $slot) }}"
-                   data-layout-slot data-slot-id="{{ $slot->id }}" data-zone="{{ $zone }}"
-                   data-x="{{ $slot->layout_x ?? '' }}" data-y="{{ $slot->layout_y ?? '' }}"
-                   aria-label="{{ $slot->code }}, {{ $slot->statusLabel() }}, {{ $slot->type }}">
-                  <strong>{{ $slot->code }}</strong>
-                  <span>{{ $slot->statusLabel() }}</span>
-                  @if (in_array($slot->status, ['occupied', 'pending_exit'], true) && $slot->parked_label)<small class="manager-slot-extra" title="Parked for">{{ $slot->parked_label }}</small>
-                  @elseif ($slot->status === 'reserved' && $slot->booked_label)<small class="manager-slot-extra" title="Reserved for">{{ $slot->booked_label }}</small>@endif
-                </a>
-              @endforeach
-            @endforeach
-          </div>
-          <div class="manager-lane" aria-label="Vehicle lane">
-            <span>Entrance</span><i aria-hidden="true"></i><span>Exit</span>
-          </div>
-        </div>
-      </div>
-      <form class="manager-layout-form" data-layout-form method="POST" action="{{ route('manager.layout.update') }}">
-        @csrf
-        @method('PUT')
-        <div data-layout-inputs></div>
-      </form>
-      <div class="manager-legend" aria-label="Slot status legend">
-        @foreach (\App\Models\ParkingSlot::statuses() as $status => $label)
-          <span><i class="manager-legend-{{ str_replace('_', '-', $status) }}" aria-hidden="true"></i>{{ $label }}</span>
-        @endforeach
-      </div>
-    @endif
+    <p class="manager-muted">The live map shows one floor at a time. Open it to switch floors, check slot status, and edit the layout.</p>
+    <div class="manager-summary-row"><span>Parking slots</span><strong>{{ $totalSlots }}</strong></div>
+    <div class="manager-summary-row"><span>Floors</span><strong>{{ $floorCount }}</strong></div>
+    <div class="manager-summary-row"><span>Zones</span><strong>{{ $zoneCount }}</strong></div>
   </div>
 
   <aside class="manager-side-stack">
@@ -120,20 +109,11 @@
       <a class="manager-text-link manager-panel-link" href="{{ route('manager.slots.index') }}">Review parking slots</a>
     </section>
 
-    <dialog class="manager-dialog manager-layout-dialog" id="layout-editor-dialog" aria-labelledby="layout-editor-title">
-      <div class="manager-dialog-inner">
-        <button class="manager-dialog-close" type="button" data-close-dialog aria-label="Close editor">X</button>
-        <p class="eyebrow">Parking layout editor</p>
-        <h2 id="layout-editor-title">Edit live lot map</h2>
-        <p class="manager-muted">Pan across the existing map, then arrange slots and zone indicators before saving.</p>
-        <div data-layout-modal-content></div>
-      </div>
-    </dialog>
-
     <section class="manager-panel manager-lot-summary">
       <p class="eyebrow">Lot summary</p>
       <h2>Current layout</h2>
       <div class="manager-summary-row"><span>Parking slots</span><strong>{{ $totalSlots }}</strong></div>
+      <div class="manager-summary-row"><span>Floors</span><strong>{{ $floorCount }}</strong></div>
       <div class="manager-summary-row"><span>Zones</span><strong>{{ $zoneCount }}</strong></div>
       <div class="manager-summary-row"><span>Last slot change</span><strong>{{ $lastUpdated ? \App\Support\Lot::time(\Illuminate\Support\Carbon::parse($lastUpdated)) : 'No changes yet' }}</strong></div>
       <p class="manager-summary-note">Vehicle activity and reservations will appear as booth and driver operations are connected.</p>

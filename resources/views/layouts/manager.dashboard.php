@@ -38,6 +38,7 @@
   <?php
   $managerLinks = [
       'dashboard' => ['Dashboard', 'manager.dashboard'],
+      'map' => ['Live map', 'manager.map'],
       'slots' => ['Slots', 'manager.slots.index'],
       'rates' => ['Rates and policies', 'manager.rates.index'],
       'accounts' => ['Accounts', 'manager.accounts.index'],

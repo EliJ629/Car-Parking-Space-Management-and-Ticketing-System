@@ -16,6 +16,9 @@
   <span class="ba-step">5. Guard approval</span>
 </div>
 
+@php $isFresh = session('fresh_payment', false); @endphp
+
+@if ($isFresh)
 <!-- Success Banner (BA-46) -->
 <div style="background:#F0FDF4;border-left:5px solid #22C55E;border-radius:0 8px 8px 0;padding:16px 20px;margin-bottom:24px;">
   <b style="color:#15803D;font-size:16px;display:block;">Payment recorded, receipt {{ $payment->receipt_number }}</b>
@@ -23,6 +26,15 @@
     The exit request for {{ \App\Support\Lot::plate($session->plate_number) }} was sent to the Guard. Slot {{ $session->slot_code }} stays Pending exit until the Guard taps Good to Go.
   </p>
 </div>
+@else
+<!-- Reprint Banner -->
+<div style="background:var(--surface);border:1px solid var(--line);border-left:5px solid var(--paint);border-radius:0 8px 8px 0;padding:16px 20px;margin-bottom:24px;color:var(--ink);">
+  <b style="font-size:16px;display:block;">Official receipt {{ $payment->receipt_number }} &mdash; Reprint</b>
+  <p style="color:var(--muted);margin:4px 0 0;font-size:14px;">
+    Paid on {{ \App\Support\Lot::stamp($payment->paid_at) }} for vehicle {{ \App\Support\Lot::plate($session->plate_number) }} in slot {{ $session->slot_code }}. You can reprint the thermal slip or navigate back freely.
+  </p>
+</div>
+@endif
 
 <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:24px;align-items:start;">
   
@@ -83,9 +95,14 @@
         </div>
       </div>
 
-      <div style="display:flex;gap:12px;">
-        <button class="btn primary" type="button" data-open="#receipt-preview-dlg" id="btn-open-receipt-print">Print receipt</button>
-        <a class="btn ghost guard-unprinted-receipt" href="{{ route('attendant.exit.index') }}">Search another vehicle</a>
+      <div style="display:flex;gap:12px;align-items:center;">
+        <button class="btn {{ $isFresh ? 'primary' : 'ghost' }}" type="button" data-open="#receipt-preview-dlg" id="btn-open-receipt-print" style="padding:0 24px;font-size:15px;display:inline-flex;align-items:center;gap:8px;">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>
+          <span>{{ $isFresh ? 'Print receipt' : 'Reprint receipt' }}</span>
+        </button>
+        <a class="btn {{ $isFresh ? 'ghost guard-unprinted-receipt' : 'primary' }}" href="{{ route('attendant.exit.index') }}">
+          {{ $isFresh ? 'Search another vehicle' : 'Back to Exit & payment' }}
+        </a>
       </div>
     </div>
   </div>
@@ -106,34 +123,98 @@
 
     <div class="actions">
       <button class="btn ghost" type="button" data-close>Cancel</button>
-      <button class="btn primary" type="button" id="btn-do-print-receipt" onclick="markReceiptPrinted(); window.baPrint('#receipt-print-slip');">Print</button>
+      <button class="btn primary" type="button" id="btn-do-print-receipt" onclick="triggerReceiptPrint();">Print</button>
     </div>
   </div>
 </dialog>
 
-<!-- Unprinted Receipt Warning Modal (Option A) -->
+<!-- Confirmation Modal to verify physical printout -->
+<dialog class="badlg" id="print-confirm-dlg">
+  <div class="in">
+    <button class="x" type="button" data-close aria-label="Close">&times;</button>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+      <span style="font-size:26px;">🖨️</span>
+      <h2 style="margin:0;">Did the receipt print?</h2>
+    </div>
+    <p>Please check your thermal printer. Did receipt <b>{{ $payment->receipt_number }}</b> print successfully?</p>
+    <div style="font-size:13px;color:var(--ink);background:var(--bg);padding:12px 14px;border-radius:6px;border-left:3px solid var(--paint);margin-bottom:16px;">
+      If printing was cancelled or jammed, click <strong>Cancel / Retry</strong> so the receipt remains marked as unprinted.
+    </div>
+    <div class="actions" style="justify-content:flex-end;">
+      <button class="btn ghost" type="button" onclick="cancelReceiptPrint();">Cancel / Retry</button>
+      <button class="btn primary" type="button" id="btn-confirm-printed" onclick="confirmReceiptPrinted();">✓ Yes, receipt printed</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- Unprinted Receipt Warning Modal -->
 <dialog class="badlg" id="unprinted-receipt-dlg">
   <div class="in">
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
       <span style="font-size:26px;">⚠️</span>
-      <h2 style="margin:0;">Receipt not printed</h2>
+      <h2 style="margin:0;">Receipt print required</h2>
     </div>
     <p>
-      The official receipt (<b>{{ $payment->receipt_number }}</b>) has not been printed yet.
+      The official receipt for slot <b>{{ $session->slot_code }}</b> (Receipt <b>{{ $payment->receipt_number }}</b>) has not been printed yet.
     </p>
     <div style="font-size:13px;color:var(--ink);background:var(--bg);padding:12px 14px;border-radius:6px;border-left:3px solid var(--paint);margin-bottom:16px;">
-      Drivers may require their official printed receipt for reimbursement or proof of payment at the exit gate.
+      Printing is required so the driver has their physical receipt for proof of payment before moving to the exit gate.
     </div>
     <div class="actions" style="justify-content:flex-end;">
-      <a class="btn ghost" id="unprinted-receipt-proceed-btn" href="{{ route('attendant.exit.index') }}">Proceed without printing</a>
+      <button class="btn ghost" type="button" data-close>Back</button>
       <button class="btn primary" type="button" onclick="document.getElementById('unprinted-receipt-dlg').close(); document.getElementById('receipt-preview-dlg').showModal();">Print receipt now</button>
     </div>
   </div>
 </dialog>
 
 <script>
-  let hasPrintedReceipt = false;
+  let isFreshPayment = {{ $isFresh ? 'true' : 'false' }};
+  let hasPrintedReceipt = !isFreshPayment;
   let pendingReceiptUrl = '{{ route('attendant.exit.index') }}';
+
+  function triggerReceiptPrint() {
+    const previewDlg = document.getElementById('receipt-preview-dlg');
+    if (previewDlg && typeof previewDlg.close === 'function') {
+      previewDlg.close();
+    }
+
+    // Send to thermal printer
+    window.baPrint('#receipt-print-slip');
+
+    // Prompt attendant to confirm physical printout
+    setTimeout(() => {
+      const confirmDlg = document.getElementById('print-confirm-dlg');
+      if (confirmDlg && typeof confirmDlg.showModal === 'function') {
+        confirmDlg.showModal();
+        const yesBtn = document.getElementById('btn-confirm-printed');
+        if (yesBtn) yesBtn.focus();
+      }
+    }, 700);
+  }
+
+  function confirmReceiptPrinted() {
+    const confirmDlg = document.getElementById('print-confirm-dlg');
+    if (confirmDlg && typeof confirmDlg.close === 'function') {
+      confirmDlg.close();
+    }
+    markReceiptPrinted();
+  }
+
+  function cancelReceiptPrint() {
+    const confirmDlg = document.getElementById('print-confirm-dlg');
+    if (confirmDlg && typeof confirmDlg.close === 'function') {
+      confirmDlg.close();
+    }
+    if (isFreshPayment) {
+      hasPrintedReceipt = false;
+      const btn = document.getElementById('btn-open-receipt-print');
+      if (btn) {
+        btn.innerHTML = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg> <span>Print receipt</span>`;
+        btn.classList.remove('ghost');
+        btn.classList.add('primary');
+      }
+    }
+  }
 
   function markReceiptPrinted() {
     hasPrintedReceipt = true;
@@ -146,6 +227,8 @@
   }
 
   function setupReceiptNavigationGuard() {
+    if (!isFreshPayment) return; // Reprints are optional and do NOT block navigation
+
     const selector = '.guard-unprinted-receipt, .ba-tabs a, header.ba-head a, a.btn';
     document.querySelectorAll(selector).forEach(el => {
       const href = el.getAttribute('href');
@@ -155,10 +238,6 @@
         if (!hasPrintedReceipt) {
           e.preventDefault();
           pendingReceiptUrl = el.href;
-          const proceedBtn = document.getElementById('unprinted-receipt-proceed-btn');
-          if (proceedBtn) {
-            proceedBtn.href = pendingReceiptUrl;
-          }
           const dlg = document.getElementById('unprinted-receipt-dlg');
           if (dlg && typeof dlg.showModal === 'function') {
             dlg.showModal();
@@ -168,7 +247,21 @@
     });
   }
 
-  document.addEventListener('DOMContentLoaded', setupReceiptNavigationGuard);
+  document.addEventListener('DOMContentLoaded', () => {
+    setupReceiptNavigationGuard();
+    // Pressing 'p' or 'Enter' opens the print preview directly if no other dialog is open
+    document.addEventListener('keydown', (e) => {
+      if (e.target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
+      if (document.querySelector('dialog[open]')) return;
+      if (e.key === 'p' || e.key === 'P' || e.key === 'Enter') {
+        const btn = document.getElementById('btn-open-receipt-print');
+        if (btn) {
+          e.preventDefault();
+          btn.click();
+        }
+      }
+    });
+  });
   setupReceiptNavigationGuard();
 </script>
 @endsection

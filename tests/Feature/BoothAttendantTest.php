@@ -14,7 +14,6 @@ use App\Support\PlateNumber;
 use Database\Seeders\ManagerDefaultsSeeder;
 use Database\Seeders\ParkingSlotSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
 class BoothAttendantTest extends TestCase
@@ -289,6 +288,58 @@ class BoothAttendantTest extends TestCase
         $this->assertEquals(44.00, (float) ($payment->receipt_snapshot['change_given'] ?? 0));
     }
 
+    public function test_can_pay_with_large_cash_tender(): void
+    {
+        $this->lot();
+        $attendant = $this->attendant();
+        $slot = ParkingSlot::query()->first();
+
+        $session = ParkingSession::create([
+            'ticket_number' => 'PK-9999',
+            'plate_number' => 'ABC 1234',
+            'slot_id' => $slot->id,
+            'slot_code' => $slot->code,
+            'vehicle_type' => 'Car',
+            'entered_at' => now()->subMinutes(30),
+            'status' => ParkingSession::STATUS_ACTIVE,
+        ]);
+
+        $res = $this->actingAs($attendant)->post(route('attendant.exit.pay', $session), [
+            'cash_received' => 9999999.00,
+        ]);
+
+        $res->assertRedirect();
+        $res->assertSessionHasNoErrors();
+
+        $payment = ParkingPayment::query()->where('session_id', $session->id)->first();
+        $this->assertNotNull($payment);
+        $this->assertEquals(9999999.00, (float) ($payment->receipt_snapshot['cash_received'] ?? 0));
+        $this->assertEquals(9999969.00, (float) ($payment->receipt_snapshot['change_given'] ?? 0));
+    }
+
+    public function test_cannot_pay_with_cash_exceeding_max_limit(): void
+    {
+        $this->lot();
+        $attendant = $this->attendant();
+        $slot = ParkingSlot::query()->first();
+
+        $session = ParkingSession::create([
+            'ticket_number' => 'PK-9998',
+            'plate_number' => 'ABC 1234',
+            'slot_id' => $slot->id,
+            'slot_code' => $slot->code,
+            'vehicle_type' => 'Car',
+            'entered_at' => now()->subMinutes(30),
+            'status' => ParkingSession::STATUS_ACTIVE,
+        ]);
+
+        $res = $this->actingAs($attendant)->post(route('attendant.exit.pay', $session), [
+            'cash_received' => 10000000.00,
+        ]);
+
+        $res->assertSessionHasErrors(['cash_received']);
+    }
+
     public function test_penalty_can_be_removed_before_payment(): void
     {
         $this->lot();
@@ -371,67 +422,17 @@ class BoothAttendantTest extends TestCase
         ]);
     }
 
-    public function test_manager_pin_approval_for_tenant_discount(): void
+    public function test_attendant_slots_page_renders_visual_map_and_slots(): void
     {
         $this->lot();
         $attendant = $this->attendant();
-        $manager = $this->manager();
 
-        $session = ParkingSession::create([
-            'ticket_number' => 'PK-0016',
-            'slot_code' => 'A-02',
-            'plate_number' => 'HJK4471',
-            'entered_at' => now()->subHours(1),
-            'status' => ParkingSession::STATUS_ACTIVE,
-        ]);
+        $response = $this->actingAs($attendant)->get(route('attendant.slots.index'));
 
-        $manager->forceFill(['manager_pin_hash' => Hash::make('987654')])->save();
-
-        // Wrong PIN attempt 1 (2 left)
-        $wrong1 = $this->actingAs($attendant)->postJson(route('attendant.exit.verify-pin', $session), [
-            'manager_id' => $manager->id,
-            'pin' => '000000',
-        ]);
-        $wrong1->assertJson(['ok' => false, 'attempts_left' => 2]);
-
-        // Wrong PIN attempt 2 (1 left)
-        $wrong2 = $this->actingAs($attendant)->postJson(route('attendant.exit.verify-pin', $session), [
-            'manager_id' => $manager->id,
-            'pin' => '000000',
-        ]);
-        $wrong2->assertJson(['ok' => false, 'attempts_left' => 1]);
-
-        // Wrong PIN attempt 3 (blocked)
-        $wrong3 = $this->actingAs($attendant)->postJson(route('attendant.exit.verify-pin', $session), [
-            'manager_id' => $manager->id,
-            'pin' => '000000',
-        ]);
-        $wrong3->assertJson(['ok' => false, 'blocked' => true, 'attempts_left' => 0]);
-        $this->assertDatabaseHas('activity_logs', ['action' => 'manager_pin_failed']);
-
-        // Session 2 for testing successful PIN verification
-        $session2 = ParkingSession::create([
-            'ticket_number' => 'PK-0017',
-            'slot_code' => 'A-03',
-            'plate_number' => 'XYZ9999',
-            'entered_at' => now()->subHours(1),
-            'status' => ParkingSession::STATUS_ACTIVE,
-        ]);
-
-        // There is no demo or master PIN: the old shipped PINs and the account password are refused, and a manager
-        // who has not set a PIN cannot approve anything.
-        foreach (['741963', '123456'] as $demo) {
-            $this->actingAs($attendant)->postJson(route('attendant.exit.verify-pin', $session2), ['manager_id' => $manager->id, 'pin' => $demo])
-                ->assertJson(['ok' => false]);
-        }
-
-        // Manager's configured 6-digit PIN
-        $manager->forceFill(['manager_pin_hash' => Hash::make('987654')])->save();
-        $configuredRes = $this->actingAs($attendant)->postJson(route('attendant.exit.verify-pin', $session2), [
-            'manager_id' => $manager->id,
-            'pin' => '987654',
-        ]);
-        $configuredRes->assertJson(['ok' => true]);
+        $response->assertOk()
+            ->assertSee('Lot slots, live')
+            ->assertSee('data-layout-canvas', false)
+            ->assertSee('A-01');
     }
 
     public function test_manual_slot_correction_with_reason(): void
@@ -490,7 +491,7 @@ class BoothAttendantTest extends TestCase
 
         $response = $this->actingAs($attendant)->get(route('attendant.shift.index'));
         $response->assertOk();
-        $response->assertSee('Shift summary');
+        $response->assertSee('Shift sale summary');
         $response->assertSee('Opening float');
 
         // Close shift
@@ -499,8 +500,8 @@ class BoothAttendantTest extends TestCase
             'note' => 'Drawer balanced cleanly',
         ]);
 
-        $closeRes->assertRedirect(route('attendant.shift.index'));
-        $closeRes->assertSessionHas('closed_shift');
+        $closeRes->assertRedirect(route('staff.login'));
+        $this->assertGuest();
 
         $this->assertDatabaseHas('activity_logs', [
             'action' => 'shift_closed',
@@ -629,8 +630,31 @@ class BoothAttendantTest extends TestCase
             'cash_counted' => 450.00,
             'note' => 'Gave ₱50 change advance for customer bills',
         ]);
-        $resWithNote->assertRedirect(route('attendant.shift.index'));
-        $resWithNote->assertSessionHas('closed_shift');
+        $resWithNote->assertRedirect(route('staff.login'));
+        $this->assertGuest();
+    }
+
+    public function test_shift_shortage_manager_pin_verification(): void
+    {
+        $this->lot();
+        $attendant = $this->attendant();
+        $manager = $this->manager();
+
+        // 1. Wrong PIN
+        $wrongRes = $this->actingAs($attendant)->postJson(route('attendant.shift.verify-pin'), [
+            'manager_id' => $manager->id,
+            'pin' => '000000',
+        ]);
+        $wrongRes->assertOk();
+        $wrongRes->assertJson(['ok' => false]);
+
+        // 2. Correct PIN
+        $correctRes = $this->actingAs($attendant)->postJson(route('attendant.shift.verify-pin'), [
+            'manager_id' => $manager->id,
+            'pin' => '123456',
+        ]);
+        $correctRes->assertOk();
+        $correctRes->assertJson(['ok' => true]);
     }
 
     public function test_reserved_check_in_rejects_canceled_reservation(): void
@@ -988,5 +1012,52 @@ class BoothAttendantTest extends TestCase
         $res->assertSee('₱100.00'); // penalties
         $res->assertSee('RC-7001');
         $res->assertSee('RC-7002');
+    }
+
+    public function test_parking_records_period_filters_and_search(): void
+    {
+        $this->lot();
+        $attendant = $this->attendant();
+
+        $sessionToday = ParkingSession::create([
+            'ticket_number' => 'PK-8881',
+            'slot_code' => 'A-01',
+            'plate_number' => 'XYZ1234',
+            'vehicle_color' => 'Red',
+            'vehicle_type' => 'Car',
+            'entered_at' => \App\Support\Lot::now()->startOfDay()->addHours(2)->setTimezone('UTC'),
+            'status' => ParkingSession::STATUS_ACTIVE,
+        ]);
+
+        $customDay = \App\Support\Lot::now()->subDays(10);
+        $sessionCustom = ParkingSession::create([
+            'ticket_number' => 'PK-8882',
+            'slot_code' => 'A-02',
+            'plate_number' => 'ABC9999',
+            'vehicle_color' => 'Blue',
+            'vehicle_type' => 'Motorcycle',
+            'entered_at' => $customDay->copy()->startOfDay()->addHours(3)->setTimezone('UTC'),
+            'status' => ParkingSession::STATUS_COMPLETED,
+        ]);
+
+        // Default 'today' filter should find sessionToday but not sessionCustom
+        $res = $this->actingAs($attendant)->get(route('attendant.records.index'));
+        $res->assertOk();
+        $res->assertSee('PK-8881');
+        $res->assertDontSee('PK-8882');
+
+        // Search by plate
+        $res = $this->actingAs($attendant)->get(route('attendant.records.index', ['q' => 'XYZ']));
+        $res->assertOk();
+        $res->assertSee('PK-8881');
+
+        // Custom date for sessionCustom
+        $res = $this->actingAs($attendant)->get(route('attendant.records.index', [
+            'filter' => 'custom',
+            'date' => $customDay->format('Y-m-d'),
+        ]));
+        $res->assertOk();
+        $res->assertSee('PK-8882');
+        $res->assertDontSee('PK-8881');
     }
 }

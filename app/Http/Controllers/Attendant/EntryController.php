@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Attendant;
 
 use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
+use App\Models\ParkingLayoutZone;
 use App\Models\ParkingReservation;
 use App\Models\ParkingSession;
 use App\Models\ParkingSlot;
@@ -66,13 +67,19 @@ class EntryController extends Controller
                 ->first();
         }
 
+        $zonePositions = ParkingLayoutZone::query()
+            ->whereIn('zone', $slots->pluck('zone')->unique())
+            ->get()
+            ->keyBy('zone');
+
         return view('staff.attendant.entry.walk-in', [
             'slots' => $slots,
             'counts' => $counts,
             'nextTicket' => $nextTicket,
-            'vehicleTypes' => Vehicle::TYPES,
+            'vehicleTypes' => Vehicle::DRIVER_TYPES,
             'vehicleColors' => Vehicle::COLORS,
             'nearestPending' => $nearestPending,
+            'zonePositions' => $zonePositions,
         ]);
     }
 
@@ -161,23 +168,29 @@ class EntryController extends Controller
     /** BA-17/BA-18: Store Walk-in and Create Ticket */
     public function storeWalkIn(Request $request, NoticeService $notices): RedirectResponse
     {
+        $rawPhone = $request->input('phone');
+        $cleanPhone = is_string($rawPhone) ? preg_replace('/[\s-]+/', '', $rawPhone) : $rawPhone;
+
         $request->merge([
             'plate' => Vehicle::normalizePlate($request->input('plate')),
-            'phone' => Lot::normalizePhone($request->input('phone')),
+            'phone' => Lot::normalizePhone($cleanPhone),
         ]);
 
         $validated = $request->validate([
             'plate' => Rules::parkablePlate(true),
             'phone' => Rules::mobile(false),
-            'color' => ['required', 'string'],
-            'type' => ['required', 'string', Rule::in(Vehicle::TYPES), function (string $attribute, mixed $value, \Closure $fail) use ($request): void {
+            'color' => ['required', 'string', 'max:30', 'regex:/^[A-Za-z\s-]+$/'],
+            'type' => ['required', 'string', Rule::in(Vehicle::DRIVER_TYPES), function (string $attribute, mixed $value, \Closure $fail) use ($request): void {
                 // The plate must be a shape this kind of vehicle may carry (a car plate on a motorcycle is a mistake at the booth).
                 if (! \App\Support\PlateNumber::isValid((string) $request->input('plate'), (string) $value)) {
                     $fail(\App\Support\PlateNumber::problem((string) $request->input('plate'), (string) $value) ?? 'The plate does not match the vehicle type.');
                 }
             }],
-            'slot_code' => ['required', 'string'],
+            'slot_code' => ['required', 'string', 'exists:parking_slots,code'],
             'driver_id' => ['nullable', 'exists:users,id'],
+        ], [
+            'type.in' => 'Please select an allowed vehicle type (Car, SUV, Van, Pickup, or Motorcycle).',
+            'color.regex' => 'Vehicle color must contain letters only.',
         ]);
 
         $normPlate = Vehicle::normalizePlate($validated['plate']);

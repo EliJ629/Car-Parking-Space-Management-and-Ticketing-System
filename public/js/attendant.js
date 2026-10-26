@@ -239,7 +239,6 @@ document.addEventListener('DOMContentLoaded', () => {
     );
 
     // Call page-specific callbacks to mark as printed
-    if (typeof markTicketPrinted === 'function') markTicketPrinted();
     if (typeof markReceiptPrinted === 'function') markReceiptPrinted();
 
     // Fire window event
@@ -464,42 +463,217 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // 8. Cash Tender Quick Calculation (BA-44, BA-45)
   const cashInput = document.getElementById('cash-received-input');
+  const hiddenCashInput = document.getElementById('hidden-cash-received');
   const dueAmountEl = document.getElementById('due-amount-val');
   const changeValEl = document.getElementById('change-val');
   const confirmPayBtn = document.getElementById('confirm-pay-btn');
   const cashErrorEl = document.getElementById('cash-error-msg');
 
   if (cashInput && dueAmountEl) {
+    function formatCashString(val) {
+      let clean = String(val).replace(/[^0-9.]/g, '');
+      const parts = clean.split('.');
+      let intPart = parts[0].slice(0, 7);
+      if (intPart.length > 1 && intPart.startsWith('0')) {
+        intPart = intPart.replace(/^0+/, '') || '0';
+      }
+      const formattedInt = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+      if (parts.length > 1) {
+        return formattedInt + '.' + parts.slice(1).join('').slice(0, 2);
+      }
+      return formattedInt;
+    }
+
+    function getRawAmount(val) {
+      const clean = String(val).replace(/,/g, '').trim();
+      const num = parseFloat(clean);
+      return isNaN(num) ? 0 : num;
+    }
+
     const getDueAmount = () => parseFloat(dueAmountEl.dataset.due || '0');
 
-    const updateChange = (val) => {
+    const updateChange = (rawCash) => {
       const dueAmount = getDueAmount();
-      const cash = parseFloat(val || '0');
-      if (cash >= dueAmount) {
-        const change = (cash - dueAmount).toFixed(2);
-        if (changeValEl) changeValEl.textContent = `\u20B1${change}`;
-        if (confirmPayBtn) confirmPayBtn.disabled = false;
-        if (cashErrorEl) cashErrorEl.hidden = true;
-      } else {
-        const short = (dueAmount - cash).toFixed(2);
+      if (hiddenCashInput) {
+        hiddenCashInput.value = rawCash.toFixed(2);
+      }
+      if (rawCash > 9999999.99) {
         if (changeValEl) changeValEl.textContent = '-';
         if (confirmPayBtn) confirmPayBtn.disabled = true;
         if (cashErrorEl) {
           cashErrorEl.hidden = false;
-          cashErrorEl.textContent = `Cash received is short by \u20B1${short}.`;
+          cashErrorEl.textContent = 'Cash received cannot exceed \u20B19,999,999.99.';
+        }
+      } else if (rawCash >= dueAmount) {
+        const change = Math.round((rawCash - dueAmount) * 100) / 100;
+        if (changeValEl) changeValEl.textContent = `\u20B1${change.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        if (confirmPayBtn) confirmPayBtn.disabled = false;
+        if (cashErrorEl) cashErrorEl.hidden = true;
+      } else {
+        const short = Math.round((dueAmount - rawCash) * 100) / 100;
+        if (changeValEl) changeValEl.textContent = '-';
+        if (confirmPayBtn) confirmPayBtn.disabled = true;
+        if (cashErrorEl) {
+          cashErrorEl.hidden = false;
+          cashErrorEl.textContent = `Cash received is short by \u20B1${short.toFixed(2)}.`;
         }
       }
     };
 
-    cashInput.addEventListener('input', (e) => updateChange(e.target.value));
+    let selectOnMouseUp = false;
+    cashInput.addEventListener('focus', () => {
+      selectOnMouseUp = true;
+      cashInput.select();
+    });
+    cashInput.addEventListener('mouseup', (e) => {
+      if (selectOnMouseUp) {
+        selectOnMouseUp = false;
+        cashInput.select();
+        e.preventDefault();
+      }
+    });
+
+    cashInput.addEventListener('keydown', (e) => {
+      if (
+        ['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'Tab', 'Enter'].includes(e.key) ||
+        e.ctrlKey || e.metaKey || e.altKey
+      ) {
+        if (e.key === 'Backspace' && cashInput.selectionStart === cashInput.selectionEnd) {
+          const pos = cashInput.selectionStart;
+          if (pos > 0 && cashInput.value[pos - 1] === ',') {
+            cashInput.setSelectionRange(pos - 1, pos - 1);
+          }
+        }
+        return;
+      }
+
+      if (!/^[0-9.]$/.test(e.key)) {
+        e.preventDefault();
+        return;
+      }
+
+      const val = cashInput.value;
+      const selStart = cashInput.selectionStart ?? val.length;
+      const selEnd = cashInput.selectionEnd ?? val.length;
+      const dotIdx = val.indexOf('.');
+
+      if (e.key === '.') {
+        if (dotIdx !== -1 && !val.slice(selStart, selEnd).includes('.')) {
+          e.preventDefault();
+        }
+        return;
+      }
+
+      const isTypingInteger = dotIdx === -1 || selStart <= dotIdx;
+      if (isTypingInteger) {
+        const intDigits = (dotIdx === -1 ? val : val.slice(0, dotIdx)).replace(/[^0-9]/g, '');
+        const selectedIntDigits = val.slice(selStart, Math.min(selEnd, dotIdx === -1 ? val.length : dotIdx)).replace(/[^0-9]/g, '');
+        if (intDigits.length - selectedIntDigits.length >= 7) {
+          e.preventDefault();
+          return;
+        }
+      }
+
+      if (dotIdx !== -1 && selStart > dotIdx) {
+        const decDigits = val.slice(dotIdx + 1).replace(/[^0-9]/g, '');
+        const selectedDecDigits = val.slice(Math.max(selStart, dotIdx + 1), selEnd).replace(/[^0-9]/g, '');
+        if (decDigits.length - selectedDecDigits.length >= 2) {
+          e.preventDefault();
+          return;
+        }
+      }
+    });
+
+    cashInput.addEventListener('paste', (e) => {
+      e.preventDefault();
+      const pasted = (e.clipboardData || window.clipboardData).getData('text') || '';
+      const clean = pasted.replace(/[^0-9.]/g, '');
+      const parts = clean.split('.');
+      const intPart = parts[0].slice(0, 7);
+      const decPart = parts.length > 1 ? '.' + parts.slice(1).join('').slice(0, 2) : '';
+      const formatted = formatCashString(intPart + decPart);
+      cashInput.value = formatted;
+      cashInput.setSelectionRange(formatted.length, formatted.length);
+      const raw = getRawAmount(formatted);
+      updateChange(raw);
+    });
+
+    cashInput.addEventListener('input', (e) => {
+      const input = e.target;
+      const originalVal = input.value;
+      const cursorPos = input.selectionStart ?? originalVal.length;
+      const digitsBefore = originalVal.slice(0, cursorPos).replace(/[^0-9.]/g, '').length;
+
+      const formatted = formatCashString(originalVal);
+      input.value = formatted;
+
+      let newCursor = 0;
+      let digitsCounted = 0;
+      while (newCursor < formatted.length && digitsCounted < digitsBefore) {
+        if (/[0-9.]/.test(formatted[newCursor])) {
+          digitsCounted++;
+        }
+        newCursor++;
+      }
+      input.setSelectionRange(newCursor, newCursor);
+
+      const raw = getRawAmount(formatted);
+      updateChange(raw);
+    });
+
+    cashInput.addEventListener('blur', () => {
+      const raw = getRawAmount(cashInput.value);
+      if (raw > 0) {
+        cashInput.value = raw.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+      } else {
+        cashInput.value = '0.00';
+      }
+      updateChange(raw);
+    });
 
     document.querySelectorAll('[data-quick-cash]').forEach(btn => {
       btn.addEventListener('click', () => {
         const dueAmount = getDueAmount();
         const amt = btn.dataset.quickCash === 'exact' ? dueAmount : parseFloat(btn.dataset.quickCash);
-        cashInput.value = amt.toFixed(2);
+        cashInput.value = amt.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
         updateChange(amt);
       });
     });
+
+    const payForm = cashInput.closest('form');
+    if (payForm) {
+      payForm.addEventListener('submit', (e) => {
+        const raw = getRawAmount(cashInput.value);
+        const due = getDueAmount();
+        if (raw < due) {
+          e.preventDefault();
+          if (cashErrorEl) {
+            cashErrorEl.textContent = `Cash received is short by \u20B1${(due - raw).toFixed(2)}.`;
+            cashErrorEl.hidden = false;
+          }
+          cashInput.focus();
+          return;
+        }
+        if (raw > 9999999.99) {
+          e.preventDefault();
+          if (cashErrorEl) {
+            cashErrorEl.textContent = 'Cash received cannot exceed \u20B19,999,999.99.';
+            cashErrorEl.hidden = false;
+          }
+          cashInput.focus();
+          return;
+        }
+        if (hiddenCashInput) {
+          hiddenCashInput.value = raw.toFixed(2);
+        }
+      });
+    }
+
+    // Trigger initial calculation
+    const initRaw = getRawAmount(cashInput.value);
+    if (initRaw > 0) {
+      cashInput.value = initRaw.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+      updateChange(initRaw);
+    }
   }
 });

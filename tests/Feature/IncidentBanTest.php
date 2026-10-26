@@ -285,7 +285,7 @@ class IncidentBanTest extends TestCase
         return $override + [
             'idle_timeout_minutes' => 20, 'idle_warning_seconds' => 45, 'failed_sign_ins_before_lock' => 6, 'lock_duration_minutes' => 25,
             'long_parking_threshold_hours' => 12, 'reservation_grace_minutes' => 10, 'early_check_in_minutes' => 25, 'maximum_advance_booking_days' => 2,
-            'maximum_slots_per_zone' => 20, 'maximum_active_zones' => 26, 'ban_incident_threshold' => 3, 'exit_window_minutes' => 15, 'reservation_reminder_minutes' => 20,
+            'maximum_slots_per_zone' => 16, 'maximum_active_zones' => 26, 'ban_incident_threshold' => 3, 'exit_window_minutes' => 15, 'reservation_reminder_minutes' => 20,
             'notify_reservation_confirmed' => '1', 'lot_name' => 'Bayline Test Lot', 'lot_address' => '1 Test Road', 'receipt_footer' => 'Pay at the booth.',
         ];
     }

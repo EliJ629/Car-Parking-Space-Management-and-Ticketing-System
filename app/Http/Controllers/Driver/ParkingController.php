@@ -107,9 +107,15 @@ class ParkingController extends Controller
         $vehicleId = (int) $request->query('vehicle', 0);
 
         if ($step === 2) {
+            $zonePositions = ParkingLayoutZone::query()
+                ->whereIn('zone', $board->pluck('zone')->unique())
+                ->get()
+                ->keyBy('zone');
+
             return view('driver.app.reserve', $base + [
                 'at' => $at,
                 'zones' => $board->groupBy('zone'),
+                'zonePositions' => $zonePositions,
                 'vehicles' => $vehicles,
                 'vehicleId' => $vehicleId,
                 'noVehicle' => $vehicles->isEmpty(),

@@ -1,7 +1,7 @@
 <section class="manager-page-heading">
   <p class="eyebrow"><a class="manager-breadcrumb" href="{{ route('manager.slots.index') }}">Parking slots</a> / Edit slot</p>
   <h1>Edit slot {{ $slot->code }}</h1>
-  <p class="manager-page-lede">Change the zone, type, or notes. The slot code cannot change.</p>
+  <p class="manager-page-lede">Change the floor, zone, type, or notes. The slot code cannot change. A floor can only contain 4 zones.</p>
 </section>
 
 <section class="manager-form-panel">

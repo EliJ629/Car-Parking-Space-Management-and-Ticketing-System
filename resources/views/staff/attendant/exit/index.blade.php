@@ -23,7 +23,7 @@
     <div class="ba-card" style="margin-bottom:20px;">
       <h2>Find the parking session</h2>
 
-      <form method="GET" action="{{ route('attendant.exit.index') }}">
+      <form method="GET" action="{{ route('attendant.exit.index') }}" id="exit-search-form">
         <div class="ba-form-group">
           <label class="ba-label" for="exit-q">Ticket number or plate number</label>
 
@@ -31,7 +31,8 @@
             <input class="ba-input ba-predict-ghost" id="exit-ghost" type="text" readonly tabindex="-1" aria-hidden="true" style="font-size:20px;font-weight:700;text-transform:uppercase;">
             <input class="ba-input" id="exit-q" name="q" type="text" data-plate-or-ticket value="{{ $q }}"
                    placeholder="PK-0016 or HJK 4471" style="font-size:20px;font-weight:700;text-transform:uppercase;"
-                   autocomplete="off" autofocus oninput="this.value = this.value.toUpperCase().replace(/[^A-Z0-9\s-]/g, '')">
+                   autocomplete="off" autofocus maxlength="20"
+                   oninput="this.value = this.value.toUpperCase().replace(/[^A-Z0-9\s-]/g, '').slice(0, 20);">
           </div>
 
           <!-- Active Customer Suggestions Chips -->
@@ -42,18 +43,12 @@
             </div>
           </div>
 
-          <p style="font-size:12px;color:var(--muted);margin-top:6px;">Type plate letters/numbers or PK to see live predictions from currently parked customers.</p>
-        </div>
-
-        <div class="ba-form-group">
-          <label style="display:inline-flex;align-items:center;gap:8px;font-size:14px;cursor:pointer;">
-            <input type="checkbox" name="include_closed" value="1" @checked($includeClosed) style="width:18px;height:18px;">
-            Include closed sessions (past 24 hours)
-          </label>
+          <p style="font-size:12px;color:var(--muted);margin-top:6px;">Type plate letters/numbers or PK to see live predictions from currently parked customers (max 20 characters).</p>
+          <div class="ba-err-msg" id="exit-q-err" hidden style="margin-top:8px;"></div>
         </div>
 
         <div style="display:flex;gap:10px;align-items:center;">
-          <button class="btn primary" type="submit">Search</button>
+          <button class="btn primary" type="submit" id="btn-exit-search">Search</button>
           <a class="btn ghost" href="{{ route('attendant.exit.index') }}">Clear</a>
         </div>
       </form>
@@ -93,8 +88,6 @@
                   <td style="padding:12px 8px;">
                     @if ($s->status === 'paid')
                       <span class="badge paid">PAID</span> <span class="badge pending">PENDING EXIT</span>
-                    @elseif ($s->status === 'completed')
-                      <span class="badge completed">COMPLETED</span>
                     @else
                       <span class="badge unpaid">UNPAID</span>
                     @endif
@@ -107,7 +100,6 @@
             </tbody>
           </table>
         </div>
-        <p style="font-size:12px;color:var(--muted);margin-top:12px;">Active sessions only. Tick Include closed sessions to see finished ones.</p>
       </div>
     @endif
   </div>
@@ -136,7 +128,7 @@
 <dialog class="badlg auto-open" id="no-match-dlg">
   <div class="in">
     <h2>No session found</h2>
-    <p>No active session matches <b>{{ $q }}</b>.<br><br>Check the digits with the driver. Closed sessions are hidden. Tick <b>Include closed sessions</b> to search them.</p>
+    <p>No active session matches <b>{{ $q }}</b>.<br><br>Check the digits with the driver, or check <a href="{{ route('attendant.records.index', ['q' => $q]) }}" style="color:var(--paint);font-weight:600;">Parking records</a> if the vehicle has already completed their stay and exited.</p>
     <div class="actions">
       <a class="btn ghost" href="{{ route('attendant.exit.index') }}">Clear</a>
       <button class="btn primary" type="button" data-close onclick="document.getElementById('exit-q').focus()">Search again</button>
@@ -285,8 +277,52 @@ document.addEventListener('DOMContentLoaded', () => {
       exitInput.value = val;
     }
 
+    const errEl = document.getElementById('exit-q-err');
+    if (errEl) errEl.hidden = true;
+    exitInput.style.borderColor = '';
+
     updatePredictions();
   });
+
+  const searchForm = document.getElementById('exit-search-form');
+  const errEl = document.getElementById('exit-q-err');
+  if (searchForm) {
+    searchForm.addEventListener('submit', (e) => {
+      const val = exitInput.value.trim().toUpperCase();
+      if (!val) {
+        e.preventDefault();
+        if (errEl) {
+          errEl.textContent = 'Please enter a ticket number (e.g. PK-0016) or a plate number.';
+          errEl.hidden = false;
+        }
+        exitInput.style.borderColor = 'var(--stop)';
+        exitInput.focus();
+        return;
+      }
+
+      if (val.length < 1) {
+        e.preventDefault();
+        if (errEl) {
+          errEl.textContent = 'Search query is too short.';
+          errEl.hidden = false;
+        }
+        exitInput.style.borderColor = 'var(--stop)';
+        exitInput.focus();
+        return;
+      }
+
+      if (val.length > 20) {
+        e.preventDefault();
+        if (errEl) {
+          errEl.textContent = 'Search query cannot exceed 20 characters.';
+          errEl.hidden = false;
+        }
+        exitInput.style.borderColor = 'var(--stop)';
+        exitInput.focus();
+        return;
+      }
+    });
+  }
 
   // Check on focus or if already has value
   exitInput.addEventListener('focus', updatePredictions);

@@ -24,6 +24,15 @@
     @if ($logHint)
       <div class="alert" role="note"><b>Mail is set to log on this computer.</b>The code is written to storage/logs/laravel.log instead of being sent. Set the Brevo details in .env to send real emails.</div>
     @endif
+    @if ($devCode)
+      <div style="background:#FEF3C7;border:1.5px solid #F59E0B;border-radius:8px;padding:12px;margin:12px 0;font-size:13px;display:flex;align-items:center;justify-content:space-between;gap:8px;">
+        <div>
+          <b style="color:#B45309;display:block;">⚡ Local Dev Mode:</b>
+          <span style="color:#92400E;">Your code is: <code style="font-weight:900;font-size:16px;background:#fff;padding:2px 8px;border-radius:4px;letter-spacing:1px;color:#1E293B;">{{ $devCode }}</code></span>
+        </div>
+        <button type="button" class="btn sm" onclick="document.getElementById('code').value='{{ $devCode }}'; document.forms[0].submit();" style="white-space:nowrap;font-size:12px;padding:6px 12px;min-height:32px;">⚡ Auto-fill & Confirm</button>
+      </div>
+    @endif
 
     <form method="POST" action="{{ route('driver.verify.check') }}" data-busy data-busy-label="Checking" novalidate style="margin-top:16px">
       @csrf

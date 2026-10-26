@@ -38,6 +38,7 @@ class DatabaseSeeder extends Seeder
                 'status' => User::STATUS_ACTIVE,
             ],
         );
+        $driver->forceFill(['email_verified_at' => now()])->save();
 
         $driver->vehicles()->firstOrCreate(
             ['plate_number' => 'DEF2208'],

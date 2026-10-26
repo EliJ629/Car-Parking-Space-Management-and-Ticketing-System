@@ -63,7 +63,7 @@
       <h2 style="color:var(--ok);">Exit completed</h2>
       <p style="color:var(--muted);font-size:14px;">The Guard approved the exit. The session is closed and slot {{ $session->slot_code }} is Available.</p>
 
-      <div style="padding:16px;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;margin-bottom:18px;">
+      <div class="ba-detail-box" style="padding:16px;background:var(--bg);border:1px solid var(--line);border-radius:8px;margin-bottom:18px;color:var(--ink);">
         <div style="display:flex;justify-content:space-between;font-size:14px;margin-bottom:6px;">
           <span>Paid in cash</span>
           <b style="font-size:22px;font-family:var(--f-d);">{{ \App\Support\Lot::peso($session->payment?->total) }}</b>

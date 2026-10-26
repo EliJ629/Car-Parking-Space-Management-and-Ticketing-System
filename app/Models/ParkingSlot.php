@@ -51,6 +51,12 @@ class ParkingSlot extends Model
     }
 
     /** @return array<string, string> */
+    /** The slot class a zone's vehicle type gives its slots: a Motorcycle zone holds motorcycles, a Car zone everything else. */
+    public static function classForZoneType(?string $zoneVehicleType): string
+    {
+        return $zoneVehicleType === ParkingLayoutZone::VEHICLE_MOTORCYCLE ? self::CLASS_MOTORCYCLE : self::CLASS_CAR;
+    }
+
     public static function vehicleClasses(): array
     {
         return [self::CLASS_CAR => 'Car zone', self::CLASS_MOTORCYCLE => 'Motorcycle zone'];
@@ -90,6 +96,11 @@ class ParkingSlot extends Model
     public function statusLabel(): string
     {
         return self::statuses()[$this->status] ?? 'Unknown';
+    }
+
+    public function floorNumber(): ?int
+    {
+        return Lot::floorForZone($this->zone);
     }
 
     public function reservations(): HasMany

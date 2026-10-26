@@ -125,13 +125,13 @@ class WrongSlotAndZonesTest extends TestCase
         $a = $this->slot('A-01', 'Zone A');
         $this->slot('A-02', 'Zone A');
 
-        $this->actingAs($manager)->patch(route('manager.slots.update', $a), ['zone' => 'Zone A', 'type' => 'Standard', 'vehicle_class' => 'motorcycle'])
+        $this->actingAs($manager)->patch(route('manager.slots.update', $a), ['zone' => 'Zone A', 'type' => 'Standard', 'vehicle_type' => 'Motorcycle'])
             ->assertRedirect(route('manager.slots.index'));
         $this->assertSame(['motorcycle', 'motorcycle'], ParkingSlot::where('zone', 'Zone A')->pluck('vehicle_class')->all());
 
         // A new slot cannot be the odd one out.
-        $this->post(route('manager.slots.store'), ['code' => 'A-03', 'zone' => 'Zone A', 'type' => 'Standard', 'vehicle_class' => 'car'])->assertSessionHasErrors('vehicle_class');
-        $this->post(route('manager.slots.store'), ['code' => 'A-03', 'zone' => 'Zone A', 'type' => 'Standard', 'vehicle_class' => 'motorcycle'])->assertSessionHasNoErrors();
+        $this->post(route('manager.slots.store'), ['code' => 'A-03', 'zone' => 'Zone A', 'type' => 'Standard', 'vehicle_type' => 'Car'])->assertSessionHasErrors('vehicle_type');
+        $this->post(route('manager.slots.store'), ['code' => 'A-03', 'zone' => 'Zone A', 'type' => 'Standard', 'vehicle_type' => 'Motorcycle'])->assertSessionHasNoErrors();
         // Left out, it follows the zone.
         $this->post(route('manager.slots.store'), ['code' => 'A-04', 'zone' => 'Zone A', 'type' => 'Standard'])->assertSessionHasNoErrors();
         $this->assertSame('motorcycle', ParkingSlot::where('code', 'A-04')->value('vehicle_class'));
@@ -143,9 +143,10 @@ class WrongSlotAndZonesTest extends TestCase
         $a = $this->slot('A-01', 'Zone A');
         $b = $this->slot('A-02', 'Zone A');
         $b->update(['status' => ParkingSlot::STATUS_OCCUPIED]);
+        \App\Models\ParkingLayoutZone::create(['zone' => 'Zone A', 'vehicle_type' => 'Car']);
 
-        $this->actingAs($manager)->patch(route('manager.slots.update', $a), ['zone' => 'Zone A', 'type' => 'Standard', 'vehicle_class' => 'motorcycle'])
-            ->assertSessionHasErrors('vehicle_class');
+        $this->actingAs($manager)->patch(route('manager.slots.update', $a), ['zone' => 'Zone A', 'type' => 'Standard', 'vehicle_type' => 'Motorcycle'])
+            ->assertSessionHasErrors('vehicle_type');
         $this->assertSame('car', $a->fresh()->vehicle_class);
     }
 

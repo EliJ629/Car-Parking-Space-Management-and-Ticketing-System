@@ -41,7 +41,6 @@ return Application::configure(basePath: dirname(__DIR__))
             : route('driver.home'));
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        $exceptions->dontFlash(['manager_pin', 'manager_pin_confirmation']);
 
         // A photo bigger than PHP's post_max_size empties the whole form, so Laravel never sees the fields.
         // Send the driver back to the reservation pop-up with a clear reason instead of an error page.
