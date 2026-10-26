@@ -51,6 +51,11 @@ class ParkingSlot extends Model
         return self::statuses()[$this->status] ?? 'Unknown';
     }
 
+    public function floorNumber(): ?int
+    {
+        return Lot::floorForZone($this->zone);
+    }
+
     public function reservations(): HasMany
     {
         return $this->hasMany(ParkingReservation::class, 'slot_id');

@@ -241,14 +241,29 @@ class ParkingSlotManagementTest extends TestCase
         $this->actingAs($manager)
             ->get(route('manager.slots.create'))
             ->assertOk()
-            ->assertSee('Add parking slot');
+            ->assertSee('Add parking slot')
+            ->assertSee('Floor 1')
+            ->assertSee('Zones: 1 / 4')
+            ->assertSee('A floor can only contain 4 zones.')
+            ->assertSee('Add zone');
 
         $this->get(route('manager.slots.index', ['status' => ParkingSlot::STATUS_AVAILABLE, 'zone' => 'Zone A']))
             ->assertOk()
             ->assertSee('A-01')
             ->assertDontSee('A-02')
             ->assertSee('data-auto-filter', false)
-            ->assertDontSee('>Apply<', false);
+            ->assertDontSee('>Apply<', false)
+            ->assertSee('Floor');
+
+        $this->get(route('manager.slots.index', ['floor' => 1]))
+            ->assertOk()
+            ->assertSee('A-01')
+            ->assertSee('A-02');
+
+        $this->get(route('manager.slots.index', ['floor' => 2]))
+            ->assertOk()
+            ->assertDontSee('>A-01<', false)
+            ->assertDontSee('>A-02<', false);
 
         $this->get(route('manager.slots.edit', $available))
             ->assertOk()
@@ -302,6 +317,145 @@ class ParkingSlotManagementTest extends TestCase
         $this->patch(route('manager.slots.update', $zoneA), ['zone' => 'Zone A', 'type' => ParkingSlot::TYPE_STANDARD, 'notes' => 'Near lift'])
             ->assertSessionHasNoErrors();
         $this->assertSame('Near lift', $zoneA->fresh()->notes);
+    }
+
+    public function test_manager_cannot_open_a_fifth_zone_or_wrong_floor_on_a_full_floor(): void
+    {
+        $manager = User::factory()->create([
+            'role' => User::ROLE_MANAGER,
+            'status' => User::STATUS_ACTIVE,
+        ]);
+
+        foreach (['A' => 'A-01', 'B' => 'B-01', 'C' => 'C-01', 'D' => 'D-01'] as $letter => $code) {
+            ParkingSlot::create([
+                'code' => $code,
+                'zone' => "Zone {$letter}",
+                'type' => ParkingSlot::TYPE_STANDARD,
+                'status' => ParkingSlot::STATUS_AVAILABLE,
+            ]);
+        }
+
+        $this->actingAs($manager)
+            ->get(route('manager.slots.create'))
+            ->assertOk()
+            ->assertSee('Zones: 4 / 4')
+            ->assertSee('This floor already has 4 zones.')
+            ->assertSee('Floor 2')
+            ->assertSee('disabled', false);
+
+        $this->from(route('manager.slots.create'))
+            ->post(route('manager.slots.store'), [
+                'code' => 'E-01',
+                'floor' => 1,
+                'zone' => 'Zone E',
+                'type' => ParkingSlot::TYPE_STANDARD,
+            ])
+            ->assertRedirect(route('manager.slots.create'))
+            ->assertSessionHasErrors([
+                'zone' => 'Choose a zone that belongs to the selected floor. A floor can only contain 4 zones.',
+            ]);
+
+        $this->assertDatabaseMissing('parking_slots', ['code' => 'E-01']);
+
+        $this->post(route('manager.slots.store'), [
+            'code' => 'A-09',
+            'floor' => 1,
+            'zone' => 'Zone A',
+            'type' => ParkingSlot::TYPE_STANDARD,
+        ])->assertRedirect(route('manager.slots.index'));
+
+        $this->assertDatabaseHas('parking_slots', [
+            'code' => 'A-09',
+            'zone' => 'Zone A',
+        ]);
+    }
+
+    public function test_next_floor_opens_only_after_four_zones_and_accepts_the_next_zone_group(): void
+    {
+        $manager = User::factory()->create([
+            'role' => User::ROLE_MANAGER,
+            'status' => User::STATUS_ACTIVE,
+        ]);
+        ParkingSlot::create([
+            'code' => 'A-01',
+            'zone' => 'Zone A',
+            'type' => ParkingSlot::TYPE_STANDARD,
+            'status' => ParkingSlot::STATUS_AVAILABLE,
+        ]);
+
+        $this->actingAs($manager)
+            ->from(route('manager.slots.create'))
+            ->post(route('manager.slots.store'), [
+                'code' => 'E-01',
+                'floor' => 2,
+                'zone' => 'Zone E',
+                'type' => ParkingSlot::TYPE_STANDARD,
+            ])
+            ->assertRedirect(route('manager.slots.create'))
+            ->assertSessionHasErrors([
+                'floor' => 'That floor is not available yet. A new floor opens after the current floor has 4 zones.',
+            ]);
+
+        $this->assertDatabaseMissing('parking_slots', ['code' => 'E-01']);
+
+        foreach (['B' => 'B-01', 'C' => 'C-01', 'D' => 'D-01'] as $letter => $code) {
+            ParkingSlot::create([
+                'code' => $code,
+                'zone' => "Zone {$letter}",
+                'type' => ParkingSlot::TYPE_STANDARD,
+                'status' => ParkingSlot::STATUS_AVAILABLE,
+            ]);
+        }
+
+        $this->post(route('manager.slots.store'), [
+            'code' => 'E-01',
+            'floor' => 2,
+            'zone' => 'Zone E',
+            'type' => ParkingSlot::TYPE_STANDARD,
+        ])->assertRedirect(route('manager.slots.index'));
+
+        $this->assertDatabaseHas('parking_slots', [
+            'code' => 'E-01',
+            'zone' => 'Zone E',
+        ]);
+        $this->assertSame(2, ParkingSlot::where('code', 'E-01')->firstOrFail()->floorNumber());
+    }
+
+    public function test_manager_cannot_move_a_slot_onto_a_full_floor_as_a_new_zone(): void
+    {
+        $manager = User::factory()->create([
+            'role' => User::ROLE_MANAGER,
+            'status' => User::STATUS_ACTIVE,
+        ]);
+
+        foreach (['A' => 'A-01', 'B' => 'B-01', 'C' => 'C-01', 'D' => 'D-01'] as $letter => $code) {
+            ParkingSlot::create([
+                'code' => $code,
+                'zone' => "Zone {$letter}",
+                'type' => ParkingSlot::TYPE_STANDARD,
+                'status' => ParkingSlot::STATUS_AVAILABLE,
+            ]);
+        }
+        $floorTwo = ParkingSlot::create([
+            'code' => 'E-01',
+            'zone' => 'Zone E',
+            'type' => ParkingSlot::TYPE_STANDARD,
+            'status' => ParkingSlot::STATUS_AVAILABLE,
+        ]);
+
+        $this->actingAs($manager)
+            ->from(route('manager.slots.edit', $floorTwo))
+            ->patch(route('manager.slots.update', $floorTwo), [
+                'floor' => 1,
+                'zone' => 'Zone E',
+                'type' => ParkingSlot::TYPE_STANDARD,
+            ])
+            ->assertRedirect(route('manager.slots.edit', $floorTwo))
+            ->assertSessionHasErrors([
+                'zone' => 'Choose a zone that belongs to the selected floor. A floor can only contain 4 zones.',
+            ]);
+
+        $this->assertSame('Zone E', $floorTwo->fresh()->zone);
     }
 
     public function test_manager_can_save_layout_positions_without_changing_slot_business_state(): void

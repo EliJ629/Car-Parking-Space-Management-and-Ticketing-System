@@ -195,6 +195,93 @@ class Lot
         return max(1, (int) self::setting('maximum_active_zones', 26));
     }
 
+    /** A floor is derived from the zone letter: A-D, E-H, and so on. */
+    public const MAX_ZONES_PER_FLOOR = 4;
+
+    public static function maxZonesPerFloor(): int
+    {
+        return self::MAX_ZONES_PER_FLOOR;
+    }
+
+    public static function zoneLetter(?string $zone): ?string
+    {
+        if ($zone !== null && preg_match('/^Zone ([A-Z])$/', $zone, $matches) === 1) {
+            return $matches[1];
+        }
+
+        return null;
+    }
+
+    public static function floorForZone(?string $zone): ?int
+    {
+        $letter = self::zoneLetter($zone);
+
+        return $letter === null ? null : intdiv(ord($letter) - ord('A'), self::MAX_ZONES_PER_FLOOR) + 1;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public static function zonesForFloor(int $floor): array
+    {
+        if ($floor < 1) {
+            return [];
+        }
+
+        $letters = array_slice(range('A', 'Z'), ($floor - 1) * self::MAX_ZONES_PER_FLOOR, self::MAX_ZONES_PER_FLOOR);
+
+        return array_map(fn (string $letter): string => "Zone {$letter}", $letters);
+    }
+
+    public static function maxFloor(): int
+    {
+        return max(1, (int) ceil(min(26, self::maxActiveZones()) / self::MAX_ZONES_PER_FLOOR));
+    }
+
+    /**
+     * Floors that already have zones, plus the next floor when the highest one is full.
+     *
+     * @param  iterable<int, string>  $activeZones
+     * @return array<int, int>
+     */
+    public static function availableFloors(iterable $activeZones = []): array
+    {
+        $active = collect($activeZones)->unique()->values();
+        $highestOccupied = (int) ($active
+            ->map(fn (string $zone): ?int => self::floorForZone($zone))
+            ->filter()
+            ->max() ?: 1);
+        $floors = range(1, $highestOccupied);
+        $zonesOnHighest = $active
+            ->filter(fn (string $zone): bool => self::floorForZone($zone) === $highestOccupied)
+            ->count();
+
+        if (
+            $active->count() < self::maxActiveZones()
+            && $highestOccupied < self::maxFloor()
+            && $zonesOnHighest >= self::MAX_ZONES_PER_FLOOR
+        ) {
+            $floors[] = $highestOccupied + 1;
+        }
+
+        return $floors;
+    }
+
+    /**
+     * @param  iterable<int, string>  $activeZones
+     * @return array<int, string>
+     */
+    public static function activeZonesOnFloor(int $floor, iterable $activeZones): array
+    {
+        $allowed = self::zonesForFloor($floor);
+
+        return collect($activeZones)
+            ->unique()
+            ->filter(fn (string $zone): bool => in_array($zone, $allowed, true))
+            ->values()
+            ->all();
+    }
+
     public static function exitWindowMinutes(): int
     {
         return max(1, (int) self::setting('exit_window_minutes', 15));

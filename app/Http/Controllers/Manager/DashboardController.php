@@ -56,6 +56,7 @@ class DashboardController extends ManagerController
                 'attentionSlots' => $attentionSlots,
                 'totalSlots' => $slots->count(),
                 'zoneCount' => $slots->pluck('zone')->unique()->count(),
+                'floorCount' => $slots->pluck('zone')->unique()->map(fn (string $zone): ?int => Lot::floorForZone($zone))->filter()->unique()->count(),
                 'lastUpdated' => $slots->max('updated_at'),
                 'salesToday' => $salesToday,
                 'openIncidents' => $openIncidents,

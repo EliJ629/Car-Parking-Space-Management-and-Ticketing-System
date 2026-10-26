@@ -135,6 +135,9 @@
 .manager-field input,.manager-field select{height:43px;padding:0 10px}
 .manager-field textarea{min-height:84px;padding:10px;resize:vertical}
 .manager-field input[readonly]{background:var(--out-bg);color:var(--muted)}
+.manager-add-zone-row{display:flex;gap:8px;margin-top:8px}
+.manager-add-zone-row .btn[disabled]{opacity:.45;cursor:not-allowed}
+.manager-field [data-zone-count]{font-weight:700}
 .manager-form-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px;padding-top:14px;border-top:1px solid var(--line)}
 .manager-current-status{display:flex;justify-content:space-between;align-items:center;gap:14px;max-width:700px;margin-top:14px;padding:14px;background:var(--out-bg);border-left:3px solid var(--ink);border-radius:4px}
 .manager-current-status>div{display:grid;gap:3px}

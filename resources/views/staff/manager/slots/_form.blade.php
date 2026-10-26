@@ -1,4 +1,5 @@
-<div class="manager-form-grid">
+<div class="manager-form-grid" data-slot-floor-form data-max-zones-per-floor="{{ $maxZonesPerFloor }}" data-selected-zone="{{ old('zone', $slot->zone ?? '') }}">
+  <script type="application/json" data-floor-map>@json($floorZoneMap)</script>
   @if (isset($slot))
     <div class="manager-field manager-field-wide">
       <label class="f" for="slot-code">Slot code</label>
@@ -15,13 +16,30 @@
   @endif
 
   <div class="manager-field">
+    <label class="f" for="slot-floor">Floor</label>
+    <select id="slot-floor" name="floor" required @if ($errors->has('floor')) aria-invalid="true" @endif>
+      @foreach ($floors as $floor)
+        <option value="{{ $floor }}" @selected((int) old('floor', $selectedFloor) === (int) $floor)>Floor {{ $floor }}</option>
+      @endforeach
+    </select>
+    @php($selectedFloorCount = $floorZoneMap[(int) old('floor', $selectedFloor)]['count'] ?? count($activeZonesOnFloor))
+    <p class="hint" data-zone-count>Zones: {{ $selectedFloorCount }} / {{ $maxZonesPerFloor }}</p>
+    @error('floor')<p class="err">{{ $message }}</p>@enderror
+  </div>
+
+  <div class="manager-field">
     <label class="f" for="slot-zone">Zone</label>
     <select id="slot-zone" name="zone" required @if ($errors->has('zone')) aria-invalid="true" @endif>
       @foreach ($zones as $zone)
-        <option value="{{ $zone }}" @selected(old('zone', $slot->zone ?? 'Zone A') === $zone)>{{ $zone }}</option>
+        @php($isActive = in_array($zone, $activeZonesOnFloor, true) || $zone === old('zone', $slot->zone ?? null))
+        <option value="{{ $zone }}" @selected(old('zone', $slot->zone ?? ($zones[0] ?? '')) === $zone) @disabled($selectedFloorCount >= $maxZonesPerFloor && ! $isActive)>{{ $zone }}</option>
       @endforeach
     </select>
-    <p class="hint">Up to {{ \App\Support\Lot::maxSlotsPerZone() }} slots per zone and {{ \App\Support\Lot::maxActiveZones() }} zones. Change these limits in Settings.</p>
+    <div class="manager-add-zone-row">
+      <button class="btn ghost sm" type="button" data-add-zone @disabled($selectedFloorCount >= $maxZonesPerFloor)>Add zone</button>
+    </div>
+    <p class="hint">A floor can only contain 4 zones. Up to {{ \App\Support\Lot::maxSlotsPerZone() }} slots per zone.</p>
+    <p class="err" data-floor-limit @if ($selectedFloorCount < $maxZonesPerFloor) hidden @endif>This floor already has 4 zones. Choose an existing zone or select another floor.</p>
     @error('zone')<p class="err">{{ $message }}</p>@enderror
   </div>
 

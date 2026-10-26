@@ -54,8 +54,9 @@
           <div class="manager-layout-canvas" data-layout-canvas>
             @foreach ($slotsByZone as $zone => $zoneSlots)
               @php($zonePosition = $zonePositions[$zone] ?? null)
+              @php($zoneFloor = \App\Support\Lot::floorForZone($zone))
               <span class="manager-layout-zone-label" data-layout-zone-label data-zone="{{ $zone }}"
-                    data-x="{{ $zonePosition?->label_x ?? '' }}" data-y="{{ $zonePosition?->label_y ?? '' }}">{{ $zone }}</span>
+                    data-x="{{ $zonePosition?->label_x ?? '' }}" data-y="{{ $zonePosition?->label_y ?? '' }}">{{ $zoneFloor ? 'Floor '.$zoneFloor.' · ' : '' }}{{ $zone }}</span>
             @endforeach
             @foreach ($slotsByZone as $zone => $zoneSlots)
               @foreach ($zoneSlots as $slot)
@@ -134,6 +135,7 @@
       <p class="eyebrow">Lot summary</p>
       <h2>Current layout</h2>
       <div class="manager-summary-row"><span>Parking slots</span><strong>{{ $totalSlots }}</strong></div>
+      <div class="manager-summary-row"><span>Floors</span><strong>{{ $floorCount }}</strong></div>
       <div class="manager-summary-row"><span>Zones</span><strong>{{ $zoneCount }}</strong></div>
       <div class="manager-summary-row"><span>Last slot change</span><strong>{{ $lastUpdated ? \App\Support\Lot::time(\Illuminate\Support\Carbon::parse($lastUpdated)) : 'No changes yet' }}</strong></div>
       <p class="manager-summary-note">Vehicle activity and reservations will appear as booth and driver operations are connected.</p>

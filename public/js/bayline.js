@@ -116,6 +116,76 @@ document.querySelectorAll('input[data-live-gmail]').forEach(function(input){
   }
   input.addEventListener('input',run);run();
 });
+/* Slot create/edit: floor choice drives the four zones on that floor. */
+document.querySelectorAll('[data-slot-floor-form]').forEach(function(root){
+  var floorSelect=root.querySelector('[name=floor]');
+  var zoneSelect=root.querySelector('[name=zone]');
+  var countEl=root.querySelector('[data-zone-count]');
+  var addBtn=root.querySelector('[data-add-zone]');
+  var limitEl=root.querySelector('[data-floor-limit]');
+  var mapEl=root.querySelector('[data-floor-map]');
+  var map={};
+  var max=parseInt(root.getAttribute('data-max-zones-per-floor'),10)||4;
+  try{map=mapEl?JSON.parse(mapEl.textContent):{}}catch(e){map={}}
+
+  function infoFor(floor){
+    return map[floor]||map[String(floor)]||{zones:[],active:[],count:0};
+  }
+
+  function sync(){
+    if(!floorSelect||!zoneSelect)return;
+    var info=infoFor(floorSelect.value);
+    var current=zoneSelect.value||root.getAttribute('data-selected-zone')||'';
+    zoneSelect.innerHTML='';
+    info.zones.forEach(function(zone){
+      var active=info.active.indexOf(zone)!==-1;
+      var option=document.createElement('option');
+      option.value=zone;
+      option.textContent=zone;
+      if(!active&&info.count>=max&&zone!==current)option.disabled=true;
+      if(zone===current)option.selected=true;
+      zoneSelect.appendChild(option);
+    });
+    if(!zoneSelect.value){
+      var first=[].find.call(zoneSelect.options,function(option){return !option.disabled});
+      if(first)zoneSelect.value=first.value;
+    }
+    if(countEl)countEl.textContent='Zones: '+info.count+' / '+max;
+    var full=info.count>=max;
+    if(addBtn){
+      addBtn.disabled=full;
+      addBtn.setAttribute('aria-disabled',full?'true':'false');
+    }
+    if(limitEl)limitEl.hidden=!full;
+    root.setAttribute('data-selected-zone',zoneSelect.value);
+  }
+
+  if(addBtn){
+    addBtn.addEventListener('click',function(){
+      var info=infoFor(floorSelect.value);
+      if(info.count>=max)return;
+      var next=info.zones.find(function(zone){return info.active.indexOf(zone)===-1});
+      if(next){
+        zoneSelect.value=next;
+        root.setAttribute('data-selected-zone',next);
+      }
+    });
+  }
+
+  if(floorSelect){
+    floorSelect.addEventListener('change',function(){
+      root.setAttribute('data-selected-zone','');
+      if(zoneSelect)zoneSelect.value='';
+      sync();
+    });
+  }
+  if(zoneSelect){
+    zoneSelect.addEventListener('change',function(){
+      root.setAttribute('data-selected-zone',zoneSelect.value);
+    });
+  }
+  sync();
+});
 /* Filter panels update themselves: <form data-auto-filter>.
    Selects and dates submit straight away; typed searches wait briefly so each key does not send a request.
    Paired date inputs marked data-range-start / data-range-end validate the range before submitting. */

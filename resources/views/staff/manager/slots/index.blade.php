@@ -20,6 +20,15 @@
     </select>
   </div>
   <div class="manager-filter-field">
+    <label class="f" for="filter-floor">Floor</label>
+    <select id="filter-floor" name="floor">
+      <option value="">All floors</option>
+      @foreach ($floors as $floor)
+        <option value="{{ $floor }}" @selected((string) ($filters['floor'] ?? '') === (string) $floor)>Floor {{ $floor }}</option>
+      @endforeach
+    </select>
+  </div>
+  <div class="manager-filter-field">
     <label class="f" for="filter-zone">Zone</label>
     <select id="filter-zone" name="zone">
       <option value="">All zones</option>
@@ -40,12 +49,13 @@
 <div class="manager-table-wrap">
   <table class="manager-table">
     <thead>
-      <tr><th scope="col">Slot</th><th scope="col">Zone</th><th scope="col">Type</th><th scope="col">Status</th><th scope="col">Notes</th><th scope="col">Actions</th></tr>
+      <tr><th scope="col">Slot</th><th scope="col">Floor</th><th scope="col">Zone</th><th scope="col">Type</th><th scope="col">Status</th><th scope="col">Notes</th><th scope="col">Actions</th></tr>
     </thead>
     <tbody>
       @forelse ($slots as $slot)
         <tr>
           <th scope="row"><a class="manager-slot-code" href="{{ route('manager.slots.edit', $slot) }}">{{ $slot->code }}</a></th>
+          <td>{{ $slot->floorNumber() ? 'Floor '.$slot->floorNumber() : '—' }}</td>
           <td>{{ $slot->zone }}</td>
           <td>{{ $slot->type }}</td>
           <td>
@@ -86,7 +96,7 @@
           </td>
         </tr>
       @empty
-        <tr><td class="manager-table-empty" colspan="6">No slots match these filters.</td></tr>
+        <tr><td class="manager-table-empty" colspan="7">No slots match these filters.</td></tr>
       @endforelse
     </tbody>
   </table>
