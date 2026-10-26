@@ -40,6 +40,8 @@ class ParkingSlotManagementTest extends TestCase
 
         $response->assertOk()
             ->assertSee('Live lot map')
+            ->assertSee('layout-editor-dialog', false)
+            ->assertSee('data-open-dialog="layout-editor-dialog"', false)
             ->assertSee('A-01')
             ->assertSee('A-02')
             ->assertSee('Maintenance')

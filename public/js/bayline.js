@@ -181,11 +181,16 @@ document.querySelectorAll('form[data-range-check]').forEach(function(form){
 });
 
 document.querySelectorAll('[data-layout-canvas]').forEach(function(canvas){
-  var editor=canvas.closest('[data-layout-editor]'),panel=editor&&editor.closest('.manager-lot-panel'),slots=[].slice.call(canvas.querySelectorAll('[data-layout-slot]')),labels=[].slice.call(canvas.querySelectorAll('[data-layout-zone-label]'));
+  var editor=canvas.closest('[data-layout-editor]'),editorHome=editor&&editor.parentNode,formHome=null,actionsHome=null,editorWidth='';
+  var modal=document.getElementById('layout-editor-dialog'),modalContent=modal&&modal.querySelector('[data-layout-modal-content]');
+  var panel=editor&&(editor.closest('.manager-lot-panel')||editor.closest('[data-layout-modal]')),slots=[].slice.call(canvas.querySelectorAll('[data-layout-slot]')),labels=[].slice.call(canvas.querySelectorAll('[data-layout-zone-label]'));
   var actions=panel&&panel.querySelector('[data-layout-actions]'),edit=actions&&actions.querySelector('[data-layout-edit]');
   var auto=actions&&actions.querySelector('[data-layout-auto]'),cancel=actions&&actions.querySelector('[data-layout-cancel]');
   var save=actions&&actions.querySelector('[data-layout-save]'),form=panel&&panel.querySelector('[data-layout-form]');
   var inputs=form&&form.querySelector('[data-layout-inputs]'),editing=false,snapshot={slots:[],labels:[]};
+  if(editor&&modalContent){
+    formHome=form&&form.parentNode;actionsHome=actions&&actions.parentNode;
+  }
   function clamp(value,min,max){return Math.max(min,Math.min(max,value))}
   function arrange(){
     var groups={},zones,height=40,offset=20;
@@ -214,6 +219,21 @@ document.querySelectorAll('[data-layout-canvas]').forEach(function(canvas){
     edit.hidden=value;auto.hidden=!value;cancel.hidden=!value;save.hidden=!value;
     actions.classList.toggle('is-editing',value);editor.classList.toggle('is-editing',value);
   }
+  function moveToModal(){
+    if(!modalContent||!editor)return;
+    editorWidth=editor.style.width;
+    editor.style.width=editor.getBoundingClientRect().width+'px';
+    modalContent.appendChild(actions);modalContent.appendChild(editor);
+    if(form)modalContent.appendChild(form);
+    panel=modalContent;
+    if(!modal.open&&typeof modal.showModal==='function')modal.showModal();
+  }
+  function restoreFromModal(){
+    if(!modalContent||!editor||editor.parentNode!==modalContent)return;
+    actionsHome.appendChild(actions);editorHome.appendChild(editor);formHome.appendChild(form);
+    editor.style.width=editorWidth;
+    panel=editor.closest('.manager-lot-panel');
+  }
   arrange();
   if(editor){
     window.requestAnimationFrame(function(){
@@ -224,12 +244,15 @@ document.querySelectorAll('[data-layout-canvas]').forEach(function(canvas){
   edit.addEventListener('click',function(){
     snapshot.slots=slots.map(function(slot){return {slot:slot,left:slot.style.left,top:slot.style.top}});
     snapshot.labels=labels.map(function(label){return {label:label,left:label.style.left,top:label.style.top}});
+    moveToModal();
     editingState(true);
   });
   cancel.addEventListener('click',function(){
     snapshot.slots.forEach(function(item){item.slot.style.left=item.left;item.slot.style.top=item.top});
     snapshot.labels.forEach(function(item){item.label.style.left=item.left;item.label.style.top=item.top});
     editingState(false);
+    restoreFromModal();
+    if(modal&&modal.open)modal.close();
   });
   auto.addEventListener('click',function(){
     slots.forEach(function(slot){slot.dataset.x='';slot.dataset.y=''});
@@ -279,6 +302,16 @@ document.querySelectorAll('[data-layout-canvas]').forEach(function(canvas){
     });
     label.addEventListener('pointerup',function(){start=null});
   });
+  if(modal){
+    modal.addEventListener('close',function(){
+      if(editing){
+        snapshot.slots.forEach(function(item){item.slot.style.left=item.left;item.slot.style.top=item.top});
+        snapshot.labels.forEach(function(item){item.label.style.left=item.left;item.label.style.top=item.top});
+        editingState(false);
+      }
+      restoreFromModal();
+    });
+  }
 });
 })();
 window.LOT=[['A-01','av'],['A-02','occ'],['A-03','av'],['A-04','res'],['A-05','occ'],['A-06','av'],['A-07','pend'],['A-08','av'],['B-01','occ'],['B-02','av'],['B-03','res'],['B-04','out']];

@@ -34,7 +34,7 @@
         <h2>Live lot map</h2>
       </div>
       <div class="manager-layout-actions" data-layout-actions>
-        <button class="btn ghost sm" type="button" data-layout-edit>Edit Layout</button>
+        <button class="btn ghost sm" type="button" data-layout-edit data-open-dialog="layout-editor-dialog">Edit Layout</button>
         <button class="btn ghost sm" type="button" data-layout-auto hidden>Auto Layout</button>
         <button class="btn ghost sm" type="button" data-layout-cancel hidden>Cancel</button>
         <button class="btn sm" type="button" data-layout-save hidden>Save Layout</button>
@@ -117,6 +117,16 @@
       @endforelse
       <a class="manager-text-link manager-panel-link" href="{{ route('manager.slots.index') }}">Review parking slots</a>
     </section>
+
+    <dialog class="manager-dialog manager-layout-dialog" id="layout-editor-dialog" aria-labelledby="layout-editor-title">
+      <div class="manager-dialog-inner">
+        <button class="manager-dialog-close" type="button" data-close-dialog aria-label="Close editor">X</button>
+        <p class="eyebrow">Parking layout editor</p>
+        <h2 id="layout-editor-title">Edit live lot map</h2>
+        <p class="manager-muted">Pan across the existing map, then arrange slots and zone indicators before saving.</p>
+        <div data-layout-modal-content></div>
+      </div>
+    </dialog>
 
     <section class="manager-panel manager-lot-summary">
       <p class="eyebrow">Lot summary</p>
