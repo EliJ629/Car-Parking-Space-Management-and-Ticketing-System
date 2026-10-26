@@ -9,6 +9,7 @@ use App\Models\SystemSetting;
 use App\Models\User;
 use Database\Seeders\DatabaseSeeder;
 use Database\Seeders\ParkingSlotSeeder;
+use Database\Seeders\ParkingSlotStatusSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -39,13 +40,77 @@ class ParkingSlotManagementTest extends TestCase
         $response = $this->actingAs($manager)->get(route('manager.dashboard'));
 
         $response->assertOk()
-            ->assertSee('Live lot map')
-            ->assertSee('layout-editor-dialog', false)
-            ->assertSee('data-open-dialog="layout-editor-dialog"', false)
-            ->assertSee('A-01')
+            ->assertSee('Live parking map')
             ->assertSee('A-02')
             ->assertSee('Maintenance')
             ->assertSee('Parking slots');
+    }
+
+    public function test_manager_dashboard_shows_report_analytics_snapshot(): void
+    {
+        $manager = User::factory()->create([
+            'role' => User::ROLE_MANAGER,
+            'status' => User::STATUS_ACTIVE,
+        ]);
+        ParkingSlot::create([
+            'code' => 'A-01',
+            'zone' => 'Zone A',
+            'type' => ParkingSlot::TYPE_STANDARD,
+            'status' => ParkingSlot::STATUS_AVAILABLE,
+        ]);
+
+        $this->actingAs($manager)
+            ->get(route('manager.dashboard'))
+            ->assertOk()
+            ->assertSee('Reports snapshot')
+            ->assertSee('Average occupancy')
+            ->assertSee('Peak entry hour')
+            ->assertSee('Open full report');
+    }
+
+    public function test_manager_live_map_shows_one_existing_floor_at_a_time(): void
+    {
+        $manager = User::factory()->create([
+            'role' => User::ROLE_MANAGER,
+            'status' => User::STATUS_ACTIVE,
+        ]);
+        ParkingSlot::create([
+            'code' => 'A-01',
+            'zone' => 'Zone A',
+            'type' => ParkingSlot::TYPE_STANDARD,
+            'status' => ParkingSlot::STATUS_AVAILABLE,
+        ]);
+        ParkingSlot::create([
+            'code' => 'A-02',
+            'zone' => 'Zone A',
+            'type' => ParkingSlot::TYPE_PWD,
+            'status' => ParkingSlot::STATUS_OUT_OF_SERVICE,
+            'out_of_service_reason' => 'Maintenance',
+        ]);
+        ParkingSlot::create([
+            'code' => 'E-01',
+            'zone' => 'Zone E',
+            'type' => ParkingSlot::TYPE_STANDARD,
+            'status' => ParkingSlot::STATUS_AVAILABLE,
+        ]);
+
+        $this->actingAs($manager)
+            ->get(route('manager.map'))
+            ->assertOk()
+            ->assertSee('Live parking map')
+            ->assertSee('layout-editor-dialog', false)
+            ->assertSee('Floor 1')
+            ->assertSee('Floor 2')
+            ->assertSee('A-01')
+            ->assertSee('A-02')
+            ->assertDontSee('>E-01<', false)
+            ->assertDontSee('Floor 3');
+
+        $this->get(route('manager.map', ['floor' => 2]))
+            ->assertOk()
+            ->assertSee('E-01')
+            ->assertDontSee('>A-01<', false)
+            ->assertDontSee('>A-02<', false);
     }
 
     public function test_manager_can_create_edit_and_audit_a_slot(): void
@@ -86,6 +151,125 @@ class ParkingSlotManagementTest extends TestCase
         $updateLog = ActivityLog::where('action', 'slot_updated')->firstOrFail();
         $this->assertSame('Zone A', $updateLog->details['before']['zone']);
         $this->assertSame('Zone B', $updateLog->details['after']['zone']);
+    }
+
+    public function test_manager_slot_creation_generates_code_from_zone_and_number(): void
+    {
+        $manager = User::factory()->create([
+            'role' => User::ROLE_MANAGER,
+            'status' => User::STATUS_ACTIVE,
+        ]);
+
+        $this->actingAs($manager)
+            ->post(route('manager.slots.store'), [
+                'zone' => 'Zone B',
+                'slot_number' => 16,
+                'type' => ParkingSlot::TYPE_STANDARD,
+            ])
+            ->assertRedirect(route('manager.slots.index'));
+
+        $this->assertDatabaseHas('parking_slots', [
+            'code' => 'B-16',
+            'zone' => 'Zone B',
+        ]);
+    }
+
+    public function test_manager_slot_creation_rejects_numbers_above_sixteen(): void
+    {
+        $manager = User::factory()->create([
+            'role' => User::ROLE_MANAGER,
+            'status' => User::STATUS_ACTIVE,
+        ]);
+
+        $this->actingAs($manager)
+            ->post(route('manager.slots.store'), [
+                'zone' => 'Zone B',
+                'slot_number' => 17,
+                'type' => ParkingSlot::TYPE_STANDARD,
+            ])
+            ->assertSessionHasErrors('slot_number');
+    }
+
+    public function test_manager_classifies_a_zone_and_rejects_a_conflicting_slot_classification(): void
+    {
+        $manager = User::factory()->create([
+            'role' => User::ROLE_MANAGER,
+            'status' => User::STATUS_ACTIVE,
+        ]);
+
+        $this->actingAs($manager)
+            ->post(route('manager.slots.store'), [
+                'zone' => 'Zone C',
+                'slot_number' => 1,
+                'vehicle_type' => ParkingLayoutZone::VEHICLE_MOTORCYCLE,
+                'type' => ParkingSlot::TYPE_STANDARD,
+            ])
+            ->assertRedirect(route('manager.slots.index'));
+
+        $this->assertDatabaseHas('parking_layout_zones', [
+            'zone' => 'Zone C',
+            'vehicle_type' => ParkingLayoutZone::VEHICLE_MOTORCYCLE,
+        ]);
+
+        $this->post(route('manager.slots.store'), [
+            'zone' => 'Zone C',
+            'slot_number' => 2,
+            'vehicle_type' => ParkingLayoutZone::VEHICLE_CAR,
+            'type' => ParkingSlot::TYPE_STANDARD,
+        ])->assertSessionHasErrors('vehicle_type');
+    }
+
+    public function test_manager_can_edit_a_zone_category_from_zone_categories_page(): void
+    {
+        $manager = User::factory()->create([
+            'role' => User::ROLE_MANAGER,
+            'status' => User::STATUS_ACTIVE,
+        ]);
+        ParkingSlot::create([
+            'code' => 'D-01',
+            'zone' => 'Zone D',
+            'type' => ParkingSlot::TYPE_STANDARD,
+            'status' => ParkingSlot::STATUS_AVAILABLE,
+        ]);
+
+        $this->actingAs($manager)
+            ->get(route('manager.slots.categories'))
+            ->assertOk()
+            ->assertSee('Zone category')
+            ->assertSee('Zone D');
+
+        $this->patch(route('manager.slots.categories.update'), [
+            'categories' => ['Zone D' => ParkingLayoutZone::VEHICLE_MOTORCYCLE],
+        ])->assertRedirect(route('manager.slots.index'));
+
+        $this->assertDatabaseHas('parking_layout_zones', [
+            'zone' => 'Zone D',
+            'vehicle_type' => ParkingLayoutZone::VEHICLE_MOTORCYCLE,
+        ]);
+    }
+
+    public function test_manager_live_map_shows_zone_vehicle_classification(): void
+    {
+        $manager = User::factory()->create([
+            'role' => User::ROLE_MANAGER,
+            'status' => User::STATUS_ACTIVE,
+        ]);
+        ParkingSlot::create([
+            'code' => 'A-01',
+            'zone' => 'Zone A',
+            'type' => ParkingSlot::TYPE_STANDARD,
+            'status' => ParkingSlot::STATUS_AVAILABLE,
+        ]);
+        ParkingLayoutZone::create([
+            'zone' => 'Zone A',
+            'vehicle_type' => ParkingLayoutZone::VEHICLE_MOTORCYCLE,
+        ]);
+
+        $this->actingAs($manager)
+            ->get(route('manager.map'))
+            ->assertOk()
+            ->assertSee('Zone A')
+            ->assertSee('(Motorcycle)');
     }
 
     public function test_manager_can_take_an_available_slot_out_of_service_and_restore_it(): void
@@ -191,6 +375,9 @@ class ParkingSlotManagementTest extends TestCase
         $this->actingAs($attendant)
             ->get(route('manager.slots.index'))
             ->assertForbidden();
+
+        $this->get(route('manager.map'))
+            ->assertForbidden();
     }
 
     public function test_manager_cannot_create_a_duplicate_slot_code(): void
@@ -243,6 +430,7 @@ class ParkingSlotManagementTest extends TestCase
             ->assertOk()
             ->assertSee('Add parking slot')
             ->assertSee('Floor 1')
+            ->assertSee('value="1" selected', false)
             ->assertSee('Zones: 1 / 4')
             ->assertSee('A floor can only contain 4 zones.')
             ->assertSee('Add zone');
@@ -419,6 +607,15 @@ class ParkingSlotManagementTest extends TestCase
             'zone' => 'Zone E',
         ]);
         $this->assertSame(2, ParkingSlot::where('code', 'E-01')->firstOrFail()->floorNumber());
+
+        $this->get(route('manager.slots.create'))
+            ->assertOk()
+            ->assertSee('value="1" selected', false);
+
+        $this->get(route('manager.slots.edit', ParkingSlot::where('code', 'E-01')->firstOrFail()))
+            ->assertOk()
+            ->assertSee('value="2" selected', false)
+            ->assertDontSee('value="1" selected', false);
     }
 
     public function test_manager_cannot_move_a_slot_onto_a_full_floor_as_a_new_zone(): void
@@ -458,7 +655,7 @@ class ParkingSlotManagementTest extends TestCase
         $this->assertSame('Zone E', $floorTwo->fresh()->zone);
     }
 
-    public function test_manager_can_save_layout_positions_without_changing_slot_business_state(): void
+    public function test_manager_cannot_save_layout_positions_while_a_slot_is_occupied_without_confirmation(): void
     {
         $manager = User::factory()->create([
             'role' => User::ROLE_MANAGER,
@@ -477,13 +674,56 @@ class ParkingSlotManagementTest extends TestCase
                     ['id' => $slot->id, 'x' => 0.42, 'y' => 0.68],
                 ],
             ])
-            ->assertRedirect(route('manager.dashboard'));
+            ->assertSessionHasErrors('positions');
 
         $slot->refresh();
         $this->assertSame(ParkingSlot::STATUS_OCCUPIED, $slot->status);
         $this->assertSame('Zone A', $slot->zone);
+        $this->assertNull($slot->layout_x);
+        $this->assertNull($slot->layout_y);
+    }
+
+    public function test_manager_can_confirm_password_before_saving_layout_with_an_occupied_slot(): void
+    {
+        $manager = User::factory()->create([
+            'role' => User::ROLE_MANAGER,
+            'status' => User::STATUS_ACTIVE,
+        ]);
+        $slot = ParkingSlot::create([
+            'code' => 'A-01',
+            'zone' => 'Zone A',
+            'type' => ParkingSlot::TYPE_STANDARD,
+            'status' => ParkingSlot::STATUS_OCCUPIED,
+        ]);
+
+        $this->actingAs($manager)
+            ->postJson(route('manager.layout.authorize'), ['password' => 'password'])
+            ->assertOk()
+            ->assertJson(['authorized' => true]);
+
+        $this->put(route('manager.layout.update'), [
+            'positions' => [
+                ['id' => $slot->id, 'x' => 0.42, 'y' => 0.68],
+            ],
+        ])->assertRedirect(route('manager.map', ['floor' => 1]));
+
+        $slot->refresh();
+        $this->assertSame(ParkingSlot::STATUS_OCCUPIED, $slot->status);
         $this->assertEqualsWithDelta(0.42, $slot->layout_x, 0.000001);
         $this->assertEqualsWithDelta(0.68, $slot->layout_y, 0.000001);
+    }
+
+    public function test_manager_layout_confirmation_rejects_an_incorrect_password(): void
+    {
+        $manager = User::factory()->create([
+            'role' => User::ROLE_MANAGER,
+            'status' => User::STATUS_ACTIVE,
+        ]);
+
+        $this->actingAs($manager)
+            ->postJson(route('manager.layout.authorize'), ['password' => 'wrong-password'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('password');
     }
 
     public function test_manager_layout_rejects_unknown_slots_and_out_of_bounds_positions(): void
@@ -528,7 +768,7 @@ class ParkingSlotManagementTest extends TestCase
                 'positions' => [['id' => $slot->id, 'x' => 0.7, 'y' => 0.8]],
                 'zone_positions' => [['zone' => 'Zone A', 'x' => 0.12, 'y' => 0.18]],
             ])
-            ->assertRedirect(route('manager.dashboard'));
+            ->assertRedirect(route('manager.map', ['floor' => 1]));
 
         $slot->refresh();
         $label = ParkingLayoutZone::where('zone', 'Zone A')->firstOrFail();
@@ -601,6 +841,19 @@ class ParkingSlotManagementTest extends TestCase
             'status' => ParkingSlot::STATUS_OUT_OF_SERVICE,
             'out_of_service_reason' => 'Maintenance',
         ]);
+    }
+
+    public function test_demo_status_seeder_covers_each_live_map_status(): void
+    {
+        $this->seed(ParkingSlotSeeder::class);
+        $this->seed(ParkingSlotStatusSeeder::class);
+
+        $this->assertSame(ParkingSlot::STATUS_AVAILABLE, ParkingSlot::where('code', 'A-01')->value('status'));
+        $this->assertSame(ParkingSlot::STATUS_OCCUPIED, ParkingSlot::where('code', 'A-02')->value('status'));
+        $this->assertSame(ParkingSlot::STATUS_RESERVED, ParkingSlot::where('code', 'A-03')->value('status'));
+        $this->assertSame(ParkingSlot::STATUS_PENDING_EXIT, ParkingSlot::where('code', 'A-04')->value('status'));
+        $this->assertSame(ParkingSlot::STATUS_OUT_OF_SERVICE, ParkingSlot::where('code', 'A-05')->value('status'));
+        $this->assertSame('Demo maintenance', ParkingSlot::where('code', 'A-05')->value('out_of_service_reason'));
     }
 
     public function test_database_seeder_includes_parking_slots(): void

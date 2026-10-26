@@ -120,16 +120,40 @@ document.querySelectorAll('input[data-live-gmail]').forEach(function(input){
 document.querySelectorAll('[data-slot-floor-form]').forEach(function(root){
   var floorSelect=root.querySelector('[name=floor]');
   var zoneSelect=root.querySelector('[name=zone]');
+  var numberSelect=root.querySelector('[data-slot-number]');
+  var codePreview=root.querySelector('[data-slot-code-preview]');
+  var vehicleTypeSelect=root.querySelector('[name=vehicle_type]');
+  var vehicleTypeField=root.querySelector('[data-zone-category-field]');
   var countEl=root.querySelector('[data-zone-count]');
   var addBtn=root.querySelector('[data-add-zone]');
   var limitEl=root.querySelector('[data-floor-limit]');
   var mapEl=root.querySelector('[data-floor-map]');
   var map={};
+  var vehicleMap={};
   var max=parseInt(root.getAttribute('data-max-zones-per-floor'),10)||4;
   try{map=mapEl?JSON.parse(mapEl.textContent):{}}catch(e){map={}}
+  try{vehicleMap=JSON.parse((root.querySelector('[data-zone-vehicle-map]')||{}).textContent||'{}')}catch(e){vehicleMap={}}
 
   function infoFor(floor){
     return map[floor]||map[String(floor)]||{zones:[],active:[],count:0};
+  }
+  function updateCodePreview(){
+    if(!codePreview||!zoneSelect||!numberSelect)return;
+    var match=zoneSelect.value.match(/([A-Za-z])$/),number=parseInt(numberSelect.value,10);
+    codePreview.value=match&&number>=1&&number<=16
+      ? match[1].toUpperCase()+'-'+String(number).padStart(2,'0')
+      : '';
+  }
+  function updateVehicleType(){
+    if(!vehicleTypeSelect||!zoneSelect)return;
+    var type=vehicleMap[zoneSelect.value];
+    if(type)vehicleTypeSelect.value=type;
+    var isExisting=Object.prototype.hasOwnProperty.call(vehicleMap,zoneSelect.value);
+    if(vehicleTypeField){
+      vehicleTypeField.hidden=isExisting;
+      vehicleTypeSelect.disabled=isExisting;
+      vehicleTypeSelect.required=!isExisting;
+    }
   }
 
   function sync(){
@@ -177,14 +201,21 @@ document.querySelectorAll('[data-slot-floor-form]').forEach(function(root){
       root.setAttribute('data-selected-zone','');
       if(zoneSelect)zoneSelect.value='';
       sync();
+      updateCodePreview();
+      updateVehicleType();
     });
   }
   if(zoneSelect){
     zoneSelect.addEventListener('change',function(){
       root.setAttribute('data-selected-zone',zoneSelect.value);
+      updateCodePreview();
+      updateVehicleType();
     });
   }
+  if(numberSelect)numberSelect.addEventListener('change',updateCodePreview);
   sync();
+  updateCodePreview();
+  updateVehicleType();
 });
 /* Filter panels update themselves: <form data-auto-filter>.
    Selects and dates submit straight away; typed searches wait briefly so each key does not send a request.
@@ -326,6 +357,8 @@ document.querySelectorAll('[data-layout-canvas]').forEach(function(canvas){
   var actions=panel&&panel.querySelector('[data-layout-actions]'),edit=actions&&actions.querySelector('[data-layout-edit]');
   var auto=actions&&actions.querySelector('[data-layout-auto]'),cancel=actions&&actions.querySelector('[data-layout-cancel]');
   var save=actions&&actions.querySelector('[data-layout-save]'),form=panel&&panel.querySelector('[data-layout-form]');
+  var gate=modal&&modal.querySelector('[data-layout-occupied-gate]'),gateForm=gate&&gate.querySelector('[data-layout-occupied-form]');
+  var gateError=gate&&gate.querySelector('[data-layout-occupied-error]'),gateCancel=gate&&gate.querySelector('[data-layout-gate-cancel]');
   var inputs=form&&form.querySelector('[data-layout-inputs]'),editing=false,snapshot={slots:[],labels:[]};
   if(editor&&modalContent){
     formHome=form&&form.parentNode;actionsHome=actions&&actions.parentNode;
@@ -393,7 +426,34 @@ document.querySelectorAll('[data-layout-canvas]').forEach(function(canvas){
     snapshot.slots=slots.map(function(slot){return {slot:slot,left:slot.style.left,top:slot.style.top}});
     snapshot.labels=labels.map(function(label){return {label:label,left:label.style.left,top:label.style.top}});
     moveToModal();
+    if(slots.some(function(slot){return slot.classList.contains('manager-slot-occupied')})){
+      if(gate){gate.hidden=false;gate.querySelector('input[name=password]').focus()}
+      return;
+    }
     editingState(true);
+  });
+  if(gateCancel)gateCancel.addEventListener('click',function(){if(modal&&modal.open)modal.close()});
+  if(gateForm)gateForm.addEventListener('submit',function(event){
+    event.preventDefault();
+    var password=gateForm.querySelector('input[name=password]'),token=form&&form.querySelector('input[name="_token"]');
+    if(gateError){gateError.hidden=true;gateError.textContent=''}
+    fetch(editor.dataset.authorizeUrl,{
+      method:'POST',
+      headers:{'Accept':'application/json','Content-Type':'application/json','X-CSRF-TOKEN':token?token.value:''},
+      credentials:'same-origin',
+      body:JSON.stringify({password:password.value})
+    }).then(function(response){
+      return response.json().then(function(data){return {ok:response.ok,data:data}});
+    }).then(function(result){
+      if(!result.ok){
+        var message=result.data.errors&&result.data.errors.password?result.data.errors.password[0]:'The manager password could not be verified.';
+        if(gateError){gateError.textContent=message;gateError.hidden=false}
+        return;
+      }
+      gate.hidden=true;password.value='';editingState(true);
+    }).catch(function(){
+      if(gateError){gateError.textContent='Unable to verify the manager password. Try again.';gateError.hidden=false}
+    });
   });
   cancel.addEventListener('click',function(){
     snapshot.slots.forEach(function(item){item.slot.style.left=item.left;item.slot.style.top=item.top});
@@ -461,6 +521,7 @@ document.querySelectorAll('[data-layout-canvas]').forEach(function(canvas){
         snapshot.labels.forEach(function(item){item.label.style.left=item.left;item.label.style.top=item.top});
         editingState(false);
       }
+      if(gate){gate.hidden=true;var password=gate.querySelector('input[name=password]');if(password)password.value='';if(gateError){gateError.hidden=true;gateError.textContent=''}}
       restoreFromModal();
     });
   }

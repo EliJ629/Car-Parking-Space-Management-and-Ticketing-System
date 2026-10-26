@@ -36,5 +36,7 @@ class LotTest extends TestCase
         $this->assertSame([], Lot::zonesForFloor(0));
         $this->assertNull(Lot::floorForZone('North Lot'));
         $this->assertNull(Lot::zoneLetter('Zone AA'));
+        $this->assertSame([1, 2], Lot::occupiedFloors(['Zone A', 'Zone E', 'Zone B']));
+        $this->assertSame([], Lot::occupiedFloors([]));
     }
 }

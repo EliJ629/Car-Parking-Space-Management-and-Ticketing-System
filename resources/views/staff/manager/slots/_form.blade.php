@@ -1,5 +1,6 @@
 <div class="manager-form-grid" data-slot-floor-form data-max-zones-per-floor="{{ $maxZonesPerFloor }}" data-selected-zone="{{ old('zone', $slot->zone ?? '') }}">
   <script type="application/json" data-floor-map>@json($floorZoneMap)</script>
+  <script type="application/json" data-zone-vehicle-map>@json($zoneVehicleTypes)</script>
   @if (isset($slot))
     <div class="manager-field manager-field-wide">
       <label class="f" for="slot-code">Slot code</label>
@@ -9,8 +10,8 @@
   @else
     <div class="manager-field manager-field-wide">
       <label class="f" for="slot-code">Slot code</label>
-      <input id="slot-code" name="code" type="text" value="{{ old('code') }}" required maxlength="10" pattern="[A-Za-z]-[0-9]{2}" placeholder="A-09" aria-describedby="slot-code-help" @if ($errors->has('code')) aria-invalid="true" @endif>
-      <p class="hint" id="slot-code-help">Use a zone letter and two digits. Each code must be unique.</p>
+      <input id="slot-code" type="text" value="{{ old('code', 'A-01') }}" readonly aria-describedby="slot-code-help" data-slot-code-preview>
+      <p class="hint" id="slot-code-help">Generated automatically from the selected zone and slot number.</p>
       @error('code')<p class="err">{{ $message }}</p>@enderror
     </div>
   @endif
@@ -27,6 +28,19 @@
     @error('floor')<p class="err">{{ $message }}</p>@enderror
   </div>
 
+  @if (! isset($slot))
+    <div class="manager-field">
+      <label class="f" for="slot-number">Slot number</label>
+      <select id="slot-number" name="slot_number" required data-slot-number @if ($errors->has('slot_number')) aria-invalid="true" @endif>
+        @for ($number = 1; $number <= 16; $number++)
+          <option value="{{ $number }}" @selected((int) old('slot_number', 1) === $number)>{{ str_pad((string) $number, 2, '0', STR_PAD_LEFT) }}</option>
+        @endfor
+      </select>
+      <p class="hint">Choose a number from 01 to 16. The zone letter and dash are added automatically.</p>
+      @error('slot_number')<p class="err">{{ $message }}</p>@enderror
+    </div>
+  @endif
+
   <div class="manager-field">
     <label class="f" for="slot-zone">Zone</label>
     <select id="slot-zone" name="zone" required @if ($errors->has('zone')) aria-invalid="true" @endif>
@@ -42,6 +56,21 @@
     <p class="err" data-floor-limit @if ($selectedFloorCount < $maxZonesPerFloor) hidden @endif>This floor already has 4 zones. Choose an existing zone or select another floor.</p>
     @error('zone')<p class="err">{{ $message }}</p>@enderror
   </div>
+
+  @php($selectedZone = old('zone', $slot->zone ?? ($zones[0] ?? '')))
+  @php($isNewZone = ! in_array($selectedZone, $activeZonesOnFloor, true))
+  @if (! isset($slot))
+  <div class="manager-field" data-zone-category-field @if (! $isNewZone) hidden @endif>
+    <label class="f" for="slot-vehicle-type">Vehicle Type</label>
+    <select id="slot-vehicle-type" name="vehicle_type" required @if (! $isNewZone) disabled @endif>
+      @foreach ($vehicleTypes as $vehicleType)
+        <option value="{{ $vehicleType }}" @selected(old('vehicle_type', $zoneVehicleTypes[$selectedZone] ?? \App\Models\ParkingLayoutZone::VEHICLE_CAR) === $vehicleType)>{{ $vehicleType }}</option>
+      @endforeach
+    </select>
+    <p class="hint">All slots in a zone inherit this classification.</p>
+    @error('vehicle_type')<p class="err">{{ $message }}</p>@enderror
+  </div>
+  @endif
 
   <div class="manager-field">
     <label class="f" for="slot-type">Slot type</label>

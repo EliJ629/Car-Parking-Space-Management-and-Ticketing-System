@@ -384,7 +384,7 @@ class AuditValidationTest extends TestCase
         $this->seed(ParkingSlotSeeder::class);
         $this->actingAs($this->manager());
 
-        foreach (['manager.dashboard', 'manager.slots.index', 'manager.slots.create', 'manager.accounts.index', 'manager.accounts.create',
+        foreach (['manager.dashboard', 'manager.map', 'manager.slots.index', 'manager.slots.create', 'manager.accounts.index', 'manager.accounts.create',
             'manager.records.index', 'manager.incidents.index', 'manager.incidents.create', 'manager.settings.index', 'manager.sales.index',
             'manager.reports.index', 'manager.rates.index', 'manager.my-account'] as $name) {
             $this->get(route($name))->assertOk();

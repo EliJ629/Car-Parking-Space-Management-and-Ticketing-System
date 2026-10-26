@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Manager;
 
 use App\Models\ActivityLog;
+use App\Models\ParkingLayoutZone;
 use App\Models\ParkingSlot;
 use App\Models\User;
 use App\Support\Lot;
@@ -72,14 +73,68 @@ class ParkingSlotController extends ManagerController
         );
     }
 
+    public function zoneCategories(): View
+    {
+        $zones = ParkingSlot::query()
+            ->select('zone')
+            ->distinct()
+            ->orderBy('zone')
+            ->pluck('zone')
+            ->map(function (string $zone): array {
+                $category = ParkingLayoutZone::query()->where('zone', $zone)->value('vehicle_type');
+
+                return [
+                    'zone' => $zone,
+                    'vehicle_type' => $category ?? ParkingLayoutZone::VEHICLE_CAR,
+                    'slots' => ParkingSlot::query()->where('zone', $zone)->count(),
+                ];
+            });
+
+        return $this->managerPage('Zone categories', 'slots', view('staff.manager.slots.categories', [
+            'zones' => $zones,
+            'vehicleTypes' => ParkingLayoutZone::vehicleTypes(),
+        ]));
+    }
+
+    public function updateZoneCategories(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'categories' => ['required', 'array'],
+            'categories.*' => ['required', Rule::in(ParkingLayoutZone::vehicleTypes())],
+        ], $this->messages());
+
+        DB::transaction(function () use ($validated): void {
+            $zones = ParkingSlot::query()
+                ->whereIn('zone', array_keys($validated['categories']))
+                ->distinct()
+                ->pluck('zone');
+
+            if ($zones->count() !== count($validated['categories'])) {
+                throw ValidationException::withMessages([
+                    'categories' => 'Choose categories only for existing zones.',
+                ]);
+            }
+
+            foreach ($validated['categories'] as $zone => $vehicleType) {
+                ParkingLayoutZone::query()->updateOrCreate(
+                    ['zone' => $zone],
+                    ['vehicle_type' => $vehicleType],
+                );
+            }
+        });
+
+        return redirect()->route('manager.slots.index')->with('status', 'Zone categories were updated.');
+    }
+
     public function store(Request $request): RedirectResponse
     {
         $this->normalizeSlotInput($request);
-
         $validated = $request->validate([
             'code' => ['required', 'string', 'max:10', 'regex:/^[A-Z]-\d{2}$/', 'unique:parking_slots,code'],
+            'slot_number' => ['required', 'integer', 'between:1,16'],
             'floor' => ['required', 'integer', Rule::in($this->availableFloors())],
             'zone' => ['required', 'string', Rule::in($this->zoneOptions($request->integer('floor')))],
+            'vehicle_type' => ['nullable', Rule::in(ParkingLayoutZone::vehicleTypes())],
             'type' => ['required', Rule::in([ParkingSlot::TYPE_STANDARD, ParkingSlot::TYPE_PWD])],
             'notes' => ['nullable', 'string', 'max:1000'],
         ], $this->messages());
@@ -87,6 +142,10 @@ class ParkingSlotController extends ManagerController
         $slot = DB::transaction(function () use ($validated, $request): ParkingSlot {
             $this->lockManagerSlotMutations();
             $this->assertFloorAndZoneLimits($validated['floor'], $validated['zone']);
+            $vehicleType = $validated['vehicle_type']
+                ?? ParkingLayoutZone::query()->where('zone', $validated['zone'])->value('vehicle_type')
+                ?? ParkingLayoutZone::VEHICLE_CAR;
+            $this->syncZoneVehicleType($validated['zone'], $vehicleType);
 
             $slot = ParkingSlot::create([
                 'code' => $validated['code'],
@@ -136,6 +195,7 @@ class ParkingSlotController extends ManagerController
         $validated = $request->validate([
             'floor' => ['required', 'integer', Rule::in($this->availableFloors($slot))],
             'zone' => ['required', 'string', Rule::in($this->zoneOptions($request->integer('floor'), $slot->zone))],
+            'vehicle_type' => ['nullable', Rule::in(ParkingLayoutZone::vehicleTypes())],
             'type' => ['required', Rule::in([ParkingSlot::TYPE_STANDARD, ParkingSlot::TYPE_PWD])],
             'notes' => ['nullable', 'string', 'max:1000'],
         ], $this->messages());
@@ -156,6 +216,10 @@ class ParkingSlotController extends ManagerController
             if ($validated['zone'] !== $slot->zone) {
                 $this->assertFloorAndZoneLimits($validated['floor'], $validated['zone'], $slot);
             }
+            $vehicleType = $validated['vehicle_type']
+                ?? ParkingLayoutZone::query()->where('zone', $validated['zone'])->value('vehicle_type')
+                ?? ParkingLayoutZone::VEHICLE_CAR;
+            $this->syncZoneVehicleType($validated['zone'], $vehicleType, $validated['zone'] === $slot->zone);
 
             $before = $slot->only(['code', 'zone', 'type', 'status', 'notes']);
             $slot->update([
@@ -354,14 +418,26 @@ class ParkingSlotController extends ManagerController
     private function normalizeSlotInput(Request $request, ?ParkingSlot $slot = null): void
     {
         $zone = trim((string) $request->input('zone'));
+        $legacyCode = strtoupper(trim((string) $request->input('code')));
+        $slotNumber = $request->input('slot_number');
+        if ($slotNumber === null && preg_match('/^[A-Z]-(\d{2})$/', $legacyCode, $matches)) {
+            $slotNumber = (int) $matches[1];
+        }
+        $zoneLetter = preg_match('/([A-Z])$/i', $zone, $matches) === 1 ? strtoupper($matches[1]) : null;
         $floor = $request->filled('floor')
             ? $request->integer('floor')
             : (Lot::floorForZone($zone) ?? Lot::floorForZone($slot?->zone) ?? 1);
 
         $request->merge([
-            'code' => $request->has('code') ? strtoupper(trim((string) $request->input('code'))) : $request->input('code'),
+            'code' => $zoneLetter !== null && is_numeric($slotNumber)
+                ? $zoneLetter.'-'.str_pad((string) $slotNumber, 2, '0', STR_PAD_LEFT)
+                : $legacyCode,
+            'slot_number' => $slotNumber,
             'zone' => $zone,
             'floor' => $floor,
+            'vehicle_type' => $request->input('vehicle_type')
+                ?? ParkingLayoutZone::query()->where('zone', $zone)->value('vehicle_type')
+                ?? ParkingLayoutZone::VEHICLE_CAR,
             'notes' => $this->cleanNotes($request->input('notes')),
         ]);
     }
@@ -379,7 +455,7 @@ class ParkingSlotController extends ManagerController
         $floors = $this->availableFloors($slot);
         $selectedFloor = old('floor') !== null
             ? (int) old('floor')
-            : (Lot::floorForZone($slot?->zone) ?? (int) ($floors[0] ?? 1));
+            : ($slot === null ? 1 : (Lot::floorForZone($slot->zone) ?? 1));
 
         if (! in_array($selectedFloor, $floors, true)) {
             $floors[] = $selectedFloor;
@@ -404,6 +480,10 @@ class ParkingSlotController extends ManagerController
             'floorZoneMap' => $floorZoneMap,
             'zones' => $this->zoneOptions($selectedFloor, $slot?->zone),
             'activeZonesOnFloor' => Lot::activeZonesOnFloor($selectedFloor, $activeZones),
+            'zoneVehicleTypes' => ParkingLayoutZone::query()
+                ->whereIn('zone', $activeZones)
+                ->pluck('vehicle_type', 'zone'),
+            'vehicleTypes' => ParkingLayoutZone::vehicleTypes(),
             'types' => [ParkingSlot::TYPE_STANDARD, ParkingSlot::TYPE_PWD],
             'maxZonesPerFloor' => Lot::maxZonesPerFloor(),
         ];
@@ -455,6 +535,23 @@ class ParkingSlotController extends ManagerController
         return $notes === '' ? null : $notes;
     }
 
+    private function syncZoneVehicleType(string $zone, string $vehicleType, bool $allowChange = false): void
+    {
+        $zoneRecord = ParkingLayoutZone::query()->lockForUpdate()->firstOrNew(['zone' => $zone]);
+
+        if ($zoneRecord->exists
+            && $zoneRecord->vehicle_type !== null
+            && $zoneRecord->vehicle_type !== $vehicleType
+            && ! $allowChange) {
+            throw ValidationException::withMessages([
+                'vehicle_type' => "Zone {$zone} is classified as {$zoneRecord->vehicle_type}.",
+            ]);
+        }
+
+        $zoneRecord->vehicle_type = $vehicleType;
+        $zoneRecord->save();
+    }
+
     /** @return array<string, string> */
     private function messages(): array
     {
@@ -462,10 +559,15 @@ class ParkingSlotController extends ManagerController
             'code.required' => 'Enter a slot code like B-04.',
             'code.regex' => 'Use a zone letter, a dash and two digits, for example B-04.',
             'code.unique' => 'This slot code already exists.',
+            'slot_number.required' => 'Choose a slot number.',
+            'slot_number.integer' => 'Choose a valid slot number.',
+            'slot_number.between' => 'Choose a slot number from 01 to 16.',
             'floor.required' => 'Choose a floor.',
             'floor.in' => 'That floor is not available yet. A new floor opens after the current floor has 4 zones.',
             'zone.required' => 'Choose a zone.',
             'zone.in' => 'Choose a zone that belongs to the selected floor. A floor can only contain 4 zones.',
+            'vehicle_type.required' => 'Choose a vehicle type for this zone.',
+            'vehicle_type.in' => 'Choose Car or Motorcycle.',
             'type.required' => 'Choose a slot type.',
             'type.in' => 'Choose a slot type from the list.',
             'reason.required' => 'Choose a reason.',

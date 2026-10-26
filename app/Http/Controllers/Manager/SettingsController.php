@@ -22,7 +22,7 @@ class SettingsController extends ManagerController
         'reservation_grace_minutes' => ['group' => 'parking', 'label' => 'Reservation grace period (minutes)', 'min' => 0, 'max' => 240],
         'early_check_in_minutes' => ['group' => 'parking', 'label' => 'Early check-in window (minutes)', 'min' => 0, 'max' => 1440],
         'maximum_advance_booking_days' => ['group' => 'parking', 'label' => 'Maximum advance booking (days)', 'min' => 1, 'max' => 30],
-        'maximum_slots_per_zone' => ['group' => 'parking', 'label' => 'Maximum parking slots per zone', 'min' => 1, 'max' => 100, 'default' => 20],
+        'maximum_slots_per_zone' => ['group' => 'parking', 'label' => 'Maximum parking slots per zone', 'min' => 1, 'max' => 16, 'default' => 16],
         'maximum_active_zones' => ['group' => 'parking', 'label' => 'Maximum active zones', 'min' => 1, 'max' => 26, 'default' => 26],
         'exit_window_minutes' => ['group' => 'parking', 'label' => 'Exit window after payment (minutes)', 'min' => 1, 'max' => 240],
         'reservation_reminder_minutes' => ['group' => 'notifications', 'label' => 'Reservation reminder before arrival (minutes)', 'min' => 0, 'max' => 1440],

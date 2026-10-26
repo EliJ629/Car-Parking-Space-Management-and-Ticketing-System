@@ -50,7 +50,7 @@
 <label class="f" for="fmin">Time parked: <span id="fdur"></span></label>
 <input id="fmin" type="range" min="10" max="900" step="5" value="125">
 <div style="display:grid;gap:14px;margin-top:16px">
-<div><label class="f" for="fdisc">Discount</label><select id="fdisc"><option value="0">None</option><option value="0.2">Senior or PWD, 20%</option><option value="0.5">Tenant validation, 50% (manager PIN)</option></select></div>
+<div><label class="f" for="fdisc">Discount</label><select id="fdisc"><option value="0">None</option><option value="0.2">Senior or PWD, 20%</option><option value="0.5">Tenant validation, 50%</option></select></div>
 <div style="display:flex;gap:20px;flex-wrap:wrap;font-size:14px">
 <label style="display:flex;gap:8px;align-items:center"><input id="flost" type="checkbox"> Lost ticket (&#8369;100)</label>
 <label style="display:flex;gap:8px;align-items:center"><input id="fover" type="checkbox"> Overstay (&#8369;150)</label></div></div>

@@ -186,7 +186,7 @@ class Lot
     /** The most slots a single zone may hold. */
     public static function maxSlotsPerZone(): int
     {
-        return max(1, (int) self::setting('maximum_slots_per_zone', 20));
+        return min(16, max(1, (int) self::setting('maximum_slots_per_zone', 16)));
     }
 
     /** The most zones that may contain slots at the same time. */
@@ -265,6 +265,23 @@ class Lot
         }
 
         return $floors;
+    }
+
+    /**
+     * Floors that already contain at least one zone. Empty floors are omitted.
+     *
+     * @param  iterable<int, string>  $activeZones
+     * @return array<int, int>
+     */
+    public static function occupiedFloors(iterable $activeZones = []): array
+    {
+        return collect($activeZones)
+            ->map(fn (string $zone): ?int => self::floorForZone($zone))
+            ->filter()
+            ->unique()
+            ->sort()
+            ->values()
+            ->all();
     }
 
     /**

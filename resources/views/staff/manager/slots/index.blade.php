@@ -5,7 +5,10 @@
       <h1>Parking slots</h1>
       <p class="manager-page-lede">Create, change, take out of service, or remove slots. Only a manager can change the lot layout.</p>
     </div>
-    <a class="btn sm" href="{{ route('manager.slots.create') }}">Add slot</a>
+    <div class="manager-heading-actions">
+      <a class="btn ghost sm" href="{{ route('manager.slots.categories') }}">Zone category</a>
+      <a class="btn sm" href="{{ route('manager.slots.create') }}">Add slot</a>
+    </div>
   </div>
 </section>
 

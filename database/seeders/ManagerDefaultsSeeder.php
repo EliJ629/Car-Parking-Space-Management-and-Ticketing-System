@@ -27,9 +27,9 @@ class ManagerDefaultsSeeder extends Seeder
         );
 
         foreach ([
-            ['name' => 'Senior citizen', 'percent' => 20, 'proof_label' => 'ID number', 'requires_manager_pin' => false],
-            ['name' => 'PWD', 'percent' => 20, 'proof_label' => 'ID number', 'requires_manager_pin' => false],
-            ['name' => 'Tenant validation', 'percent' => 50, 'proof_label' => 'Stamp code', 'requires_manager_pin' => true],
+            ['name' => 'Senior citizen', 'percent' => 20, 'proof_label' => 'ID number'],
+            ['name' => 'PWD', 'percent' => 20, 'proof_label' => 'ID number'],
+            ['name' => 'Tenant validation', 'percent' => 50, 'proof_label' => 'Stamp code'],
         ] as $discount) {
             ParkingDiscount::firstOrCreate(['name' => $discount['name']], $discount);
         }
