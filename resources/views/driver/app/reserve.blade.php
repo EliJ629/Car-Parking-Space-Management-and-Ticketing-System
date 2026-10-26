@@ -84,20 +84,24 @@
     <input type="hidden" name="time" value="{{ $time }}">
     <h2 class="f" style="font-size:15px;margin:4px 0 8px">1. Pick a slot <small style="font-weight:400;color:var(--muted)">({{ $zones->sum(fn ($group) => $group->where('state', 'available')->count()) }} free at this time)</small></h2>
     <p class="fine" style="margin:0 0 10px">Only free slots can be picked. A slot marked <b>PWD</b> needs a photo of your PWD ID, which the booth attendant checks before approving.</p>
-    <div class="lot">
-      @foreach ($zones as $zone => $slots)
-        <div class="zl">{{ strtoupper($zone) }}</div>
-        <div class="g">
+    <div class="lot driver-layout" data-layout-readonly>
+      <div class="driver-layout-canvas" data-layout-canvas>
+        @foreach ($zones as $zone => $slots)
+          @php $zonePosition = $zonePositions[$zone] ?? null; @endphp
+          <span class="driver-layout-zone-label" data-layout-zone-label data-zone="{{ $zone }}"
+            data-x="{{ $zonePosition?->label_x ?? '' }}" data-y="{{ $zonePosition?->label_y ?? '' }}">{{ $zone }}</span>
           @foreach ($slots as $slot)
             @php $free = $slot->state === 'available'; @endphp
-            <label class="sl pick {{ $cls[$slot->state] ?? '' }} {{ $free ? '' : 'off dim' }}">
+            <label class="sl pick driver-layout-slot {{ $cls[$slot->state] ?? '' }} {{ $free ? '' : 'off dim' }}"
+                   data-layout-slot data-slot="{{ $slot->code }}" data-slot-id="{{ $slot->id }}" data-zone="{{ $zone }}"
+                   data-type="{{ $slot->type }}" data-x="{{ $slot->layout_x ?? '' }}" data-y="{{ $slot->layout_y ?? '' }}">
               <input type="radio" name="slot" value="{{ $slot->id }}" @disabled(! $free) @checked($free && $slotId === $slot->id) aria-label="Slot {{ $slot->code }}, {{ $label[$slot->state] ?? $slot->state }}">
               <b>{{ $slot->code }}</b><span>{{ $label[$slot->state] ?? '' }}</span>
               @if ($slot->type === 'PWD')<em class="pwdtag" title="PWD slot: needs a PWD ID photo">PWD</em>@endif
             </label>
           @endforeach
-        </div>
-      @endforeach
+        @endforeach
+      </div>
       @include('driver.app.partials.legend')
     </div>
 

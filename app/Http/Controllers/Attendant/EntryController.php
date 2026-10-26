@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Attendant;
 
 use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
+use App\Models\ParkingLayoutZone;
 use App\Models\ParkingReservation;
 use App\Models\ParkingSession;
 use App\Models\ParkingSlot;
@@ -60,6 +61,11 @@ class EntryController extends Controller
                 ->first();
         }
 
+        $zonePositions = ParkingLayoutZone::query()
+            ->whereIn('zone', $slots->pluck('zone')->unique())
+            ->get()
+            ->keyBy('zone');
+
         return view('staff.attendant.entry.walk-in', [
             'slots' => $slots,
             'counts' => $counts,
@@ -67,6 +73,7 @@ class EntryController extends Controller
             'vehicleTypes' => Vehicle::DRIVER_TYPES,
             'vehicleColors' => Vehicle::COLORS,
             'nearestPending' => $nearestPending,
+            'zonePositions' => $zonePositions,
         ]);
     }
 

@@ -421,6 +421,19 @@ class BoothAttendantTest extends TestCase
         ]);
     }
 
+    public function test_attendant_slots_page_renders_visual_map_and_slots(): void
+    {
+        $this->lot();
+        $attendant = $this->attendant();
+
+        $response = $this->actingAs($attendant)->get(route('attendant.slots.index'));
+
+        $response->assertOk()
+            ->assertSee('Lot slots, live')
+            ->assertSee('data-layout-canvas', false)
+            ->assertSee('A-01');
+    }
+
     public function test_manual_slot_correction_with_reason(): void
     {
         $this->lot();

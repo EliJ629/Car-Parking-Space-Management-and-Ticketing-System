@@ -18,73 +18,160 @@
   </div>
 @endif
 
-<div style="display:grid;grid-template-columns:1.8fr 1fr;gap:24px;align-items:start;">
+<div style="display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:24px;align-items:start;">
   
   <!-- Left Column: Lot Slots Board (BA-51) -->
   <div class="ba-card">
-    <h2>Lot slots, live</h2>
-
-    <!-- Zone Filter Tabs & Available Count -->
-    <div style="display:flex;align-items:center;justify-content:space-between;margin:12px 0 16px;flex-wrap:wrap;gap:10px;">
-      <div style="display:flex;gap:6px;flex-wrap:wrap;" id="zone-filter-tabs">
-        <button type="button" class="btn sm primary zone-tab-btn" data-zone="all" style="padding:5px 12px;font-size:13px;">All Zones ({{ $slots->count() }})</button>
-        @foreach ($slots->groupBy('zone') as $zoneName => $zoneSlots)
-          <button type="button" class="btn sm ghost zone-tab-btn" data-zone="{{ $zoneName }}" style="padding:5px 12px;font-size:13px;">Zone {{ $zoneName }} ({{ $zoneSlots->count() }})</button>
-        @endforeach
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:12px;">
+      <div>
+        <h2 style="margin:0 0 2px;">Lot slots, live</h2>
+        @if (count($floors) > 1)
+          <span style="font-size:13px;color:var(--muted);font-weight:600;">Floor {{ $selectedFloor }}</span>
+        @endif
       </div>
-      <span style="font-size:13px;color:var(--muted);font-weight:600;">
-        {{ $counts['available'] }} of {{ $slots->count() }} available
-      </span>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div class="ba-view-toggle">
+          <button type="button" id="btn-toggle-map" class="active" onclick="switchSlotView('map')">Visual map</button>
+          <button type="button" id="btn-toggle-grid" onclick="switchSlotView('grid')">Grid list</button>
+        </div>
+        <span style="font-size:13px;color:var(--muted);font-weight:600;">
+          {{ $counts['available'] }} of {{ $slots->count() }} available
+        </span>
+      </div>
     </div>
 
-    <!-- Grouped Slots by Zone -->
-    @foreach ($slots->groupBy('zone') as $zoneName => $zoneSlots)
-      <div class="ba-zone-section" data-zone="{{ $zoneName }}" style="margin-bottom:22px;">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin:0 0 10px;padding-bottom:6px;border-bottom:1.5px solid var(--line);">
-          <b style="font-size:15px;color:var(--ink);">Zone {{ $zoneName }}</b>
-          <span style="font-size:12px;color:var(--muted);font-weight:600;">{{ $zoneSlots->where('status', 'available')->count() }} of {{ $zoneSlots->count() }} available</span>
-        </div>
-        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;">
-          @foreach ($zoneSlots as $slot)
-            @php
-                $curr = $slot->currentSession();
-                $booking = $slot->nextOpenBooking();
-            @endphp
-            <div class="ba-slot {{ $slot->status }}"
-                 style="min-height:100px;padding:12px 8px;cursor:pointer;"
-                 onclick="openSlotDetail({{ json_encode([
-                     'id' => $slot->id,
-                     'code' => $slot->code,
-                     'zone' => $slot->zone,
-                     'type' => $slot->type,
-                     'status' => $slot->status,
-                     'status_label' => $slot->statusLabel(),
-                     'session_id' => $curr?->id,
-                     'ticket' => $curr?->ticket_number,
-                     'plate' => $curr ? \App\Support\Lot::plate($curr->plate_number) : ($booking ? \App\Support\Lot::plate($booking->plate_number) : null),
-                     'vehicle' => $curr ? "{$curr->vehicle_color} {$curr->vehicle_type}" : null,
-                     'entry' => $curr ? \App\Support\Lot::stamp($curr->entered_at) : null,
-                     'parked' => $curr ? \App\Support\Lot::duration(\App\Support\Lot::minutesBetween($curr->entered_at)) : null,
-                     'booking_driver' => $booking?->driver?->name,
-                     'booking_code' => $booking?->code,
-                     'booking_time' => $booking ? \App\Support\Lot::time($booking->scheduled_at) : null,
-                     'out_reason' => $slot->out_of_service_reason,
-                 ]) }})">
-              @if ($slot->type === 'PWD')<span class="pwd-tag">PWD</span>@endif
-              <b>{{ $slot->code }}</b>
-              <span class="st">{{ $slot->statusLabel() }}</span>
-              @if ($curr)
-                <span class="plt">{{ \App\Support\Lot::plate($curr->plate_number) }}</span>
-              @elseif ($booking)
-                <span class="plt" style="color:#92400E;">{{ \App\Support\Lot::plate($booking->plate_number) }}</span>
-              @elseif ($slot->out_of_service_reason)
-                <span class="plt" style="font-size:10px;">{{ \Illuminate\Support\Str::limit($slot->out_of_service_reason, 15) }}</span>
-              @endif
-            </div>
+    @if (count($floors) > 1)
+      <div style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;">
+        @foreach ($floors as $floor)
+          <a href="{{ route('attendant.slots.index', ['floor' => $floor]) }}"
+             class="btn sm {{ (int) $selectedFloor === (int) $floor ? 'primary' : 'ghost' }}"
+             style="padding:5px 14px;font-size:13px;text-decoration:none;">
+            Floor {{ $floor }}
+          </a>
+        @endforeach
+      </div>
+    @endif
+
+    <!-- Visual Map View (Matching Manager Layout Canvas) -->
+    <div class="ba-layout-wrap" id="ba-layout-view">
+      <div class="ba-layout-canvas" data-layout-canvas>
+        @foreach ($floorSlots->groupBy('zone') as $zone => $zoneSlots)
+          @php
+            $zonePosition = $zonePositions[$zone] ?? null;
+            $vehicleType = $zonePosition?->vehicle_type ?? 'Car';
+          @endphp
+          <span data-layout-zone-label data-zone="{{ $zone }}"
+                data-x="{{ $zonePosition?->label_x ?? '' }}" data-y="{{ $zonePosition?->label_y ?? '' }}">
+            {{ $zone }} <small>({{ $vehicleType }})</small>
+          </span>
+        @endforeach
+        @foreach ($floorSlots as $slot)
+          @php
+              $curr = $slot->currentSession();
+              $booking = $slot->nextOpenBooking();
+          @endphp
+          <div class="ba-slot ba-layout-slot {{ $slot->status }}"
+               data-layout-slot data-slot-id="{{ $slot->id }}" data-zone="{{ $slot->zone }}"
+               data-x="{{ $slot->layout_x ?? '' }}" data-y="{{ $slot->layout_y ?? '' }}"
+               title="{{ $slot->code }} &mdash; {{ $slot->statusLabel() }}"
+               style="cursor:pointer;"
+               onclick="openSlotDetail({{ json_encode([
+                   'id' => $slot->id,
+                   'code' => $slot->code,
+                   'zone' => $slot->zone,
+                   'type' => $slot->type,
+                   'status' => $slot->status,
+                   'status_label' => $slot->statusLabel(),
+                   'session_id' => $curr?->id,
+                   'ticket' => $curr?->ticket_number,
+                   'plate' => $curr ? \App\Support\Lot::plate($curr->plate_number) : ($booking ? \App\Support\Lot::plate($booking->plate_number) : null),
+                   'vehicle' => $curr ? "{$curr->vehicle_color} {$curr->vehicle_type}" : null,
+                   'entry' => $curr ? \App\Support\Lot::stamp($curr->entered_at) : null,
+                   'parked' => $curr ? \App\Support\Lot::duration(\App\Support\Lot::minutesBetween($curr->entered_at)) : null,
+                   'booking_driver' => $booking?->driver?->name,
+                   'booking_code' => $booking?->code,
+                   'booking_time' => $booking ? \App\Support\Lot::time($booking->scheduled_at) : null,
+                   'out_reason' => $slot->out_of_service_reason,
+               ]) }})">
+            @if ($slot->type === 'PWD')<span class="pwd-tag">PWD</span>@endif
+            <b>{{ $slot->code }}</b>
+            <span class="st">{{ $slot->statusLabel() }}</span>
+            @if ($curr)
+              <span class="plt">{{ \App\Support\Lot::plate($curr->plate_number) }}</span>
+            @elseif ($booking)
+              <span class="plt" style="color:#92400E;">{{ \App\Support\Lot::plate($booking->plate_number) }}</span>
+            @elseif ($slot->out_of_service_reason)
+              <span class="plt" style="font-size:9px;">{{ \Illuminate\Support\Str::limit($slot->out_of_service_reason, 12) }}</span>
+            @endif
+          </div>
+        @endforeach
+      </div>
+      <div class="ba-layout-lane">
+        <span>Entrance</span><i></i><span>Exit</span>
+      </div>
+    </div>
+
+    <!-- Grouped Slots Grid View -->
+    <div id="ba-grid-view" style="display:none;">
+      <!-- Zone Filter Tabs & Available Count -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin:12px 0 16px;flex-wrap:wrap;gap:10px;">
+        <div style="display:flex;gap:6px;flex-wrap:wrap;" id="zone-filter-tabs">
+          <button type="button" class="btn sm primary zone-tab-btn" data-zone="all" style="padding:5px 12px;font-size:13px;">All Zones ({{ $slots->count() }})</button>
+          @foreach ($slots->groupBy('zone') as $zoneName => $zoneSlots)
+            <button type="button" class="btn sm ghost zone-tab-btn" data-zone="{{ $zoneName }}" style="padding:5px 12px;font-size:13px;">Zone {{ $zoneName }} ({{ $zoneSlots->count() }})</button>
           @endforeach
         </div>
       </div>
-    @endforeach
+
+      <!-- Grouped Slots by Zone -->
+      @foreach ($slots->groupBy('zone') as $zoneName => $zoneSlots)
+        <div class="ba-zone-section" data-zone="{{ $zoneName }}" style="margin-bottom:22px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin:0 0 10px;padding-bottom:6px;border-bottom:1.5px solid var(--line);">
+            <b style="font-size:15px;color:var(--ink);">Zone {{ $zoneName }}</b>
+            <span style="font-size:12px;color:var(--muted);font-weight:600;">{{ $zoneSlots->where('status', 'available')->count() }} of {{ $zoneSlots->count() }} available</span>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;">
+            @foreach ($zoneSlots as $slot)
+              @php
+                  $curr = $slot->currentSession();
+                  $booking = $slot->nextOpenBooking();
+              @endphp
+              <div class="ba-slot {{ $slot->status }}"
+                   style="min-height:100px;padding:12px 8px;cursor:pointer;"
+                   onclick="openSlotDetail({{ json_encode([
+                       'id' => $slot->id,
+                       'code' => $slot->code,
+                       'zone' => $slot->zone,
+                       'type' => $slot->type,
+                       'status' => $slot->status,
+                       'status_label' => $slot->statusLabel(),
+                       'session_id' => $curr?->id,
+                       'ticket' => $curr?->ticket_number,
+                       'plate' => $curr ? \App\Support\Lot::plate($curr->plate_number) : ($booking ? \App\Support\Lot::plate($booking->plate_number) : null),
+                       'vehicle' => $curr ? "{$curr->vehicle_color} {$curr->vehicle_type}" : null,
+                       'entry' => $curr ? \App\Support\Lot::stamp($curr->entered_at) : null,
+                       'parked' => $curr ? \App\Support\Lot::duration(\App\Support\Lot::minutesBetween($curr->entered_at)) : null,
+                       'booking_driver' => $booking?->driver?->name,
+                       'booking_code' => $booking?->code,
+                       'booking_time' => $booking ? \App\Support\Lot::time($booking->scheduled_at) : null,
+                       'out_reason' => $slot->out_of_service_reason,
+                   ]) }})">
+                @if ($slot->type === 'PWD')<span class="pwd-tag">PWD</span>@endif
+                <b>{{ $slot->code }}</b>
+                <span class="st">{{ $slot->statusLabel() }}</span>
+                @if ($curr)
+                  <span class="plt">{{ \App\Support\Lot::plate($curr->plate_number) }}</span>
+                @elseif ($booking)
+                  <span class="plt" style="color:#92400E;">{{ \App\Support\Lot::plate($booking->plate_number) }}</span>
+                @elseif ($slot->out_of_service_reason)
+                  <span class="plt" style="font-size:10px;">{{ \Illuminate\Support\Str::limit($slot->out_of_service_reason, 15) }}</span>
+                @endif
+              </div>
+            @endforeach
+          </div>
+        </div>
+      @endforeach
+    </div>
 
     <!-- Legend matching Driver App design -->
     <div class="leg ba-detail-box" style="margin-top:14px;gap:10px 20px;">
@@ -93,6 +180,9 @@
       <span><i class="o"></i>Occupied</span>
       <span><i class="p"></i>Pending exit</span>
       <span><i class="x"></i>Out of service</span>
+      <span style="display:inline-flex;align-items:center;gap:6px;">
+        <span style="font-size:10px;font-weight:900;background:#2563EB;color:#fff;border-radius:3px;padding:2px 5px;">♿ PWD</span> Priority
+      </span>
     </div>
   </div>
 
@@ -339,6 +429,24 @@ document.querySelectorAll('.zone-tab-btn').forEach(btn => {
     });
   });
 });
+
+window.switchSlotView = function(mode) {
+  const mapView = document.getElementById('ba-layout-view');
+  const gridView = document.getElementById('ba-grid-view');
+  const btnMap = document.getElementById('btn-toggle-map');
+  const btnGrid = document.getElementById('btn-toggle-grid');
+  if (mode === 'map') {
+    mapView.style.display = 'block';
+    gridView.style.display = 'none';
+    btnMap.classList.add('active');
+    btnGrid.classList.remove('active');
+  } else {
+    mapView.style.display = 'none';
+    gridView.style.display = 'block';
+    btnGrid.classList.add('active');
+    btnMap.classList.remove('active');
+  }
+};
 </script>
 @endpush
 @endsection

@@ -42,9 +42,16 @@ class SessionController extends Controller
             return redirect()->route('driver.session');
         }
 
+        $slots = ParkingSlot::query()->orderBy('zone')->orderBy('code')->get();
+        $zonePositions = \App\Models\ParkingLayoutZone::query()
+            ->whereIn('zone', $slots->pluck('zone')->unique())
+            ->get()
+            ->keyBy('zone');
+
         return view('driver.app.locate', [
             'session' => $session,
-            'zones' => ParkingSlot::query()->orderBy('zone')->orderBy('code')->get()->groupBy('zone'),
+            'zones' => $slots->groupBy('zone'),
+            'zonePositions' => $zonePositions,
             'vehicle' => Vehicle::withTrashed()->where('user_id', $user->id)->where('plate_number', $session->plate_number)->first(),
         ]);
     }

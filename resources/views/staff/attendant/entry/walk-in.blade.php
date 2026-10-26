@@ -202,12 +202,50 @@
             </div>
           </div>
 
-          <div style="margin-bottom:14px;">
-            <h2 style="margin:0 0 4px;">Lot map</h2>
-            <p style="font-size:13px;color:var(--muted);margin:0;">Only Available slots can be picked. Other slots are dimmed.</p>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px;">
+            <div>
+              <h2 style="margin:0 0 4px;">Lot map</h2>
+              <p style="font-size:13px;color:var(--muted);margin:0;">Pick any Available slot. Positioned live from Manager floor layout.</p>
+            </div>
+            <div class="ba-view-toggle">
+              <button type="button" id="btn-walkin-view-map" class="active" onclick="switchWalkinSlotView('map')">Visual map</button>
+              <button type="button" id="btn-walkin-view-grid" onclick="switchWalkinSlotView('grid')">Grid list</button>
+            </div>
           </div>
 
-          <div class="ba-lot-map">
+          <!-- Visual Map View (Matching Manager Layout Canvas) -->
+          <div class="ba-layout-wrap" id="walkin-layout-view">
+            <div class="ba-layout-canvas" data-layout-canvas>
+              @foreach ($slots->groupBy('zone') as $zone => $zoneSlots)
+                @php
+                  $zonePosition = $zonePositions[$zone] ?? null;
+                  $vehicleType = $zonePosition?->vehicle_type ?? 'Car';
+                @endphp
+                <span data-layout-zone-label data-zone="{{ $zone }}"
+                      data-x="{{ $zonePosition?->label_x ?? '' }}" data-y="{{ $zonePosition?->label_y ?? '' }}">
+                  {{ $zone }} <small>({{ $vehicleType }})</small>
+                </span>
+              @endforeach
+              @foreach ($slots as $s)
+                @php $isAvail = ($s->status === 'available'); @endphp
+                <div class="ba-slot ba-layout-slot {{ $s->status }} @if(!$isAvail) dimmed @endif"
+                     data-layout-slot data-slot="{{ $s->code }}" data-slot-id="{{ $s->id }}" data-zone="{{ $s->zone }}"
+                     data-type="{{ $s->type }}" data-x="{{ $s->layout_x ?? '' }}" data-y="{{ $s->layout_y ?? '' }}"
+                     @if($isAvail) onclick="selectSlot(this)" style="cursor:pointer;" @else style="cursor:not-allowed;" @endif
+                     title="{{ $s->code }} &mdash; {{ $s->statusLabel() }}">
+                  @if($s->type === 'PWD')<span class="pwd-tag">PWD</span>@endif
+                  <b>{{ $s->code }}</b>
+                  <span class="st">{{ $s->statusLabel() }}</span>
+                </div>
+              @endforeach
+            </div>
+            <div class="ba-layout-lane">
+              <span>Entrance</span><i></i><span>Exit</span>
+            </div>
+          </div>
+
+          <!-- Grouped Grid View -->
+          <div class="ba-lot-map" id="walkin-grid-view" style="display:none;">
             @foreach ($slots->groupBy('zone') as $zoneName => $zoneSlots)
               <div class="ba-zone">
                 <div class="ba-zone-title">{{ $zoneName }}</div>
@@ -737,7 +775,7 @@ document.getElementById('btn-back-to-details').addEventListener('click', () => {
 window.selectSlot = function(el) {
   if (!el || !el.classList.contains('available')) return;
   document.querySelectorAll('.ba-slot.selected').forEach(s => s.classList.remove('selected'));
-  el.classList.add('selected');
+  document.querySelectorAll(`.ba-slot[data-slot="${el.dataset.slot}"]`).forEach(s => s.classList.add('selected'));
 
   selectedSlot = {
     code: el.dataset.slot,
@@ -769,6 +807,24 @@ window.selectSlot = function(el) {
     } else {
       topPwdBanner.style.display = 'none';
     }
+  }
+};
+
+window.switchWalkinSlotView = function(mode) {
+  const mapView = document.getElementById('walkin-layout-view');
+  const gridView = document.getElementById('walkin-grid-view');
+  const btnMap = document.getElementById('btn-walkin-view-map');
+  const btnGrid = document.getElementById('btn-walkin-view-grid');
+  if (mode === 'map') {
+    mapView.style.display = 'block';
+    gridView.style.display = 'none';
+    btnMap.classList.add('active');
+    btnGrid.classList.remove('active');
+  } else {
+    mapView.style.display = 'none';
+    gridView.style.display = 'block';
+    btnGrid.classList.add('active');
+    btnMap.classList.remove('active');
   }
 };
 </script>
