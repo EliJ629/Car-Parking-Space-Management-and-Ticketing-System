@@ -55,6 +55,18 @@ class ExitController extends Controller
 
             if (! $includeClosed) {
                 $query->whereIn('status', ParkingSession::OPEN_STATUSES);
+            } else {
+                $cutoff = now()->subHours(24);
+                $query->where(function ($b) use ($cutoff) {
+                    $b->whereIn('status', ParkingSession::OPEN_STATUSES)
+                        ->orWhere(function ($closed) use ($cutoff) {
+                            $closed->where('status', ParkingSession::STATUS_COMPLETED)
+                                ->where(function ($time) use ($cutoff) {
+                                    $time->where('exited_at', '>=', $cutoff)
+                                        ->orWhere('updated_at', '>=', $cutoff);
+                                });
+                        });
+                });
             }
 
             $query->where(function ($w) use ($q, $normPlate, $cleanTicket) {
