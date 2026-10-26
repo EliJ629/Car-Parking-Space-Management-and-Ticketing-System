@@ -10,6 +10,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&family=Inter:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="<?= e('/css/bayline.css?v='.filemtime(public_path('css/bayline.css'))) ?>">
 <link rel="stylesheet" href="<?= e('/css/manager.css?v='.filemtime(public_path('css/manager.css'))) ?>">
+<link rel="stylesheet" href="<?= e('/css/pager.css?v='.filemtime(public_path('css/pager.css'))) ?>">
 </head>
 <body class="manager-body">
 <header class="manager-header">
@@ -46,6 +47,8 @@
       'reports' => ['Reports', 'manager.reports.index'],
       'activity' => ['Activity log', 'manager.activity.index'],
       'incidents' => ['Incidents', 'manager.incidents.index'],
+      'bans' => ['Banned vehicles', 'manager.bans.index'],
+      'landing' => ['Landing page', 'manager.landing.edit'],
       'settings' => ['Settings', 'manager.settings.index'],
   ];
 foreach ($managerLinks as $page => [$label, $routeName]) {
@@ -86,5 +89,7 @@ foreach ($managerLinks as $page => [$label, $routeName]) {
   </div>
 </footer>
 <script src="<?= e(asset('js/bayline.js').'?v='.filemtime(public_path('js/bayline.js'))) ?>"></script>
+<script src="<?= e(asset('js/plate.js').'?v='.filemtime(public_path('js/plate.js'))) ?>"></script>
+<script src="<?= e(asset('js/table-pager.js').'?v='.filemtime(public_path('js/table-pager.js'))) ?>"></script>
 </body>
 </html>

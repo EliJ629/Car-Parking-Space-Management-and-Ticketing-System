@@ -49,7 +49,6 @@
       <dialog class="badlg" id="rej-{{ $r->id }}" aria-labelledby="rej-{{ $r->id }}-t">
         <form class="in" method="POST" action="{{ route('attendant.reservations.reject', $r) }}" data-reject>
           @csrf
-          <button class="x" type="button" data-close aria-label="Close">&times;</button>
           <h2 id="rej-{{ $r->id }}-t">Reject {{ $r->code }}?</h2>
           <p>The driver is told right away and must choose a new slot. Slot {{ $r->slot_code }} is released.</p>
           <label class="ba-label" for="rej-{{ $r->id }}-why">Reason</label>

@@ -129,7 +129,6 @@
 <!-- POP-UP BA-61: Record Detail Modal -->
 <dialog class="badlg" id="record-detail-dlg">
   <div class="in">
-    <button class="x" type="button" data-close aria-label="Close">&times;</button>
     <h2>Record <span id="rd-ticket"></span></h2>
 
     <div class="ba-detail-box" style="display:flex;flex-direction:column;gap:10px;font-size:14px;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:18px;color:var(--ink);">

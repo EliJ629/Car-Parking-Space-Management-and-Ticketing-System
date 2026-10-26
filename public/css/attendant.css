@@ -962,6 +962,7 @@ dialog.badlg .ba-detail-box{background:var(--bg);border:1px solid var(--line);bo
     font-size: 11px;
   }
 }
+.ba-slot.long{background:#a3261b;border-color:#7a1810;color:#fff}.ba-slot.long span.st,.ba-slot.long span.plt{color:#fff}
 
 /* Layout Canvas matching Manager Live Map (BA-51) */
 .ba-zone-slots-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px}

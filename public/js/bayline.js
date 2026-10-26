@@ -51,7 +51,9 @@ document.querySelectorAll('input[type=password]').forEach(function(input){
 });
 /* Disable the submit button while a form is sending, so a double tap does not send it twice */
 document.querySelectorAll('form[data-busy]').forEach(function(form){
-  form.addEventListener('submit',function(){
+  form.addEventListener('submit',function(e){
+    // A check in the page already stopped this submit: the button stays usable.
+    if(e&&e.defaultPrevented)return;
     var b=form.querySelector('button[type=submit]');
     if(b){setTimeout(function(){b.disabled=true;b.textContent=b.getAttribute('data-busy-label')||'Please wait'},0)}
   });
@@ -71,13 +73,19 @@ document.querySelectorAll('input[data-pwcheck]').forEach(function(input){
       li.classList.toggle('ok',ok);
       var s=li.querySelector('.sr');if(s)s.textContent=ok?' (done)':' (not yet)';
     });
-    if(confirm&&match){
-      if(!confirm.value){match.textContent='';match.className='hint'}
-      else if(confirm.value===v){match.textContent='Passwords match.';match.className='hint okline'}
-      else{match.textContent='Passwords do not match yet.';match.className='hint badline'}
-    }
   }
-  input.addEventListener('input',run);if(confirm)confirm.addEventListener('input',run);run();
+  /* The match message shows once the confirmation field has been left; typing or emptying it clears the message. */
+  function judge(){
+    if(!(confirm&&match))return;
+    if(!confirm.value){match.textContent='';match.className='hint'}
+    else if(confirm.value===input.value){match.textContent='Passwords match.';match.className='hint okline'}
+    else{match.textContent='Passwords do not match.';match.className='hint badline'}
+  }
+  function clearMatch(){if(match){match.textContent='';match.className='hint'}}
+  input.addEventListener('input',function(){run();clearMatch()});
+  input.addEventListener('blur',function(){if(confirm&&confirm.value)judge()});
+  if(confirm){confirm.addEventListener('input',clearMatch);confirm.addEventListener('blur',judge)}
+  run();
 });
 /* Phone fields take digits and a leading + only. Letters, spaces and dashes are removed as they are typed or pasted. */
 document.querySelectorAll('input[type=tel]').forEach(function(input){
@@ -101,7 +109,13 @@ document.querySelectorAll('input[data-live-gmail]').forEach(function(input){
     if(!note)return;
     clearTimeout(timer);seq++;
     if(!v){plain();return}
-    if(!re.test(v)){note.textContent='Use a Gmail address, for example maria.santos@gmail.com.';note.className='hint badline';return}
+    if(!re.test(v)){
+      var m=/^([^@]*)@gmail\.com$/.exec(v),msg='Use a Gmail address, for example maria.santos@gmail.com.';
+      if(m&&m[1].length<6)msg='A Gmail address has at least 6 characters before @gmail.com.';
+      else if(m&&m[1].length>30)msg='A Gmail address has at most 30 characters before @gmail.com.';
+      else if(m&&/^\.|\.$|\.\./.test(m[1]))msg='A Gmail address cannot start or end with a dot, or have two dots in a row.';
+      else if(m&&/\+/.test(m[1]))msg='Use the plain Gmail address, without a + tag.';
+      note.textContent=msg;note.className='hint badline';return}
     plain();
     if(!url||typeof fetch!=='function')return;
     var mine=seq;
@@ -114,7 +128,10 @@ document.querySelectorAll('input[data-live-gmail]').forEach(function(input){
         }).catch(function(){});
     },400);
   }
-  input.addEventListener('input',run);run();
+  /* The message is judged once, when the person leaves the field. Typing or clearing the field puts the plain note back. */
+  input.addEventListener('input',function(){clearTimeout(timer);seq++;plain()});
+  input.addEventListener('blur',run);
+  if(input.value)run();
 });
 /* Slot create/edit: floor choice drives the four zones on that floor. */
 document.querySelectorAll('[data-slot-floor-form]').forEach(function(root){
@@ -378,7 +395,7 @@ document.querySelectorAll('[data-layout-canvas]').forEach(function(canvas){
     slots.forEach(function(slot){(groups[slot.dataset.zone]||(groups[slot.dataset.zone]=[])).push(slot)});
     zones=Object.keys(groups);
     zones.forEach(function(zone){height+=Math.ceil(groups[zone].length/8)*72+28});
-    height=Math.max(520,height);canvas.style.height=height+'px';
+    height=Math.max(520,height);canvas.style.height=(height*(parseFloat(canvas.getAttribute('data-scale'))||1))+'px';
     labels.forEach(function(label){
       var labelX=parseFloat(label.dataset.x),labelY=parseFloat(label.dataset.y);
       label.style.left=(clamp(Number.isFinite(labelX)?labelX:0.04,0,.9)*100)+'%';
@@ -534,21 +551,22 @@ window.renderLot=function(el,st,me){
   var A=['A-01','A-02','A-03','A-04'],A2=['A-05','A-06','A-07','A-08'],B=['B-01','B-02','B-03','B-04'];
   el.innerHTML='<div class="zl">ZONE A</div><div class="g">'+A.map(cell).join('')+'</div><div class="g">'+A2.map(cell).join('')+'</div><div class="lane"><span class="en">ENTRANCE</span><span class="ds"></span><span class="ex">EXIT</span></div><div class="zl">ZONE B</div><div class="g">'+B.map(cell).join('')+'</div><div class="leg"><span><i></i>Available</span><span><i class="r"></i>Reserved</span><span><i class="o"></i>Occupied</span><span><i class="p"></i>Pending exit</span></div>';
 };
+window.rates=function(){var r=window.BAYLINE_RATES||{};return {first:r.first!=null?+r.first:30,extra:r.extra!=null?+r.extra:20,cap:r.cap!=null?+r.cap:300,lost:r.lost!=null?+r.lost:100,over:r.over!=null?+r.over:150}};
 window.fee=function(min,disc,lost,over){
-  var hrs=Math.max(1,Math.ceil(min/60)),first=30,extra=(hrs-1)*20,sub=first+extra,cap=false;
-  if(sub>300){sub=300;cap=true}
-  var d=Math.round(sub*disc*100)/100,pen=(lost?100:0)+(over?150:0);
+  var R=rates(),hrs=Math.max(1,Math.ceil(min/60)),first=R.first,extra=(hrs-1)*R.extra,sub=first+extra,cap=false;
+  if(sub>R.cap){sub=R.cap;cap=true}
+  var d=Math.round(sub*disc*100)/100,pen=(lost?R.lost:0)+(over?R.over:0);
   return {hrs:hrs,first:first,extra:extra,addHrs:hrs-1,sub:sub,cap:cap,disc:d,pen:pen,lost:lost,over:over,total:sub-d+pen};
 };
 window.money=function(n){return '\u20B1'+n.toFixed(2)};
 window.dur=function(m){var h=Math.floor(m/60),r=m%60;return h?(h+' h '+(r<10?'0':'')+r+' min'):(r+' min')};
 window.feeHTML=function(f,discLabel){
   var h='<div class="row"><span>First hour</span><span>'+money(f.first)+'</span></div>';
-  h+='<div class="row"><span>Additional hours ('+f.addHrs+' x \u20B120)</span><span>'+money(f.extra)+'</span></div>';
+  h+='<div class="row"><span>Additional hours ('+f.addHrs+' x '+money(rates().extra)+')</span><span>'+money(f.extra)+'</span></div>';
   if(f.cap)h+='<div class="row"><span>Daily maximum applied</span><span>'+money(f.sub)+'</span></div>';
   if(f.disc)h+='<div class="row"><span>'+discLabel+'</span><span>-'+money(f.disc)+'</span></div>';
-  if(f.lost)h+='<div class="row"><span>Lost ticket penalty</span><span>'+money(100)+'</span></div>';
-  if(f.over)h+='<div class="row"><span>Overstay penalty</span><span>'+money(150)+'</span></div>';
+  if(f.lost)h+='<div class="row"><span>Lost ticket penalty</span><span>'+money(rates().lost)+'</span></div>';
+  if(f.over)h+='<div class="row"><span>Overstay penalty</span><span>'+money(rates().over)+'</span></div>';
   h+='<div class="row" style="border-top:2px solid var(--ink);font-size:18px"><span style="color:var(--ink);font-weight:700">Amount payable</span><span style="font-family:var(--f-d);font-size:30px;line-height:1">'+money(f.total)+'</span></div>';
   return h;
 };

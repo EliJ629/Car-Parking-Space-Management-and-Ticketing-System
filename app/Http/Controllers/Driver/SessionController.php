@@ -50,7 +50,7 @@ class SessionController extends Controller
 
         return view('driver.app.locate', [
             'session' => $session,
-            'zones' => $slots->groupBy('zone'),
+            'zones' => \App\Support\SlotLayout::decorate($slots)->groupBy('zone'),
             'zonePositions' => $zonePositions,
             'vehicle' => Vehicle::withTrashed()->where('user_id', $user->id)->where('plate_number', $session->plate_number)->first(),
         ]);

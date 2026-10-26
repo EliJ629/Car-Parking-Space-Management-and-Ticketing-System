@@ -10,6 +10,7 @@ use App\Services\GoogleSignIn;
 use App\Services\GoogleSignInFailed;
 use App\Services\SignInService;
 use App\Support\Lot;
+use App\Support\PlateEntry;
 use App\Support\Rules;
 use App\Support\VehicleCatalog;
 use Illuminate\Http\RedirectResponse;
@@ -157,6 +158,7 @@ class GoogleController extends Controller
         return view('driver.google-complete', [
             'email' => $profile['email'],
             'googleName' => $profile['name'],
+            'googleParts' => Rules::splitName($profile['name']),
             'vehicleTypes' => Vehicle::DRIVER_TYPES,
             'catalog' => VehicleCatalog::forForm(),
             'colors' => VehicleCatalog::colors(),
@@ -172,37 +174,39 @@ class GoogleController extends Controller
             return $this->toLogin('That sign up took too long. Start again with Google.');
         }
 
-        Rules::tidy($request, 'name');
-        $request->merge([
-            'phone' => Lot::normalizePhone($request->input('phone')),
-            'plate_number' => Vehicle::normalizePlate($request->input('plate_number')),
+        Rules::joinNameFields($request);
+
+        $request->merge(['phone' => Lot::normalizePhone($request->input('phone'))]);
+
+        // "Still in registration" ticked: the plate is optional, and a plate that is typed must be a temporary plate.
+        $entry = PlateEntry::resolve($request, null, [
+            fn (string $attribute, mixed $value, \Closure $fail) => Vehicle::plateTaken((string) $value)
+                ? $fail(Lot::plate((string) $value).' is already registered to an account. A plate can belong to one account only.')
+                : null,
         ]);
 
-        $data = VehicleCatalog::validate($request, [
-            'name' => array_merge(Rules::personName(), [
-                fn (string $attribute, mixed $value, \Closure $fail) => Rules::driverNameTaken((string) $value)
-                    ? $fail('An account with this name already exists. If it is yours, sign in instead.')
-                    : null,
-            ]),
+        $data = VehicleCatalog::validate($request, Rules::nameParts() + [
             'phone' => Rules::mobile(),
-            'plate_number' => array_merge(Rules::plate(), [
-                fn (string $attribute, mixed $value, \Closure $fail) => Vehicle::withTrashed()->where('plate_number', $value)->exists()
-                    ? $fail(Lot::plate((string) $value).' is already registered to an account. A plate can belong to one account only.')
-                    : null,
-            ]),
-        ], Rules::personNameMessages() + [
+            'plate_number' => $entry->rules,
+            'details_confirmed' => ['accepted'],
+        ], Rules::namePartMessages() + [
             'phone.required' => 'Enter your mobile number.',
             'phone.regex' => Rules::MOBILE_MESSAGE,
-            'plate_number.required' => 'Enter your plate number.',
+            'plate_number.required' => 'Enter your plate number, or tick "still in registration".',
             'plate_number.regex' => Rules::PLATE_MESSAGE,
+            'details_confirmed.accepted' => 'Check your details and confirm that they are all correct.',
         ]);
+
+        $data['plate_number'] = $entry->plate;
+        $data['plate_is_temporary'] = $entry->temporary;
+        unset($data['details_confirmed']);
 
         $user = DB::transaction(function () use ($data, $profile) {
             if (Rules::emailTaken($profile['email'])) {
                 throw ValidationException::withMessages(['name' => 'This Gmail account is already registered. Try signing in.']);
             }
 
-            if (Vehicle::withTrashed()->where('plate_number', $data['plate_number'])->lockForUpdate()->exists()) {
+            if ($data['plate_number'] !== null && Vehicle::withTrashed()->where('plate_number', $data['plate_number'])->lockForUpdate()->exists()) {
                 throw ValidationException::withMessages([
                     'plate_number' => Lot::plate($data['plate_number']).' is already registered to an account. A plate can belong to one account only.',
                 ]);
@@ -220,7 +224,8 @@ class GoogleController extends Controller
             $user->forceFill(['google_id' => $profile['sub'], 'email_verified_at' => now()])->save();
 
             $user->vehicles()->create([
-                'plate_number' => $data['plate_number'],
+                'plate_number' => $data['plate_number'] ?? null,
+                'plate_is_temporary' => (bool) $data['plate_is_temporary'],
                 'vehicle_type' => $data['vehicle_type'],
                 'color' => $data['color'],
                 'make_model' => $data['make_model'],

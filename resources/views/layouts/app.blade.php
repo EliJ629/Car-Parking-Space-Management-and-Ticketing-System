@@ -14,6 +14,9 @@
 <body>
 @yield('body')
 <script src="{{ asset('js/bayline.js') }}?v={{ filemtime(public_path('js/bayline.js')) }}"></script>
+<script src="{{ asset('js/plate.js') }}?v={{ filemtime(public_path('js/plate.js')) }}"></script>
+<script src="{{ asset('js/inputs.js') }}?v={{ filemtime(public_path('js/inputs.js')) }}"></script>
+<script src="{{ asset('js/form-ajax.js') }}?v={{ filemtime(public_path('js/form-ajax.js')) }}"></script>
 @stack('scripts')
 </body>
 </html>

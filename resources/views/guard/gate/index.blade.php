@@ -41,7 +41,7 @@
   @else
     <div id="queue" data-feed="{{ route('guard.gate.feed') }}" data-ids="{{ $queue->pluck('id')->implode(',') }}">
       <div class="g-tablewrap">
-        <table class="g-table">
+        <table class="g-table" data-paginate="10">
           <thead><tr><th>Ticket</th><th>Plate</th><th>Slot</th><th>Vehicle</th><th>Entry</th><th>Paid at</th><th>Receipt</th><th>Exit window left</th><th><span class="sr-only" style="position:absolute;left:-999px">Action</span></th></tr></thead>
           <tbody>
             @foreach ($queue as $s)
@@ -71,7 +71,7 @@
     <div class="g-search">
       <div>
         <label class="f" for="q">Plate or ticket number</label>
-        <input id="q" name="q" type="search" value="{{ $q }}" placeholder="BNM 6628 or PK-0018" autocomplete="off" autocapitalize="characters" spellcheck="false" required>
+        <input id="q" name="q" type="search" data-plate-or-ticket maxlength="20" value="{{ $q }}" placeholder="BNM 6628 or PK-0018" autocomplete="off" autocapitalize="characters" spellcheck="false" required>
       </div>
       <button class="btn" type="submit" style="min-height:48px">Search</button>
     </div>
@@ -112,13 +112,11 @@
       @push('dialogs')
       <dialog class="gdlg stop" id="balance" aria-labelledby="bal-t" data-autoopen>
         <div class="in">
-          <button class="x" type="button" data-close aria-label="Close">X</button>
           <h2 id="bal-t">Outstanding balance</h2>
           <p>{{ \App\Support\Lot::plate($s->plate_number) }} has not paid. The amount due so far is <b>{{ \App\Support\Lot::peso($due) }}</b>.</p>
           <p class="note">The Guard cannot release this slot. Send the driver to the booth to pay, then the vehicle shows in the exit queue.</p>
           <div class="actions">
             <button class="btn" type="button" data-close>OK, send to booth</button>
-            <a class="btn ghost" href="{{ route('guard.incidents.create', ['category' => 'Unpaid vehicle attempting exit', 'plate' => $s->plate_number, 'location' => $s->slot?->code ?? $s->slot_code, 'session' => $s->id]) }}">Report incident</a>
           </div>
         </div>
       </dialog>
@@ -129,11 +127,10 @@
     @push('dialogs')
     <dialog class="gdlg" id="none" aria-labelledby="none-t" data-autoopen>
       <div class="in">
-        <button class="x" type="button" data-close aria-label="Close">X</button>
         <h2 id="none-t">No session found</h2>
         <p>There is no parking session for {{ $q }}. Check the plate or the ticket number and try again.</p>
-        <p class="note">A vehicle with no ticket is not a paid exit. If it is inside the lot, report it as unauthorized parking.</p>
-        <div class="actions"><button class="btn" type="button" data-close>Search again</button><a class="btn ghost" href="{{ route('guard.incidents.create', ['category' => 'Unauthorized parking']) }}">Report incident</a></div>
+        <p class="note">A vehicle with no ticket is not a paid exit.</p>
+        <div class="actions"><button class="btn" type="button" data-close>Search again</button></div>
       </div>
     </dialog>
     @endpush

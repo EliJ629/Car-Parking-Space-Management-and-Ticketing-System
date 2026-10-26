@@ -10,12 +10,17 @@ use App\Models\ParkingRateSet;
 use App\Models\ParkingSession;
 use App\Models\ParkingSlot;
 use App\Models\Vehicle;
+use App\Services\ExitAuthorizationService;
 use App\Services\FeeCalculator;
+use App\Services\GateService;
 use App\Services\NoticeService;
 use App\Support\Lot;
 use Illuminate\Http\RedirectResponse;
+use App\Support\TicketNumber;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
+use App\Models\ExitAuthorization;
 use Illuminate\View\View;
 
 class ExitController extends Controller
@@ -42,11 +47,7 @@ class ExitController extends Controller
             $normPlate = Vehicle::normalizePlate($q);
 
             // Normalize ticket numbers (e.g. PK0016, PK 16, PK-16 -> PK-0016)
-            $cleanTicket = null;
-            if (preg_match('/^PK[\s\-]*(\d+)$/i', $q, $m)) {
-                $num = (int) $m[1];
-                $cleanTicket = 'PK-'.str_pad((string) $num, 4, '0', STR_PAD_LEFT);
-            }
+            $cleanTicket = TicketNumber::looksLikeTicket($q) ? TicketNumber::normalize($q) : null;
 
             $query = ParkingSession::query()
                 ->with(['slot', 'payment', 'driver'])
@@ -129,7 +130,7 @@ class ExitController extends Controller
             if ($isExpired) {
                 // BA-50: Recalculate stay, add overstay penalty
                 $recalc = $calculator->estimate($session, now());
-                $recalc['already_paid'] = (float) ($session->payment?->total ?? 0);
+                $recalc['already_paid'] = ExitAuthorization::paidFor($session);
                 $rate = ParkingRateSet::current();
                 $recalc['overstay_penalty'] = (float) ($rate->overstay_penalty ?? 150.0);
                 $recalc['amount_to_collect'] = max(0, $recalc['parking_charge'] - $recalc['already_paid'] + $recalc['overstay_penalty']);
@@ -164,8 +165,15 @@ class ExitController extends Controller
         ]);
     }
 
-    /** BA-44 to BA-46: Process cash payment */
-    public function pay(Request $request, ParkingSession $session, FeeCalculator $calculator, NoticeService $notices): RedirectResponse
+    /**
+     * BA-44 to BA-46: Process cash payment.
+     *
+     * One payment, one exit permission. The session row is locked for the whole request, so two clicks or two
+     * counters cannot both charge it: the second one finds the vehicle already paid (inside its window) and is
+     * sent to the receipt without charging again. A permission that ran out is closed first, and the vehicle pays
+     * only the difference between what it owes now and everything it has paid before.
+     */
+    public function pay(Request $request, ParkingSession $session, FeeCalculator $calculator, NoticeService $notices, GateService $gate, ExitAuthorizationService $authorizations): RedirectResponse
     {
         $validated = $request->validate([
             'cash_received' => ['required', 'numeric', 'min:0', 'max:9999999.99'],
@@ -183,35 +191,48 @@ class ExitController extends Controller
 
         $attendant = $request->user();
 
-        // Calculate live fee
-        $estimate = $calculator->estimate($session, now());
-        $parkingCharge = $estimate['parking_charge'];
-
-        // Apply penalties only if explicitly added by the attendant
-        $penalties = 0.0;
-        $currentRate = ParkingRateSet::current();
-        if ($request->boolean('lost_ticket')) {
-            $penalties += (float) ($currentRate?->lost_ticket_penalty ?? 100);
-            $session->lost_ticket = true;
-        } else {
-            $session->lost_ticket = false;
+        // A permission whose time is up is closed before anything is charged (a no-op when it is still valid).
+        if ($session->status === ParkingSession::STATUS_PAID) {
+            $gate->expireOne($session->id);
         }
 
-        if ($request->boolean('overstay')) {
-            $penalties += (float) ($currentRate?->overstay_penalty ?? 150);
-        }
+        $outcome = DB::transaction(function () use ($session, $validated, $request, $attendant, $calculator, $notices, $authorizations): array {
+            $locked = ParkingSession::query()->lockForUpdate()->with(['payment', 'slot'])->findOrFail($session->id);
 
-        $subtotal = $parkingCharge + $penalties;
+            if ($locked->status === ParkingSession::STATUS_COMPLETED) {
+                return ['refused' => 'This vehicle has already left. Its exit was confirmed, so nothing can be charged.'];
+            }
 
-        // Apply discount if selected (applies to total including additional fees like lost ticket and overstay)
-        $discountAmount = 0.0;
-        $discountName = null;
-        if (! empty($validated['discount_id'])) {
-            $discount = ParkingDiscount::query()->find($validated['discount_id']);
-            if ($discount) {
+            // Already paid and still inside the exit window: a repeat click or a second counter. Charge nothing.
+            if ($locked->status === ParkingSession::STATUS_PAID && $locked->payment) {
+                return ['payment' => $locked->payment, 'repeat' => true];
+            }
+
+            $estimate = $calculator->estimate($locked, now());
+            $parkingCharge = $estimate['parking_charge'];
+
+            $penalties = 0.0;
+            $currentRate = ParkingRateSet::current();
+            $locked->lost_ticket = $request->boolean('lost_ticket');
+
+            if ($locked->lost_ticket) {
+                $penalties += (float) ($currentRate?->lost_ticket_penalty ?? 100);
+            }
+
+            if ($request->boolean('overstay')) {
+                $penalties += (float) ($currentRate?->overstay_penalty ?? 150);
+            }
+
+            $subtotal = $parkingCharge + $penalties;
+
+            $discountAmount = 0.0;
+            $discountName = null;
+
+            if (! empty($validated['discount_id']) && ($discount = ParkingDiscount::query()->find($validated['discount_id']))) {
                 $proof = trim((string) ($validated['discount_proof'] ?? ''));
-                if (empty($proof)) {
-                    return back()->withErrors(['discount_proof' => 'An ID number or proof is required to apply this discount.']);
+
+                if ($proof === '') {
+                    throw ValidationException::withMessages(['discount_proof' => 'An ID number or proof is required to apply this discount.']);
                 }
 
                 $lowerName = strtolower($discount->name);
@@ -219,59 +240,57 @@ class ExitController extends Controller
 
                 if (str_contains($lowerName, 'senior')) {
                     $validSenior = preg_match('/^(?:(?:SC|OSCA|SR)[-\s]?[A-Z0-9-]{4,18}|[0-9]{2,4}[-\s]?[0-9]{4,10}|[0-9]{4}[-\s][0-9]{4}[-\s][0-9]{4}[-\s]?[0-9]{4}|[A-Z0-9-]{5,20})$/i', $proof);
+
                     if (! $validSenior || $isDummy || strlen($proof) < 5) {
-                        return back()->withErrors(['discount_proof' => 'Invalid Senior Citizen (OSCA) ID format. Example: SC-0048215 or 12-3456-789']);
+                        throw ValidationException::withMessages(['discount_proof' => 'Invalid Senior Citizen (OSCA) ID format. Example: SC-0048215 or 12-3456-789']);
                     }
                 } elseif (str_contains($lowerName, 'pwd')) {
                     $validPwd = preg_match('/^(?:PWD[-\s]?[A-Z0-9-]{4,18}|[0-9]{2}[-\s][0-9]{4}[-\s][0-9]{3}[-\s]?[0-9]{4,7}|[0-9]{2,4}[-\s]?[0-9]{4,10}|[A-Z0-9-]{5,20})$/i', $proof);
+
                     if (! $validPwd || $isDummy || strlen($proof) < 5) {
-                        return back()->withErrors(['discount_proof' => 'Invalid PWD ID format. Example: PWD-2024-00142 or 11-2402-001-0001234']);
+                        throw ValidationException::withMessages(['discount_proof' => 'Invalid PWD ID format. Example: PWD-2024-00142 or 11-2402-001-0001234']);
                     }
                 }
 
                 $discountName = $discount->name;
                 $discountAmount = round(($subtotal * $discount->percent) / 100, 2);
             }
-        }
 
-        $alreadyPaid = (float) ($session->payment?->total ?? 0.0);
-        $finalAmount = max(0.0, round($subtotal - $discountAmount - $alreadyPaid, 2));
-        $cashReceived = (float) $validated['cash_received'];
+            // What the vehicle still owes: the whole bill minus every payment it has already made.
+            $alreadyPaid = $authorizations->alreadyPaid($locked);
+            $finalAmount = max(0.0, round($subtotal - $discountAmount - $alreadyPaid, 2));
+            $cashReceived = (float) $validated['cash_received'];
 
-        // BA-45: Cash check
-        if ($cashReceived < $finalAmount) {
-            $shortfall = $finalAmount - $cashReceived;
+            // BA-45: the cash must cover the balance before any exit permission is issued.
+            if ($cashReceived < $finalAmount) {
+                return ['short' => [
+                    'type' => 'insufficient_cash',
+                    'shortfall' => Lot::peso($finalAmount - $cashReceived),
+                    'amount_due' => Lot::peso($finalAmount),
+                    'cash' => Lot::peso($cashReceived),
+                ]];
+            }
 
-            return back()->with('error_modal', [
-                'type' => 'insufficient_cash',
-                'shortfall' => Lot::peso($shortfall),
-                'amount_due' => Lot::peso($finalAmount),
-                'cash' => Lot::peso($cashReceived),
-            ]);
-        }
+            $changeGiven = round($cashReceived - $finalAmount, 2);
+            $receiptNumber = $locked->payment?->receipt_number ?: $this->generateNextReceiptNumber();
+            $previousSnapshot = (array) ($locked->payment?->receipt_snapshot ?? []);
 
-        $changeGiven = round($cashReceived - $finalAmount, 2);
-        $receiptNumber = $session->payment?->receipt_number ?: $this->generateNextReceiptNumber();
-
-        $payment = DB::transaction(function () use (
-            $session, $attendant, $estimate, $discountAmount, $discountName, $penalties,
-            $finalAmount, $cashReceived, $changeGiven, $receiptNumber, $validated, $notices, $request
-        ) {
             $paymentData = [
                 'receipt_number' => $receiptNumber,
-                'session_id' => $session->id,
+                'session_id' => $locked->id,
                 'received_by' => $attendant->id,
                 'base_fee' => $estimate['first_hour'],
                 'additional_fee' => $estimate['additional'],
                 'penalty' => $penalties,
                 'discount' => $discountAmount,
+                // This payment only. Sales and shift cash add up payments, so each one counts once.
                 'total' => $finalAmount,
                 'method' => 'cash',
                 'receipt_snapshot' => [
-                    'ticket_number' => $session->ticket_number,
-                    'plate_number' => $session->plate_number,
-                    'slot_code' => $session->slot_code,
-                    'entry_time' => Lot::stamp($session->entered_at),
+                    'ticket_number' => $locked->ticket_number,
+                    'plate_number' => $locked->plate_number,
+                    'slot_code' => $locked->slot_code,
+                    'entry_time' => Lot::stamp($locked->entered_at),
                     'payment_time' => Lot::stamp(now()),
                     'base_fee' => $estimate['first_hour'],
                     'additional_fee' => $estimate['additional'],
@@ -282,44 +301,68 @@ class ExitController extends Controller
                     'cash_received' => $cashReceived,
                     'change_given' => $changeGiven,
                     'attendant_name' => $attendant->name,
+                    'previously_paid' => $alreadyPaid,
+                    'bill_total' => round($subtotal - $discountAmount, 2),
+                    // The earlier payments stay on the receipt record. The ledger keeps them as well.
+                    'earlier_payments' => $locked->payment
+                        ? array_merge((array) ($previousSnapshot['earlier_payments'] ?? []), [[
+                            'receipt' => $locked->payment->receipt_number,
+                            'amount' => (float) $locked->payment->total,
+                            'paid_at' => Lot::stamp($locked->payment->paid_at),
+                            'cashier' => $previousSnapshot['attendant_name'] ?? null,
+                        ]])
+                        : [],
                 ],
                 'paid_at' => now(),
             ];
 
-            if ($session->payment) {
-                $session->payment->update($paymentData);
-                $payment = $session->payment->fresh();
+            if ($locked->payment) {
+                $locked->payment->update($paymentData);
+                $payment = $locked->payment->fresh();
             } else {
                 $payment = ParkingPayment::create($paymentData);
             }
 
-            // Update session and slot
-            $session->update([
-                'status' => ParkingSession::STATUS_PAID,
-                'exit_window_expired_at' => null,
-            ]);
+            $authorization = $authorizations->issue($locked, $payment, $attendant, $finalAmount, round($alreadyPaid + $finalAmount, 2));
 
-            if ($session->slot) {
-                $session->slot->update(['status' => ParkingSlot::STATUS_PENDING_EXIT]);
-            }
+            $payment->update(['receipt_snapshot' => array_merge($payment->receipt_snapshot, ['authorization' => $authorization->code, 'authorization_expires_at' => Lot::stamp($authorization->expires_at)])]);
+
+            // The slot stays held (Pending exit) until the Guard confirms the exit.
+            $locked->update(['status' => ParkingSession::STATUS_PAID, 'exit_window_expired_at' => null]);
+            $locked->slot?->update(['status' => ParkingSlot::STATUS_PENDING_EXIT]);
 
             ActivityLog::record('payment_recorded', $attendant, $request, $receiptNumber, 'attendant', [
-                'ticket' => $session->ticket_number,
+                'ticket' => $locked->ticket_number,
                 'receipt' => $receiptNumber,
-                'plate' => $session->plate_number,
+                'authorization' => $authorization->code,
+                'plate' => $locked->plate_number,
                 'amount' => $finalAmount,
+                'previously_paid' => $alreadyPaid,
                 'cash' => $cashReceived,
                 'change' => $changeGiven,
             ]);
 
-            // Notifications
-            $notices->paymentReceived($session, $payment);
-            $notices->staffExitRequest($session);
+            $notices->paymentReceived($locked, $payment);
+            $notices->staffExitRequest($locked);
 
-            return $payment;
+            return ['payment' => $payment];
         });
 
-        return redirect()->route('attendant.exit.receipt', $payment)->with('fresh_payment', true);
+        if (isset($outcome['refused'])) {
+            return redirect()->route('attendant.exit.show', $session)->with('modal', [
+                'title' => 'Nothing was charged', 'body' => $outcome['refused'], 'primary' => ['label' => 'OK', 'close' => true],
+            ]);
+        }
+
+        if (isset($outcome['short'])) {
+            return back()->with('error_modal', $outcome['short']);
+        }
+
+        $redirect = redirect()->route('attendant.exit.receipt', $outcome['payment']);
+
+        return empty($outcome['repeat']) ? $redirect->with('fresh_payment', true) : $redirect->with('modal', [
+            'title' => 'Already paid', 'body' => 'This vehicle was already paid and its exit permission is still valid. No second charge was made.', 'primary' => ['label' => 'OK', 'close' => true],
+        ]);
     }
 
     /** BA-46 & BA-47: Receipt screen and preview */

@@ -126,11 +126,11 @@ class DashboardController extends ManagerController
 
         $slots = $zonesOnFloor === []
             ? collect()
-            : ParkingSlot::query()
+            : \App\Support\SlotLayout::decorate(ParkingSlot::query()
                 ->whereIn('zone', $zonesOnFloor)
                 ->orderBy('zone')
                 ->orderBy('code')
-                ->get();
+                ->get());
 
         $zonePositions = $slots->isEmpty()
             ? collect()

@@ -43,17 +43,11 @@
         
         <div class="ba-form-group">
           <label class="ba-label" for="plate-input">Plate number</label>
-          <div style="position:relative;">
-            <input class="ba-input" id="plate-input" name="plate" type="text"
-                   maxlength="20"
-                   value="{{ request('plate', '') }}"
-                   placeholder="e.g. ABC 1234, AB 12345, or 1" style="font-size:24px;font-weight:800;letter-spacing:1px;text-transform:uppercase;padding-right:44px;transition:border-color .15s, background-color .15s;"
-                   autocomplete="off" autofocus>
-            <span id="plate-live-icon" style="position:absolute;right:14px;top:50%;transform:translateY(-50%);font-size:18px;display:none;pointer-events:none;"></span>
-          </div>
-          <div id="plate-live-feedback" style="font-size:12px;color:var(--muted);margin-top:6px;font-weight:600;min-height:18px;display:flex;align-items:center;gap:4px;">
-            Philippine standard (ABC 1234, AB 12345), legacy, vintage, vanity, or protocol plates (e.g. 1 for President).
-          </div>
+          <input class="ba-input" id="plate-input" name="plate" type="text" data-plate
+                 value="{{ request('plate', '') }}"
+                 placeholder="e.g. ABC 1234, A 123 BC, or 1" style="font-size:24px;font-weight:800;letter-spacing:1px;text-transform:uppercase;"
+                 autocomplete="off" autofocus>
+          <p style="font-size:12px;color:var(--muted);margin-top:4px;">Standard, motorcycle, legacy, vintage, temporary, diplomatic, or government plates (1 to 17).</p>
           <div class="ba-err-msg" id="plate-err" hidden></div>
         </div>
 
@@ -248,12 +242,12 @@
           <div class="ba-lot-map" id="walkin-grid-view" style="display:none;">
             @foreach ($slots->groupBy('zone') as $zoneName => $zoneSlots)
               <div class="ba-zone">
-                <div class="ba-zone-title">{{ $zoneName }}</div>
+                <div class="ba-zone-title">{{ $zoneName }} <small style="font-weight:600;color:var(--muted)">{{ ($zoneSlots->first()?->vehicle_class ?? 'car') === 'motorcycle' ? 'Motorcycles only' : 'Cars, SUVs, vans, pickups, tricycles' }}</small></div>
                 <div class="ba-slot-grid" style="grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px;">
                   @foreach ($zoneSlots as $s)
                     @php $isAvail = ($s->status === 'available'); @endphp
                     <div class="ba-slot {{ $s->status }} @if(!$isAvail) dimmed @endif"
-                         data-slot="{{ $s->code }}" data-zone="{{ $s->zone }}" data-type="{{ $s->type }}"
+                         data-slot="{{ $s->code }}" data-zone="{{ $s->zone }}" data-type="{{ $s->type }}" data-class="{{ $s->vehicle_class ?: 'car' }}"
                          @if($isAvail) onclick="selectSlot(this)" @endif>
                        @if($s->type === 'PWD')<span class="pwd-tag">PWD</span>@endif
                       <b>{{ $s->code }}</b>
@@ -347,7 +341,6 @@
   <!-- POP-UP BA-17: Confirm Slot Modal -->
   <dialog class="badlg" id="confirm-slot-dlg">
     <div class="in">
-      <button class="x" type="button" data-close aria-label="Close">&times;</button>
       <h2>Assign slot <span id="dlg-slot-code"></span>?</h2>
       
       <div class="ba-detail-box" style="background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:16px;font-size:14px;color:var(--ink);">
@@ -393,7 +386,6 @@
 <!-- POP-UP BA-21: Active Session Already Exists -->
 <dialog class="badlg {{ (session('error_modal') && session('error_modal')['type'] === 'active_session_exists') ? 'auto-open' : '' }}" id="active-session-dlg">
   <div class="in">
-    <button class="x" type="button" data-close aria-label="Close">&times;</button>
     <h2 style="color:var(--stop);">This plate already has an active session</h2>
     
     <div class="ba-detail-box" style="background:var(--bg);border:1.5px dashed var(--line);border-radius:8px;padding:18px;margin-bottom:16px;font-family:'Courier New',Courier,monospace;color:var(--ink);">
@@ -419,7 +411,6 @@
 @if(session('error_modal') && session('error_modal')['type'] === 'slot_just_taken')
 <dialog class="badlg auto-open" id="slot-taken-dlg">
   <div class="in">
-    <button class="x" type="button" data-close aria-label="Close">&times;</button>
     <h2 style="color:var(--stop);">{{ session('error_modal')['slot'] }} was just taken</h2>
     <p>Another entry started a session on {{ session('error_modal')['slot'] }} while you were choosing. The slot is now Occupied.<br><br>Your vehicle details are kept. Pick another Available slot.</p>
     <div class="actions">
@@ -437,13 +428,8 @@ let selectedSlot = null;
 const lookupUrl = "{{ route('attendant.entry.walk-in.lookup') }}";
 const csrfToken = "{{ csrf_token() }}";
 
-// Validation Pattern matching PHP Vehicle::PLATE_PATTERN
-const PLATE_REGEX = /^(?:[A-Z]{3}[0-9]{2,4}|[A-Z]{2}[0-9]{3,5}|[A-Z][0-9]{4,5}|[A-Z][0-9]{3,4}[A-Z]{2}|[0-9]{3}[A-Z]{3}|[0-9]{4}[A-Z]{2}|[1-9]|1[0-7]|(?:SENATE|CONGRESS|GOV|PNP)[0-9]{1,4}|[0-9]{6,7}|[0-9]{15})$/;
-
 const plateInput = document.getElementById('plate-input');
 const plateErr = document.getElementById('plate-err');
-const plateLiveIcon = document.getElementById('plate-live-icon');
-const plateLiveFeedback = document.getElementById('plate-live-feedback');
 const btnLookup = document.getElementById('btn-lookup');
 const knownBox = document.getElementById('known-vehicle-box');
 const guestBox = document.getElementById('guest-vehicle-box');
@@ -451,65 +437,12 @@ const knownBtns = document.getElementById('known-btns');
 const guestBtns = document.getElementById('guest-btns');
 const plateBtns = document.getElementById('plate-btns');
 
-function checkPlateValidity(val) {
-  const norm = (val || '').toUpperCase().replace(/[\s-]+/g, '');
-  if (!norm) return { valid: false, empty: true, norm: '' };
-  return { valid: PLATE_REGEX.test(norm), empty: false, norm };
-}
-
-function handlePlateLiveValidation() {
-  // Format input: uppercase, allowed plate characters
-  plateInput.value = plateInput.value.toUpperCase().replace(/[^A-Z0-9\s-]/g, '');
-  plateErr.hidden = true;
-
-  const result = checkPlateValidity(plateInput.value);
-
-  if (result.empty) {
-    plateInput.style.borderColor = 'var(--line)';
-    plateInput.style.backgroundColor = '';
-    plateLiveIcon.style.display = 'none';
-    plateLiveFeedback.innerHTML = 'Philippine standard (ABC 1234, AB 12345), legacy, vintage, vanity, or protocol plates (e.g. 1 for President).';
-    plateLiveFeedback.style.color = 'var(--muted)';
-    return;
-  }
-
-  if (result.valid) {
-    plateInput.style.borderColor = 'var(--ok)';
-    plateInput.style.backgroundColor = '';
-    plateLiveIcon.textContent = '✓';
-    plateLiveIcon.style.color = 'var(--ok)';
-    plateLiveIcon.style.fontWeight = '900';
-    plateLiveIcon.style.display = 'block';
-    plateLiveFeedback.innerHTML = '<span style="color:var(--ok);font-weight:900;">✓</span> Valid Philippine plate format';
-    plateLiveFeedback.style.color = 'var(--ok)';
-  } else {
-    plateInput.style.borderColor = 'var(--paint)';
-    plateInput.style.backgroundColor = '';
-    plateLiveIcon.textContent = '•';
-    plateLiveIcon.style.color = 'var(--paint)';
-    plateLiveIcon.style.fontWeight = '900';
-    plateLiveIcon.style.display = 'block';
-    plateLiveFeedback.innerHTML = '<span style="color:var(--paint);font-weight:900;">●</span> Type standard (e.g. ABC 1234, AB 12345), vanity, or protocol (e.g. 1 to 17)';
-    plateLiveFeedback.style.color = 'var(--paint)';
-  }
-}
-
-plateInput.addEventListener('input', handlePlateLiveValidation);
-
 // Lookup handler
 async function doLookup() {
-  const rawPlate = plateInput.value.trim();
+  const plate = plateInput.value.trim();
   plateErr.hidden = true;
-
-  const result = checkPlateValidity(rawPlate);
-  if (result.empty || !result.valid) {
-    plateInput.style.borderColor = 'var(--stop)';
-    plateInput.style.backgroundColor = '';
-    plateLiveIcon.textContent = '✕';
-    plateLiveIcon.style.color = 'var(--stop)';
-    plateLiveIcon.style.fontWeight = '900';
-    plateLiveIcon.style.display = 'block';
-    plateErr.textContent = 'Please enter a valid Philippine plate (e.g. ABC 1234, AB 12345, or 1).';
+  if (!plate) {
+    plateErr.textContent = 'Enter a valid Philippine plate (e.g. ABC 1234, A 123 BC, or 1).';
     plateErr.hidden = false;
     plateInput.focus();
     return;
@@ -519,7 +452,7 @@ async function doLookup() {
     const res = await fetch(lookupUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json' },
-      body: JSON.stringify({ plate: rawPlate })
+      body: JSON.stringify({ plate })
     });
     const data = await res.json();
 
@@ -580,7 +513,6 @@ plateInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preve
 
 // Auto-lookup if plate was passed via query parameter (e.g. from reserved mismatch lockout)
 if (plateInput.value.trim() !== '') {
-  handlePlateLiveValidation();
   doLookup();
 }
 
@@ -591,7 +523,6 @@ function resetLookup() {
   knownBtns.style.display = 'none';
   guestBtns.style.display = 'none';
   plateBtns.style.display = 'flex';
-  handlePlateLiveValidation();
   plateInput.focus();
 }
 document.getElementById('btn-search-again-1').addEventListener('click', resetLookup);
@@ -743,6 +674,25 @@ function goToSlot() {
   // Apply PWD highlight if checked on vehicle details
   const isPwd = document.getElementById('det-pwd').checked;
   applyPwdHighlight(isPwd);
+  applyClassFilter();
+}
+
+// Motorcycles park in motorcycle zones. Every other vehicle (cars, SUVs, vans, pickups, tricycles) parks in car zones.
+function applyClassFilter() {
+  const cls = vehicleState.type === 'Motorcycle' ? 'motorcycle' : 'car';
+  document.querySelectorAll('.ba-slot').forEach(s => {
+    const wrong = (s.dataset.class || 'car') !== cls;
+    s.dataset.blocked = wrong ? '1' : '0';
+    s.classList.toggle('dimmed', wrong || !s.classList.contains('available'));
+    s.title = wrong ? (cls === 'motorcycle' ? 'Car zone: not for motorcycles' : 'Motorcycle zone: motorcycles only') : '';
+    if (wrong && s.classList.contains('selected')) {
+      s.classList.remove('selected');
+      selectedSlot = null;
+      document.getElementById('hidden-slot-code').value = '';
+      document.getElementById('btn-confirm-slot').disabled = true;
+      document.getElementById('sum-slot').textContent = 'None picked';
+    }
+  });
 }
 
 function applyPwdHighlight(isPwd) {
@@ -773,7 +723,7 @@ document.getElementById('btn-back-to-details').addEventListener('click', () => {
 
 // Slot click selection
 window.selectSlot = function(el) {
-  if (!el || !el.classList.contains('available')) return;
+  if (!el || !el.classList.contains('available') || el.dataset.blocked === '1') return;
   document.querySelectorAll('.ba-slot.selected').forEach(s => s.classList.remove('selected'));
   document.querySelectorAll(`.ba-slot[data-slot="${el.dataset.slot}"]`).forEach(s => s.classList.add('selected'));
 

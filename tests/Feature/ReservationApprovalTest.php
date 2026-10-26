@@ -354,22 +354,18 @@ class ReservationApprovalTest extends TestCase
         $this->actingAs($driver)->get(route('driver.bookings.show', $reservation))->assertOk()->assertSee('Pending exit');
     }
 
-    public function test_advance_booking_uses_the_manager_configured_limit(): void
+    public function test_booking_is_limited_to_24_hours_whatever_the_old_advance_days_setting_says(): void
     {
         $this->lot();
         $driver = $this->driver();
 
         SystemSetting::query()->where('key', 'maximum_advance_booking_days')->update(['value' => json_encode(9)]);
-        $this->assertSame(9, Lot::advanceDays());
 
-        SystemSetting::query()->where('key', 'maximum_advance_booking_days')->update(['value' => json_encode(1)]);
-        $this->assertSame(1, Lot::advanceDays());
-
-        $tomorrow = Lot::now()->addDay()->setTime(10, 0);
-        $dayAfter = Lot::now()->addDays(2)->setTime(10, 0);
-        $this->actingAs($driver)->post(route('driver.reserve.store'), $this->form($driver, 'A-05', $dayAfter))->assertSessionHas('modal');
+        $tooLate = Lot::now()->addHours(26);
+        $fine = Lot::now()->addHours(20);
+        $this->actingAs($driver)->post(route('driver.reserve.store'), $this->form($driver, 'A-05', $tooLate))->assertSessionHas('modal');
         $this->assertSame(0, ParkingReservation::count());
-        $this->actingAs($driver)->post(route('driver.reserve.store'), $this->form($driver, 'A-05', $tomorrow))->assertRedirect();
+        $this->actingAs($driver)->post(route('driver.reserve.store'), $this->form($driver, 'A-05', $fine))->assertRedirect();
         $this->assertSame(1, ParkingReservation::count());
     }
 

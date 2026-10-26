@@ -94,6 +94,11 @@ class DriverData
     /** A vehicle is in use while a booking or an open session carries its plate. */
     public function vehicleUse(Vehicle $vehicle): ?array
     {
+        // A vehicle with no plate yet cannot have a reservation or a ticket.
+        if (! $vehicle->hasPlate()) {
+            return null;
+        }
+
         $reservation = ParkingReservation::query()
             ->where('status', ParkingReservation::STATUS_BOOKED)
             ->where(fn ($q) => $q->where('vehicle_id', $vehicle->id)->orWhere('plate_number', $vehicle->plate_number))

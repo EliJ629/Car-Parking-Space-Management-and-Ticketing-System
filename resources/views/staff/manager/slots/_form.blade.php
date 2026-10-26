@@ -82,6 +82,7 @@
     @error('type')<p class="err">{{ $message }}</p>@enderror
   </div>
 
+
   <div class="manager-field manager-field-wide">
     <label class="f" for="slot-notes">Notes <span class="manager-muted">(optional)</span></label>
     <textarea id="slot-notes" name="notes" rows="3" maxlength="1000" @if ($errors->has('notes')) aria-invalid="true" @endif>{{ old('notes', $slot->notes ?? '') }}</textarea>

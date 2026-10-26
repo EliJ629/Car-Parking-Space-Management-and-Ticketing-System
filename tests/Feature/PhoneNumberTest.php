@@ -25,9 +25,9 @@ class PhoneNumberTest extends TestCase
     private function form(string $phone): array
     {
         return [
-            'name' => 'Pedro Cruz', 'email' => 'pedro.cruz@gmail.com', 'phone' => $phone, 'plate_number' => 'KLM 4455',
+            'first_name' => 'Pedro', 'last_name' => 'Cruz', 'email' => 'pedro.cruz@gmail.com', 'phone' => $phone, 'plate_number' => 'KLM 4455',
             'vehicle_type' => 'Car', 'make_model' => 'Toyota Vios', 'color' => 'Black',
-            'password' => 'Driver123x!', 'password_confirmation' => 'Driver123x!',
+            'password' => 'Driver123x!', 'password_confirmation' => 'Driver123x!', 'details_confirmed' => '1',
         ];
     }
 
@@ -69,9 +69,19 @@ class PhoneNumberTest extends TestCase
         }
     }
 
+    public function test_a_number_starting_with_63_must_have_exactly_12_digits(): void
+    {
+        foreach (['63917123456', '6391712345678', '63', '638171234567'] as $phone) {
+            $this->assertStringContainsString('exactly 12 digits', (string) Rules::mobileProblem(Lot::normalizePhone($phone)), $phone);
+        }
+
+        $this->assertSame('09171234567', Lot::normalizePhone('639171234567'));
+        $this->assertNull(Rules::mobileProblem(Lot::normalizePhone('639171234567')));
+    }
+
     public function test_other_starts_are_refused(): void
     {
-        foreach (['9171234567', '639171234567', '+19171234567', '12345', '+0917123456'] as $phone) {
+        foreach (['9171234567', '+19171234567', '12345', '+0917123456', '6'] as $phone) {
             $this->assertNotNull(Rules::mobileProblem(Lot::normalizePhone($phone)), $phone);
         }
     }
@@ -80,12 +90,17 @@ class PhoneNumberTest extends TestCase
     {
         Mail::fake();
 
-        foreach (['0917abc4567', '0917 123 4567', '0917123456', '+63917123456', '639171234567'] as $bad) {
+        foreach (['0917abc4567', '0917 123 4567', '0917123456', '+63917123456', '63917123456', '6391712345678'] as $bad) {
             $this->post(route('driver.register'), $this->form($bad))->assertSessionHasErrors('phone');
         }
         $this->assertSame(0, PendingRegistration::count());
 
         $this->post(route('driver.register'), $this->form('+639171234567'))->assertSessionHasNoErrors();
+        $this->assertSame('09171234567', PendingRegistration::firstOrFail()->phone);
+        PendingRegistration::query()->delete();
+
+        // 63 followed by 10 digits is the same number without the plus.
+        $this->post(route('driver.register'), $this->form('639171234567'))->assertSessionHasNoErrors();
         $this->assertSame('09171234567', PendingRegistration::firstOrFail()->phone);
     }
 

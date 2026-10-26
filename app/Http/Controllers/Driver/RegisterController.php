@@ -12,6 +12,7 @@ use App\Services\EmailVerification;
 use App\Services\SignInService;
 use App\Support\Lot;
 use App\Support\MailFailure;
+use App\Support\PlateEntry;
 use App\Support\Rules;
 use App\Support\VehicleCatalog;
 use Illuminate\Http\JsonResponse;
@@ -40,35 +41,54 @@ class RegisterController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        $this->forgetStaleAccounts();
+        Rules::joinNameFields($request);
 
-        Rules::tidy($request, 'name');
         $request->merge([
             'email' => Rules::email($request->input('email')),
             'phone' => Lot::normalizePhone($request->input('phone')),
-            'plate_number' => Vehicle::normalizePlate($request->input('plate_number')),
         ]);
 
-        $data = VehicleCatalog::validate($request, [
-            'name' => array_merge(Rules::personName(), [
-                fn (string $attribute, mixed $value, \Closure $fail) => Rules::driverNameTaken((string) $value)
-                    ? $fail('An account with this name already exists. If it is yours, sign in instead.')
-                    : null,
-            ]),
+        // "Still in registration" ticked: the plate is optional, and a plate that is typed must be a temporary plate.
+        // Unticked: the permanent plate is required. Either way the plate belongs to one account only.
+        $entry = PlateEntry::resolve($request, null, [
+            fn (string $attribute, mixed $value, \Closure $fail) => Vehicle::plateTaken((string) $value)
+                ? $fail(Lot::plate((string) $value).' is already registered to an account. A plate can belong to one account only.')
+                : null,
+        ]);
+
+        $validate = fn () => VehicleCatalog::validate($request, Rules::nameParts() + [
             'email' => Rules::driverEmail(),
             'phone' => Rules::mobile(),
-            'plate_number' => array_merge(Rules::plate(), [
-                fn (string $attribute, mixed $value, \Closure $fail) => Vehicle::withTrashed()->where('plate_number', $value)->exists()
-                    ? $fail(Lot::plate((string) $value).' is already registered to an account. A plate can belong to one account only.')
-                    : null,
-            ]),
+            'plate_number' => $entry->rules,
+            'details_confirmed' => ['accepted'],
             'password' => Rules::driverPassword(),
-        ], Rules::personNameMessages() + Rules::driverEmailMessages() + Rules::driverPasswordMessages() + [
+        ], Rules::namePartMessages() + Rules::driverEmailMessages() + Rules::driverPasswordMessages() + [
             'phone.required' => 'Enter your mobile number.',
             'phone.regex' => Rules::MOBILE_MESSAGE,
-            'plate_number.required' => 'Enter your plate number.',
+            'plate_number.required' => 'Enter your plate number, or tick "still in registration".',
             'plate_number.regex' => Rules::PLATE_MESSAGE,
+            'details_confirmed.accepted' => 'Check your details and confirm that they are all correct.',
         ]);
+
+        // An account that never confirmed its email lets go of its name, Gmail address and plate after a day. That clean-up
+        // costs database round trips, so it runs only when one of those three was refused (it may have been held by a stale
+        // account) and the form is checked again once. A sign up with a mistake elsewhere does not pay for it.
+        try {
+            $data = $validate();
+        } catch (ValidationException $e) {
+            $heldByAnother = collect($e->errors())->flatten()->contains(fn ($message) => str_contains((string) $message, 'already'));
+
+            if (! $heldByAnother) {
+                throw $e;
+            }
+
+            $this->forgetStaleAccounts();
+            $data = $validate();
+        }
+
+        $data['plate_number'] = $entry->plate;
+        $data['plate_is_temporary'] = $entry->temporary;
+        unset($data['details_confirmed']);
 
         // Nothing goes into users or vehicles yet. The details wait here until the link in the email is clicked.
         $pending = DB::transaction(function () use ($data, &$token) {
@@ -172,7 +192,7 @@ class RegisterController extends Controller
                 $problem = ['email', 'This Gmail account is already registered. Sign in instead.'];
             } elseif (Rules::driverNameTaken($pending->name)) {
                 $problem = ['name', 'An account with this name already exists. If it is yours, sign in instead.'];
-            } elseif (Vehicle::withTrashed()->where('plate_number', $pending->plate_number)->lockForUpdate()->exists()) {
+            } elseif ($pending->plate_number !== null && Vehicle::withTrashed()->where('plate_number', $pending->plate_number)->lockForUpdate()->exists()) {
                 $problem = ['plate_number', Lot::plate($pending->plate_number).' is already registered to an account. A plate can belong to one account only.'];
             }
 
@@ -193,6 +213,7 @@ class RegisterController extends Controller
 
             $user->vehicles()->create([
                 'plate_number' => $pending->plate_number,
+                'plate_is_temporary' => $pending->plate_number !== null && (bool) $pending->plate_is_temporary,
                 'vehicle_type' => $pending->vehicle_type,
                 'color' => $pending->color,
                 'make_model' => $pending->make_model,
@@ -208,7 +229,7 @@ class RegisterController extends Controller
         }
 
         if ($problem) {
-            $input = $pending->only(['name', 'email', 'phone', 'plate_number', 'vehicle_type', 'color', 'make_model']);
+            $input = $pending->only(['name', 'email', 'phone', 'plate_number', 'vehicle_type', 'color', 'make_model']) + Rules::splitName($pending->name);
             $pending->delete();
 
             if ($problem[0] === 'email') {
@@ -235,7 +256,8 @@ class RegisterController extends Controller
             'email' => $data['email'],
             'email_key' => Rules::emailKey($data['email']),
             'phone' => $data['phone'],
-            'plate_number' => $data['plate_number'],
+            'plate_number' => $data['plate_number'] ?? null,
+            'plate_is_temporary' => (bool) ($data['plate_is_temporary'] ?? false),
             'vehicle_type' => $data['vehicle_type'],
             'color' => $data['color'] ?? null,
             'make_model' => $data['make_model'] ?? null,

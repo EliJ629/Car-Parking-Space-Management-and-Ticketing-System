@@ -25,7 +25,7 @@
               <div class="plate"><small>{{ strtoupper($vehicle->vehicle_type) }}</small><b>{{ $vehicle->displayPlate() }}</b></div>
               <div>
                 <p style="font-weight:700">{{ $vehicle->color }} {{ strtolower($vehicle->vehicle_type) }}</p>
-                <p class="fine">{{ $vehicle->plate_number }}</p>
+                @if ($vehicle->hasPlate())<p class="fine">{{ $vehicle->plate_number }}</p>@else<p class="fine">No plate number yet</p>@endif
               </div>
             </li>
           @endforeach

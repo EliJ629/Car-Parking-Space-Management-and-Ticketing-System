@@ -133,7 +133,6 @@
 <!-- POP-UP BA-19: Print Ticket Preview Modal -->
 <dialog class="badlg" id="print-preview-dlg">
   <div class="in">
-    <button class="x" type="button" data-close aria-label="Close">&times;</button>
     <h2>Print preview</h2>
     <p style="font-size:12px;color:var(--muted);text-align:center;margin-top:-6px;">Booth thermal printer, 58 mm paper</p>
 
@@ -182,7 +181,6 @@
 <!-- Unprinted Ticket Warning Modal -->
 <dialog class="badlg" id="unprinted-ticket-dlg">
   <div class="in">
-    <button class="x" type="button" data-close aria-label="Close">&times;</button>
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
       <span style="font-size:26px;">⚠️</span>
       <h2 style="margin:0;">Ticket print required</h2>

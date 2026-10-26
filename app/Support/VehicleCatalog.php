@@ -36,6 +36,9 @@ class VehicleCatalog
             'Toyota Hilux', 'Ford Ranger', 'Isuzu D-Max', 'Nissan Navara', 'Mitsubishi Strada', 'Mazda BT-50', 'Chevrolet Colorado',
             'GAC GS3 Pickup', 'Great Wall Poer',
         ],
+        'Tricycle' => [
+            'Honda TMX Tricycle', 'Kawasaki Barako Tricycle', 'TVS King', 'Bajaj RE', 'Suzuki Tricycle', 'Yamaha Tricycle',
+        ],
         'Motorcycle' => [
             'Honda Click', 'Honda Beat', 'Honda ADV 160', 'Honda PCX', 'Honda TMX', 'Honda XRM', 'Honda CB150R', 'Yamaha Mio',
             'Yamaha NMAX', 'Yamaha Aerox', 'Yamaha Sniper', 'Yamaha XSR', 'Suzuki Raider', 'Suzuki Burgman', 'Suzuki Gixxer',

@@ -9,7 +9,6 @@
 
 <div class="g-actions" style="margin-top:14px">
   <a class="btn" href="{{ route('guard.incidents.create') }}">New incident</a>
-  <a class="btn ghost" href="{{ route('guard.incidents.long-parked') }}">Report long-parked vehicle</a>
 </div>
 
 <nav class="g-chips" style="margin-top:18px" aria-label="Filter by status">

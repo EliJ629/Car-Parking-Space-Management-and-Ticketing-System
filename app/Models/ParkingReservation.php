@@ -52,6 +52,28 @@ class ParkingReservation extends Model
     }
 
     /** Waiting for the booth attendant to look at it. */
+    /**
+     * Bookings whose hold on the slot is in effect right now: from the start of the hold window (the early check-in time
+     * plus the grace time, before the arrival time) until the grace period after it ends. A booking for later today,
+     * or tomorrow, does not touch the live slot. A PWD request waiting for the booth attendant only counts when
+     * $includePending is true (used to keep walk-ins out of a slot someone has asked for).
+     */
+    public function scopeHoldingNow($query, bool $includePending = false)
+    {
+        $before = \App\Support\Lot::earlyMinutes() + \App\Support\Lot::graceMinutes();
+        $after = \App\Support\Lot::graceMinutes();
+
+        return $query
+            ->where('status', self::STATUS_BOOKED)
+            ->when(! $includePending, fn ($q) => $q->where('approval_status', self::APPROVAL_APPROVED))
+            ->whereBetween('scheduled_at', [now()->subMinutes($after), now()->addMinutes($before)]);
+    }
+
+    public static function slotHeldNow(int $slotId, bool $includePending = false): bool
+    {
+        return static::query()->where('slot_id', $slotId)->holdingNow($includePending)->exists();
+    }
+
     public function isAwaitingApproval(): bool
     {
         return $this->status === self::STATUS_BOOKED && $this->approval_status === self::APPROVAL_PENDING;

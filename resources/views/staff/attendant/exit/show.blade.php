@@ -185,7 +185,6 @@
 <!-- POP-UP BA-39: Apply Discount Modal -->
 <dialog class="badlg" id="apply-discount-dlg">
   <div class="in">
-    <button class="x" type="button" data-close aria-label="Close">&times;</button>
     <h2>Apply discount</h2>
 
     <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:18px;">
@@ -231,7 +230,6 @@
 <!-- POP-UP BA-42: Add Penalty Modal -->
 <dialog class="badlg" id="add-penalty-dlg">
   <div class="in">
-    <button class="x" type="button" data-close aria-label="Close">&times;</button>
     <h2>Add penalty</h2>
 
     <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:18px;">
@@ -271,7 +269,6 @@
     <input type="hidden" name="lost_ticket" id="pay-hidden-lost" value="0">
     <input type="hidden" name="overstay" id="pay-hidden-overstay" value="0">
 
-    <button class="x" type="button" data-close aria-label="Close">&times;</button>
     <h2>Take cash payment</h2>
     
     <div style="font-size:14px;margin-bottom:14px;color:var(--muted);">

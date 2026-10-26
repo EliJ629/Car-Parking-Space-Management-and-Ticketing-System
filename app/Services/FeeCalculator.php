@@ -61,8 +61,9 @@ class FeeCalculator
         $lostPenalty = $session->lost_ticket ? (float) $rate->lost_ticket_penalty : 0.0;
         $overstayPenalty = $session->exit_window_expired_at ? (float) $rate->overstay_penalty : 0.0;
 
+        // After a permission ended, what was paid before counts toward the new total. The ledger holds every earlier payment.
         $alreadyPaid = $session->exit_window_expired_at && $session->payment
-            ? (float) $session->payment->total
+            ? \App\Models\ExitAuthorization::paidFor($session)
             : 0.0;
 
         $discount = 0.0;

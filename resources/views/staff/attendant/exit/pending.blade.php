@@ -117,7 +117,6 @@
 @if ($isExpired && $recalc)
 <dialog class="badlg auto-open" id="exit-expired-dlg">
   <div class="in">
-    <button class="x" type="button" data-close aria-label="Close">&times;</button>
     <h2 style="color:var(--stop);">Exit window ended</h2>
     <p>{{ $session->ticket_number }} paid at {{ \App\Support\Lot::time($session->payment?->paid_at) }}. The 15 minute exit window ended at {{ $windowEndsAt }} and the vehicle is still in {{ $session->slot_code }}.</p>
 

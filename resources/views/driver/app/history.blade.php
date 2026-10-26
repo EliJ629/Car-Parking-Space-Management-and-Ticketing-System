@@ -22,6 +22,9 @@
       @foreach ($vehicles as $v)<option value="{{ $v->id }}" @selected($vehicleId === $v->id)>{{ $v->displayPlate() }}</option>@endforeach
     </select>
   </div>
+  @if ($range !== '30' || $vehicleId)
+    <div class="fld" style="margin:0;grid-column:1/-1"><a class="btn ghost sm" href="{{ route('driver.history') }}">Clear filters</a></div>
+  @endif
   <noscript><button class="btn sm" type="submit">Apply</button></noscript>
 </form>
 

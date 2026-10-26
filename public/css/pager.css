@@ -1,0 +1,10 @@
+/* Page controls under every table: the server one (Laravel links) and the in-page one (table-pager.js). */
+.bpager{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-top:12px;font-size:13px;color:var(--muted,#5b6470)}
+.bpager .bp-info{white-space:nowrap}
+.bpager .bp-pages{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.bpager .bp-pages a,.bpager .bp-pages button,.bpager .bp-pages span,.bpager .bp-pages strong{display:inline-flex;align-items:center;justify-content:center;min-width:36px;min-height:36px;padding:0 12px;border:1.5px solid var(--line,#d6dbe1);border-radius:6px;background:var(--surface,#fff);color:var(--ink,#111);font:inherit;font-weight:600;text-decoration:none;cursor:pointer}
+.bpager .bp-pages a:hover,.bpager .bp-pages button:hover{border-color:var(--ink,#111)}
+.bpager .bp-pages strong{background:var(--ink,#111);color:var(--surface,#fff);border-color:var(--ink,#111);cursor:default}
+.bpager .bp-pages .off{opacity:.55;cursor:default}
+.bpager .bp-pages .gap{border:0;background:none;min-width:auto;padding:0 2px;cursor:default}
+@media (max-width:720px){.bpager{justify-content:center}}

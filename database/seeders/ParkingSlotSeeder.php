@@ -23,6 +23,8 @@ class ParkingSlotSeeder extends Seeder
                         'type' => in_array($slotNumber, [1, 2], true)
                             ? ParkingSlot::TYPE_PWD
                             : ParkingSlot::TYPE_STANDARD,
+                        // Zone D is the motorcycle zone of a new lot. The Manager can change it on the slot form.
+                        'vehicle_class' => $zoneLetter === 'D' ? ParkingSlot::CLASS_MOTORCYCLE : ParkingSlot::CLASS_CAR,
                         'status' => ParkingSlot::STATUS_AVAILABLE,
                     ],
                 );

@@ -208,3 +208,8 @@ dialog.dsheet.notices .in{max-height:min(80vh,640px);overflow:auto}
 .nbox .dot{width:10px;height:10px;border-radius:50%;background:var(--stop);flex:none}
 
 @media (max-width:420px){.dapp-top{gap:8px}.dapp-top h1{font-size:25px}.dapp-bell{padding:0 10px}}
+/* the Manager's map: slots keep their laid-out size and position on every driver screen */
+.dapp .slot-layout .slot-layout-slot,.dapp .slot-layout button.slot-layout-slot,.dapp .slot-layout label.slot-layout-slot{position:absolute;width:76px;height:62px;min-height:0;padding:12px 3px 4px;box-sizing:border-box}
+.dapp .slot-layout.scale-wide .slot-layout-slot{width:88px;height:86px}
+.dapp .slot-layout .slot-layout-slot b{font-size:18px}
+.dapp .slot-layout{padding:10px;-webkit-overflow-scrolling:touch}

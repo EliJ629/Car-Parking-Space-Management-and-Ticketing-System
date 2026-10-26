@@ -60,6 +60,12 @@ class ParkingSlotController extends ManagerController
                 'floors' => Lot::availableFloors($zones),
                 'statuses' => ParkingSlot::statuses(),
                 'filters' => $filters,
+                'longParked' => \App\Models\ParkingSession::query()
+                    ->where('status', \App\Models\ParkingSession::STATUS_ACTIVE)
+                    ->where('entered_at', '<=', now()->subHours(\App\Support\Lot::longParkingHours()))
+                    ->whereIn('slot_id', $slots->pluck('id'))
+                    ->get()
+                    ->keyBy('slot_id'),
             ]),
         );
     }
@@ -151,6 +157,8 @@ class ParkingSlotController extends ManagerController
                 'code' => $validated['code'],
                 'zone' => $validated['zone'],
                 'type' => $validated['type'],
+                // A slot takes the vehicle class of its zone (Car zone or Motorcycle zone).
+                'vehicle_class' => ParkingSlot::classForZoneType($vehicleType),
                 'notes' => $validated['notes'] ?? null,
                 'status' => ParkingSlot::STATUS_AVAILABLE,
             ]);
@@ -161,7 +169,7 @@ class ParkingSlotController extends ManagerController
                 $request,
                 $slot->code,
                 'manager',
-                ['slot' => $slot->only(['code', 'zone', 'type', 'status', 'notes'])],
+                ['slot' => $slot->only(['code', 'zone', 'type', 'vehicle_class', 'status', 'notes'])],
             );
 
             return $slot;
@@ -221,10 +229,11 @@ class ParkingSlotController extends ManagerController
                 ?? ParkingLayoutZone::VEHICLE_CAR;
             $this->syncZoneVehicleType($validated['zone'], $vehicleType, $validated['zone'] === $slot->zone);
 
-            $before = $slot->only(['code', 'zone', 'type', 'status', 'notes']);
+            $before = $slot->only(['code', 'zone', 'type', 'vehicle_class', 'status', 'notes']);
             $slot->update([
                 'zone' => $validated['zone'],
                 'type' => $validated['type'],
+                'vehicle_class' => ParkingSlot::classForZoneType(ParkingLayoutZone::query()->where('zone', $validated['zone'])->value('vehicle_type')),
                 'notes' => $validated['notes'] ?? null,
             ]);
 
@@ -406,6 +415,12 @@ class ParkingSlotController extends ManagerController
         }
     }
 
+    /**
+     * A zone is for one kind of vehicle. Giving a slot another class changes the whole zone, which is only allowed while
+     * no slot in it is in use or booked. A slot moved into a zone of the other class is refused.
+     *
+     * @throws ValidationException
+     */
     private function lockManagerSlotMutations(): void
     {
         User::query()
@@ -541,15 +556,29 @@ class ParkingSlotController extends ManagerController
 
         if ($zoneRecord->exists
             && $zoneRecord->vehicle_type !== null
-            && $zoneRecord->vehicle_type !== $vehicleType
-            && ! $allowChange) {
-            throw ValidationException::withMessages([
-                'vehicle_type' => "Zone {$zone} is classified as {$zoneRecord->vehicle_type}.",
-            ]);
+            && $zoneRecord->vehicle_type !== $vehicleType) {
+            if (! $allowChange) {
+                throw ValidationException::withMessages([
+                    'vehicle_type' => "Zone {$zone} is classified as {$zoneRecord->vehicle_type}.",
+                ]);
+            }
+
+            // A zone changes its vehicle type only while none of its slots is in use or booked.
+            $busy = ParkingSlot::query()->where('zone', $zone)->get()
+                ->first(fn (ParkingSlot $s) => ! in_array($s->status, [ParkingSlot::STATUS_AVAILABLE, ParkingSlot::STATUS_OUT_OF_SERVICE], true) || $s->nextOpenBooking() !== null);
+
+            if ($busy) {
+                throw ValidationException::withMessages([
+                    'vehicle_type' => "Zone {$zone} cannot change its vehicle type while {$busy->code} is in use or booked. Wait until the zone is empty, or cancel the booking.",
+                ]);
+            }
         }
 
         $zoneRecord->vehicle_type = $vehicleType;
         $zoneRecord->save();
+
+        // Every slot in the zone carries the zone's vehicle class.
+        ParkingSlot::query()->where('zone', $zone)->update(['vehicle_class' => ParkingSlot::classForZoneType($vehicleType)]);
     }
 
     /** @return array<string, string> */

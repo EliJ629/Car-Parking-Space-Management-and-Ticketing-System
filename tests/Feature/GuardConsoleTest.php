@@ -75,7 +75,7 @@ class GuardConsoleTest extends TestCase
         foreach ([
             route('guard.gate'), route('guard.gate', ['tab' => 'search']), route('guard.gate', ['tab' => 'search', 'q' => 'BNM 6628']),
             route('guard.gate', ['tab' => 'search', 'q' => 'HJK4471']), route('guard.gate', ['tab' => 'search', 'q' => 'ZZZ9999']),
-            route('guard.gate.show', $paid), route('guard.incidents'), route('guard.incidents.create'), route('guard.incidents.long-parked'),
+            route('guard.gate.show', $paid), route('guard.incidents'), route('guard.incidents.create'),
             route('guard.incidents.show', $incident), route('guard.records'), route('guard.records', ['tab' => 'incidents']),
             route('guard.records', ['range' => 'custom', 'from' => '2026-01-01', 'to' => '2026-12-31']), route('guard.slots'),
         ] as $url) {
@@ -129,7 +129,7 @@ class GuardConsoleTest extends TestCase
         $slot = ParkingSlot::where('code', 'A-08')->first();
         ParkingReservation::create([
             'code' => 'RSV-9100', 'slot_id' => $slot->id, 'slot_code' => 'A-08', 'plate_number' => 'QRS3317',
-            'scheduled_at' => Lot::dayEnd()->subMinutes(2), 'status' => 'booked',
+            'scheduled_at' => now()->addMinutes(10), 'status' => 'booked', 'approval_status' => 'approved',
         ]);
 
         $this->actingAs($guard)->post(route('guard.gate.approve', $session), ['checks' => ['plate' => 1, 'details' => 1, 'ticket' => 1]])
@@ -193,6 +193,7 @@ class GuardConsoleTest extends TestCase
 
         $response = $this->actingAs($guard)->post(route('guard.incidents.store'), [
             'category' => 'Vehicle damage', 'description' => 'Scratch along the left door.', 'plate_number' => 'hjk 4471', 'location' => 'a-02',
+            'responsible_unknown' => 1,
             'photos' => [UploadedFile::fake()->create('a.jpg', 20, 'image/jpeg'), UploadedFile::fake()->create('b.png', 20, 'image/png')],
         ]);
 
@@ -223,7 +224,7 @@ class GuardConsoleTest extends TestCase
         $this->parked('PK-0020', 'HJK4471', 'A-02', 'active');
         $this->parked('PK-0021', 'GON1111', 'A-03', 'completed');
         $url = route('guard.incidents.store');
-        $base = ['category' => 'Vehicle damage', 'description' => 'Scratch along the left door.'];
+        $base = ['category' => 'Vehicle damage', 'description' => 'Scratch along the left door.', 'responsible_unknown' => 1];
 
         $this->actingAs($guard)->post($url, $base)->assertSessionHasErrors(['plate_number', 'location']);
         $this->actingAs($guard)->post($url, $base + ['plate_number' => 'HJK 4471'])->assertSessionHasErrors('location');
@@ -247,7 +248,7 @@ class GuardConsoleTest extends TestCase
         // Suspicious vehicle: a place is required, the plate is optional, but a plate that is given must be parked now.
         $this->actingAs($guard)->post($url, ['category' => 'Suspicious vehicle', 'description' => 'Someone is looking into cars.'])->assertSessionHasErrors('location');
         $this->actingAs($guard)->post($url, ['category' => 'Suspicious vehicle', 'description' => 'Someone is looking into cars.', 'location' => 'Zone A lane', 'plate_number' => 'NEW 9999'])->assertSessionHasErrors('plate_number');
-        $this->actingAs($guard)->post($url, ['category' => 'Other', 'description' => 'Gate arm is stuck halfway.'])->assertSessionHasNoErrors();
+        $this->actingAs($guard)->post($url, ['category' => 'Other', 'other_label' => 'Stuck gate arm', 'description' => 'Gate arm is stuck halfway.'])->assertSessionHasNoErrors();
     }
 
     public function test_the_plate_check_says_whether_a_vehicle_is_parked_now(): void
@@ -300,31 +301,21 @@ class GuardConsoleTest extends TestCase
         $this->actingAs($guard)->get(route('guard.incidents.show', $incident))->assertOk()->assertSee('Owner moved the car')->assertSee('Car is gone now');
     }
 
-    public function test_long_parked_report_flow_with_duplicate_protection(): void
+    public function test_long_parking_is_automatic_only_a_guard_cannot_report_it_by_hand(): void
     {
         $this->lot();
         $guard = $this->guard();
-        Cache::put('bayline:sweep:long-parking', 1, 600);
-        $driver = $this->user(User::ROLE_DRIVER, 'Maria', 'maria@example.com');
-        $this->parked('PK-0012', 'QRS3317', 'B-01', 'active', 60 * 14, $driver);
+        $this->parked('PK-0012', 'QRS3317', 'B-01', 'active', 60 * 14);
 
-        $this->actingAs($guard)->get(route('guard.incidents.long-parked', ['plate' => 'NOPE123']))->assertOk()->assertSee('Plate not found');
-        $this->actingAs($guard)->get(route('guard.incidents.long-parked', ['plate' => 'QRS 3317']))->assertOk()->assertSee('Vehicle found')->assertSee('14 h');
+        // The manual report page and its button are gone.
+        $this->assertFalse(\Illuminate\Support\Facades\Route::has('guard.incidents.long-parked'));
+        $this->actingAs($guard)->get(route('guard.incidents'))->assertOk()->assertDontSee('Report long-parked vehicle');
+        $this->actingAs($guard)->get('/staff/guard/incidents/long-parked')->assertNotFound();
 
-        $this->actingAs($guard)->post(route('guard.incidents.long-parked.store'), ['session_id' => ParkingSession::first()->id, 'description' => 'short'])->assertSessionHasErrors('description');
-
-        $this->actingAs($guard)->post(route('guard.incidents.long-parked.store'), ['session_id' => ParkingSession::first()->id, 'description' => 'Car in B-01 has not moved all day.', 'notify_driver' => 1])->assertSessionHas('modal');
-        $this->assertSame(1, Incident::where('category', 'Long-parked vehicle')->count());
-        $this->assertTrue(Notice::where('user_id', $driver->id)->where('code', 'N-11')->exists());
-
-        $this->actingAs($guard)->get(route('guard.incidents.long-parked', ['plate' => 'QRS3317']))->assertSee('An alert already exists');
-        $this->actingAs($guard)->post(route('guard.incidents.long-parked.store'), ['session_id' => ParkingSession::first()->id, 'description' => 'Still there at 6 PM, doors locked.']);
-        $this->assertSame(1, Incident::where('category', 'Long-parked vehicle')->count());
-        $this->assertSame(1, Incident::first()->notes()->where('kind', 'followup')->count());
-
-        $this->parked('PK-0013', 'GONE111', 'B-02', 'active', 600);
-        ParkingSession::where('plate_number', 'GONE111')->update(['status' => 'completed', 'exited_at' => now()]);
-        $this->actingAs($guard)->get(route('guard.incidents.long-parked', ['plate' => 'GONE111']))->assertSee('Vehicle not currently parked');
+        // The category is not in the new-incident form, and the server refuses it if someone posts it.
+        $this->actingAs($guard)->get(route('guard.incidents.create'))->assertOk()->assertDontSee('value="Long-parked vehicle"', false);
+        $this->actingAs($guard)->post(route('guard.incidents.store'), ['category' => 'Long-parked vehicle', 'description' => 'Car in B-01 has not moved all day.', 'plate_number' => 'QRS 3317', 'location' => 'B-01'])->assertSessionHasErrors('category');
+        $this->assertSame(0, Incident::where('source', 'manual')->count());
     }
 
     public function test_automatic_detection_makes_one_incident_per_session_and_it_shows_in_alerts(): void

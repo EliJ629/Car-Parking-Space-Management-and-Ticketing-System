@@ -25,7 +25,7 @@ class ParkingController extends Controller
     public function find(Request $request, DriverData $data, GateService $gate): View
     {
         $lot = $data->lot();
-        $slots = ParkingSlot::query()->orderBy('zone')->orderBy('code')->get();
+        $slots = \App\Support\SlotLayout::decorate(ParkingSlot::query()->orderBy('zone')->orderBy('code')->get());
         $zonePositions = ParkingLayoutZone::query()
             ->whereIn('zone', $slots->pluck('zone')->unique())
             ->get()
@@ -61,24 +61,27 @@ class ParkingController extends Controller
         $step = max(1, min(3, (int) $request->query('step', 1)));
         $today = Lot::now()->startOfDay();
 
-        $date = $request->query('other_date') ?: $request->query('date') ?: $today->format('Y-m-d');
         $time = (string) $request->query('time', '');
         $slotId = (int) $request->query('slot', 0);
 
-        if (! preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $date) || strtotime((string) $date) === false) {
-            $date = $today->format('Y-m-d');
+        // The driver picks only a time of day. The date is worked out here: the next time the clock reads that time,
+        // which is always inside the next 24 hours. Later steps carry the date that was worked out.
+        $date = (string) $request->query('date', '');
+
+        if ($date === '' || ! preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) || strtotime($date) === false) {
+            $date = $this->dateForTime($time);
         }
 
         $base = [
             'step' => $step,
-            'days' => collect(range(0, Lot::advanceDays()))->map(fn (int $i) => $today->copy()->addDays($i)),
             'date' => $date,
             'time' => $time,
             'slotId' => $slotId,
-            'advanceDays' => Lot::advanceDays(),
-            'latest' => $today->copy()->addDays(Lot::advanceDays()),
+            'windowHours' => ReservationService::WINDOW_HOURS,
             'today' => $today,
+            'tomorrow' => $today->copy()->addDay(),
             'nowTime' => Lot::now()->format('H:i'),
+            'windowEnd' => Lot::now()->startOfMinute()->addHours(ReservationService::WINDOW_HOURS),
         ];
 
         if ($blocking = $reservations->blockingFor($user)) {
@@ -92,14 +95,16 @@ class ParkingController extends Controller
         $problem = $this->checkWhen($date, $time);
 
         if ($problem) {
-            return redirect()->route('driver.reserve', array_filter(['step' => 1, 'date' => $date, 'time' => $time, 'slot' => $slotId ?: null]))
+            return redirect()->route('driver.reserve', array_filter(['step' => 1, 'time' => $time, 'slot' => $slotId ?: null]))
                 ->withErrors(['when' => $problem['message']])
                 ->with('modal', $problem['modal'] ?? null);
         }
 
         $at = Lot::parse($date, $time);
-        $board = $reservations->boardAt($at);
-        $vehicleId = (int) $request->query('vehicle', $vehicles->first()?->id ?? 0);
+        // The booking time on a reserved square is the one around the chosen time (set by boardAt); only the parked time is added here.
+        $board = \App\Support\SlotLayout::decorate($reservations->boardAt($at), false);
+        // No vehicle is chosen until the driver picks one: the vehicle decides which zones can be used.
+        $vehicleId = (int) $request->query('vehicle', 0);
 
         if ($step === 2) {
             $zonePositions = ParkingLayoutZone::query()
@@ -126,9 +131,19 @@ class ParkingController extends Controller
                 ->withErrors(['vehicle' => 'Choose a vehicle.']);
         }
 
+        if (! $vehicle->hasPlate()) {
+            return redirect()->route('driver.reserve', ['step' => 2, 'date' => $date, 'time' => $time, 'slot' => $slotId])
+                ->withErrors(['vehicle' => 'This vehicle has no plate number yet. Add it under My vehicles once the LTO has issued it, then reserve.']);
+        }
+
         if (! $slot || $slot->state !== 'available') {
             return redirect()->route('driver.reserve', ['step' => 2, 'date' => $date, 'time' => $time, 'vehicle' => $vehicleId])
                 ->withErrors(['slot' => 'Choose a free slot.']);
+        }
+
+        if ($zoneProblem = $slot->wrongZoneMessage($vehicle->vehicle_type)) {
+            return redirect()->route('driver.reserve', ['step' => 2, 'date' => $date, 'time' => $time, 'vehicle' => $vehicleId])
+                ->withErrors(['slot' => $zoneProblem]);
         }
 
         return view('driver.app.reserve', $base + [
@@ -155,20 +170,32 @@ class ParkingController extends Controller
     public function store(Request $request, ReservationService $reservations): RedirectResponse
     {
         $user = $request->user();
-        $data = $request->validate([
-            'date' => ['required', 'date_format:Y-m-d'],
-            'time' => ['required', 'date_format:H:i'],
+        // A reservation is one day and one arrival time. Anything that asks for a range (an end date, several days,
+        // a list of dates) is refused here, whatever the form sent, so the rule does not depend on the screen.
+        $oneDay = 'A reservation is for one day only. Book each day on its own.';
+        $data = $request->validate(array_merge(array_fill_keys(self::RANGE_FIELDS, ['prohibited']), [
+            'date' => ['required', 'string', 'date_format:Y-m-d'],
+            'time' => ['required', 'string', 'date_format:H:i'],
             'slot' => ['required', 'integer'],
             'vehicle' => ['required', 'integer'],
             'understand' => ['accepted'],
-        ], [
+        ]), array_merge(array_fill_keys(array_map(fn (string $f) => "{$f}.prohibited", self::RANGE_FIELDS), $oneDay), [
+            'date.date_format' => 'Choose a valid date.',
+            'time.date_format' => 'Choose a valid arrival time.',
             'understand.accepted' => 'Tick the box to confirm that you will arrive on time. The slot is released when the grace period ends.',
-        ]);
+        ]));
 
         $problem = $this->checkWhen($data['date'], $data['time']);
         $back = ['date' => $data['date'], 'time' => $data['time'], 'slot' => $data['slot'], 'vehicle' => $data['vehicle']];
         $slot = ParkingSlot::query()->find($data['slot']);
         $idPhoto = null;
+
+        // The vehicle comes first: its type decides which zones it may use.
+        $chosen = Vehicle::query()->where('user_id', $user->id)->find($data['vehicle']);
+
+        if ($slot && $chosen && ($zoneProblem = $slot->wrongZoneMessage($chosen->vehicle_type))) {
+            return redirect()->route('driver.reserve', ['step' => 2] + $back)->withErrors(['slot' => $zoneProblem]);
+        }
 
         // A PWD slot needs a photo of the PWD ID, so the booth attendant can check it before approving.
         if ($slot?->type === ParkingSlot::TYPE_PWD) {
@@ -208,11 +235,40 @@ class ParkingController extends Controller
         return redirect()->route('driver.bookings.show', [$reservation, 'new' => 1]);
     }
 
+    /** The date of the next time the clock reads $time (today if it has not passed yet, otherwise tomorrow). */
+    private function dateForTime(string $time): string
+    {
+        $today = Lot::now()->startOfDay();
+
+        if (! preg_match('/^\d{2}:\d{2}$/', $time)) {
+            return $today->format('Y-m-d');
+        }
+
+        return Lot::parse($today->format('Y-m-d'), $time)->lessThan(now()->startOfMinute())
+            ? $today->copy()->addDay()->format('Y-m-d')
+            : $today->format('Y-m-d');
+    }
+
+    /** Fields a form could send to ask for more than one day. They are refused on the server. */
+    private const RANGE_FIELDS = ['end_date', 'end_time', 'date_to', 'to_date', 'until', 'check_out', 'days', 'nights', 'dates', 'duration_days', 'repeat', 'recurring'];
+
     /** @return array{message:string,modal?:array<string,mixed>}|null */
     private function checkWhen(string $date, string $time): ?array
     {
         if (! preg_match('/^\d{2}:\d{2}$/', $time)) {
             return ['message' => 'Choose an arrival time.'];
+        }
+
+        // 2026-02-31 and 25:99 look right but are not real; the date and time must read back exactly as typed.
+        $day = \DateTimeImmutable::createFromFormat('!Y-m-d', $date);
+        $clock = \DateTimeImmutable::createFromFormat('!H:i', $time);
+
+        if (! $day || $day->format('Y-m-d') !== $date) {
+            return ['message' => 'Choose a valid date.'];
+        }
+
+        if (! $clock || $clock->format('H:i') !== $time) {
+            return ['message' => 'Choose a valid arrival time.'];
         }
 
         $at = Lot::parse($date, $time);
@@ -221,15 +277,15 @@ class ParkingController extends Controller
             return ['message' => 'That time has already passed. Choose a time from now on.'];
         }
 
-        $latest = Lot::now()->addDays(Lot::advanceDays());
+        $latest = Lot::now()->startOfMinute()->addHours(ReservationService::WINDOW_HOURS);
 
-        if (Lot::local($at)->startOfDay()->greaterThan($latest->copy()->startOfDay())) {
+        if ($at->greaterThan($latest)) {
             return [
-                'message' => 'This date is more than '.Lot::advanceDays().' days ahead.',
+                'message' => 'You can reserve only within the next '.ReservationService::WINDOW_HOURS.' hours.',
                 'modal' => [
-                    'title' => 'That date is too far ahead',
-                    'body' => 'You can reserve up to '.Lot::advanceDays().' days ahead. The latest date is '.$latest->format('D, M j').'.',
-                    'primary' => ['label' => 'Pick another date', 'close' => true],
+                    'title' => 'That time is too far ahead',
+                    'body' => 'A reservation can be made for any time from now until '.Lot::when($latest).'.',
+                    'primary' => ['label' => 'Choose another time', 'close' => true],
                 ],
             ];
         }
@@ -248,7 +304,21 @@ class ParkingController extends Controller
                 'body' => 'Another driver reserved it a moment ago. Choose another slot for '.Lot::date(Lot::parse($back['date'], $back['time'])).' at '.Lot::time(Lot::parse($back['date'], $back['time'])).'.',
                 'primary' => ['label' => 'Choose another slot', 'close' => true],
             ]),
+            'wrong_zone' => redirect()->route('driver.reserve', $stepTwo)->withErrors(['slot' => $e->getMessage()]),
+            'no_plate' => redirect()->route('driver.reserve', $stepTwo)->withErrors(['vehicle' => $e->getMessage()]),
+            'suspended' => redirect()->route('driver.reserve', $stepOne)->with('modal', [
+                'title' => 'Reservations are paused',
+                'body' => $e->getMessage(),
+                'primary' => ['label' => 'OK', 'close' => true],
+                'tone' => 'stop',
+            ]),
             'id_required' => redirect()->route('driver.reserve', ['step' => 3] + $back)->withErrors(['id_photo' => $e->getMessage()]),
+            'vehicle_banned' => redirect()->route('driver.reserve', $stepOne)->with('modal', [
+                'title' => 'This vehicle cannot be reserved',
+                'body' => $e->getMessage(),
+                'primary' => ['label' => 'OK', 'close' => true],
+                'tone' => 'stop',
+            ]),
             'driver_busy' => redirect()->route('driver.reserve', $stepOne)->with('modal', $this->busyModal($e)),
             'vehicle_busy' => redirect()->route('driver.reserve', $stepOne)->with('modal', [
                 'title' => 'You already have a reservation',

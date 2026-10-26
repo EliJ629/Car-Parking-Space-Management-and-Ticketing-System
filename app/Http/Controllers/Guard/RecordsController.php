@@ -7,6 +7,7 @@ use App\Models\Incident;
 use App\Models\ParkingSession;
 use App\Models\Vehicle;
 use App\Support\Lot;
+use App\Support\TicketNumber;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -19,7 +20,7 @@ class RecordsController extends Controller
     {
         $tab = $request->query('tab') === 'incidents' ? 'incidents' : 'parking';
         [$from, $to, $range] = $this->range($request);
-        $q = mb_substr(trim((string) $request->query('q', '')), 0, 40);
+        $q = mb_substr(trim((string) $request->query('q', '')), 0, 20);
 
         $filters = ['range' => $range, 'from' => Lot::local($from)->format('Y-m-d'), 'to' => Lot::local($to)->format('Y-m-d'), 'q' => $q];
         $data = ['tab' => $tab, 'f' => $filters, 'rangeText' => $this->rangeText($from, $to, $range), 'detail' => null];
@@ -31,7 +32,8 @@ class RecordsController extends Controller
                 ->whereBetween('entered_at', [$from, $to])
                 ->when($q !== '', function (Builder $b) use ($q) {
                     $plate = Vehicle::normalizePlate($q);
-                    $b->where(fn (Builder $w) => $w->where('ticket_number', 'like', '%'.strtoupper($q).'%')->orWhere('plate_number', 'like', '%'.($plate ?: strtoupper($q)).'%'));
+                    $ticket = TicketNumber::looksLikeTicket($q) ? TicketNumber::normalize($q) : null;
+                    $b->where(fn (Builder $w) => $w->where('ticket_number', 'like', '%'.strtoupper($q).'%')->orWhere('plate_number', 'like', '%'.($plate ?: strtoupper($q)).'%')->when($ticket, fn (Builder $t) => $t->orWhere('ticket_number', $ticket)));
                 })
                 ->when($payment === 'paid', fn (Builder $b) => $b->whereIn('status', [ParkingSession::STATUS_PAID, ParkingSession::STATUS_COMPLETED]))
                 ->when($payment === 'unpaid', fn (Builder $b) => $b->where('status', ParkingSession::STATUS_ACTIVE))
@@ -88,6 +90,15 @@ class RecordsController extends Controller
         $valid = fn (?string $d) => $d && preg_match('/^\d{4}-\d{2}-\d{2}$/', $d) && strtotime($d) !== false;
         $from = $valid($request->query('from')) ? Lot::parse($request->query('from')) : Lot::dayStart()->subDays(6);
         $to = $valid($request->query('to')) ? Lot::dayEnd(Lot::parse($request->query('to'))) : $end;
+
+        // A record cannot be in the future, so neither end of the range can be later than today.
+        if ($from->greaterThan($end)) {
+            $from = Lot::dayStart();
+        }
+
+        if ($to->greaterThan($end)) {
+            $to = $end;
+        }
 
         if ($to->lessThan($from)) {
             [$from, $to] = [Lot::dayStart($to), Lot::dayEnd($from)];

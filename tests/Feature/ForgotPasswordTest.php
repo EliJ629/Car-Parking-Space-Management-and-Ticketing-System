@@ -164,6 +164,20 @@ class ForgotPasswordTest extends TestCase
         $this->assertTrue(Hash::check(self::NEW_PASSWORD, $user->fresh()->password));
     }
 
+    public function test_a_reset_link_stops_working_after_it_expires(): void
+    {
+        $user = $this->driver();
+        $token = Password::broker()->createToken($user);
+        $minutes = (int) config('auth.passwords.'.config('auth.defaults.passwords').'.expire');
+        $payload = ['token' => $token, 'email' => $user->email, 'password' => self::NEW_PASSWORD, 'password_confirmation' => self::NEW_PASSWORD];
+
+        $this->travel($minutes + 1)->minutes();
+
+        $this->post(route('driver.password.update'), $payload)->assertSessionHasErrors();
+        $this->assertFalse(Hash::check(self::NEW_PASSWORD, $user->fresh()->password));
+        $this->assertTrue(Hash::check('Old-Password-1!', $user->fresh()->password));
+    }
+
     public function test_the_confirmation_must_match_and_the_password_must_be_strong(): void
     {
         $user = $this->driver();

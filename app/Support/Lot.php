@@ -114,39 +114,10 @@ class Lot
         return max(0, intdiv(max(0, $to->getTimestamp() - $from->getTimestamp()), 60));
     }
 
-    /** "ABC1234" becomes "ABC 1234", "SENATE3" becomes "SENATE 3". Digits only, such as "5", stay as they are. */
+    /** "ABC1234" becomes "ABC 1234", "A1234BC" becomes "A 1234 BC". Digits only, such as "5", stay as they are. */
     public static function plate(?string $plate): string
     {
-        $plate = (string) $plate;
-        if ($plate === '') {
-            return '';
-        }
-
-        // Vintage RA 11698 plates such as A1234BC are written A-1234-BC.
-        if (preg_match('/^[A-Z][0-9]{4}[A-Z]{2}$/', $plate)) {
-            return substr($plate, 0, 1).'-'.substr($plate, 1, 4).'-'.substr($plate, 5);
-        }
-
-        // Vintage / Motorcycle plates such as A123BC are written A-123-BC.
-        if (preg_match('/^[A-Z][0-9]{3}[A-Z]{2}$/', $plate)) {
-            return substr($plate, 0, 1).'-'.substr($plate, 1, 3).'-'.substr($plate, 4);
-        }
-
-        // Temporary transit motorcycle format (15 digits, e.g. 1301-00000012345)
-        if (preg_match('/^[0-9]{15}$/', $plate)) {
-            return substr($plate, 0, 4).'-'.substr($plate, 4);
-        }
-
-        // Diplomatic or 6-7 digit plates (e.g. 100 1234, 100 123, 123 456)
-        if (preg_match('/^[0-9]{6,7}$/', $plate)) {
-            return substr($plate, 0, 3).' '.substr($plate, 3);
-        }
-
-        if (preg_match('/^([A-Z]+)([0-9]+)$/', $plate, $m) || preg_match('/^([0-9]+)([A-Z]+)$/', $plate, $m)) {
-            return $m[1].' '.$m[2];
-        }
-
-        return $plate;
+        return PlateNumber::format($plate);
     }
 
     /** "0917 555 0142" */
@@ -159,12 +130,12 @@ class Lot
             : $phone;
     }
 
-    /** +639171234567 becomes 09171234567. Anything else is returned as typed (trimmed), so the phone rule can refuse it. */
+    /** +639171234567 and 639171234567 become 09171234567. Anything else is returned as typed (trimmed), so the phone rule can refuse it. */
     public static function normalizePhone(?string $phone): string
     {
         $phone = trim((string) $phone);
 
-        if (preg_match('/^\+63(9\d{9})$/', $phone, $matches)) {
+        if (preg_match('/^(?:\+63|63)(9\d{9})$/', $phone, $matches)) {
             return '0'.$matches[1];
         }
 

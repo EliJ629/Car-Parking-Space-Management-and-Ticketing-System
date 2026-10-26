@@ -63,6 +63,10 @@
           <td>{{ $slot->type }}</td>
           <td>
             <span class="badge manager-status-badge manager-status-{{ str_replace('_', '-', $slot->status) }}">{{ $slot->statusLabel() }}</span>
+            @if ($lp = $longParked->get($slot->id))
+              <span class="badge manager-status-badge" style="background:#a3261b;color:#fff">&#9201; Long parked</span>
+              <small class="manager-status-note">{{ \App\Support\Lot::plate($lp->plate_number) }}, {{ \App\Support\Lot::duration($lp->parkedMinutes()) }}</small>
+            @endif
             @if ($slot->out_of_service_reason)
               <small class="manager-status-note">{{ $slot->out_of_service_reason }}</small>
             @endif

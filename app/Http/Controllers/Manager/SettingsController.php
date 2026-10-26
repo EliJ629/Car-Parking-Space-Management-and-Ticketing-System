@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Manager;
 
 use App\Models\ActivityLog;
 use App\Models\SystemSetting;
+use App\Services\LongParkingService;
 use App\Support\Rules;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
@@ -24,6 +25,7 @@ class SettingsController extends ManagerController
         'maximum_advance_booking_days' => ['group' => 'parking', 'label' => 'Maximum advance booking (days)', 'min' => 1, 'max' => 30],
         'maximum_slots_per_zone' => ['group' => 'parking', 'label' => 'Maximum parking slots per zone', 'min' => 1, 'max' => 16, 'default' => 16],
         'maximum_active_zones' => ['group' => 'parking', 'label' => 'Maximum active zones', 'min' => 1, 'max' => 26, 'default' => 26],
+        'ban_incident_threshold' => ['group' => 'parking', 'label' => 'Confirmed incidents before a vehicle is banned', 'min' => 2, 'max' => 10, 'default' => 3],
         'exit_window_minutes' => ['group' => 'parking', 'label' => 'Exit window after payment (minutes)', 'min' => 1, 'max' => 240],
         'reservation_reminder_minutes' => ['group' => 'notifications', 'label' => 'Reservation reminder before arrival (minutes)', 'min' => 0, 'max' => 1440],
         'lot_name' => ['group' => 'receipt', 'label' => 'Lot name', 'max_length' => 120],
@@ -52,7 +54,7 @@ class SettingsController extends ManagerController
         ]));
     }
 
-    public function update(Request $request): RedirectResponse
+    public function update(Request $request, LongParkingService $longParking): RedirectResponse
     {
         $rules = [];
         $messages = [];
@@ -91,6 +93,7 @@ class SettingsController extends ManagerController
         }
 
         $before = SystemSetting::values();
+        $thresholdBefore = (int) ($before['long_parking_threshold_hours'] ?? 12);
         DB::transaction(function () use ($validated, $request): void {
             foreach (self::FIELDS as $key => $field) {
                 SystemSetting::updateOrCreate(
@@ -112,6 +115,20 @@ class SettingsController extends ManagerController
             'after' => $after,
         ]);
 
-        return redirect()->route('manager.settings.index')->with('status', 'Settings were saved.');
+        // A new long-parking limit is applied right away: sessions that already exceed it are reported now,
+        // without waiting for the next scheduled run. Lowering or raising it never removes an incident already recorded.
+        $message = 'Settings were saved.';
+
+        if ((int) $validated['long_parking_threshold_hours'] !== $thresholdBefore) {
+            try {
+                $created = $longParking->detect();
+                $message .= $created > 0 ? " {$created} long-parking ".\Illuminate\Support\Str::plural('incident', $created).' reported under the new limit.' : ' No parked vehicle exceeds the new long-parking limit.';
+            } catch (\Throwable $e) {
+                report($e);
+                $message .= ' The long-parking check will run again within 5 minutes.';
+            }
+        }
+
+        return redirect()->route('manager.settings.index')->with('status', $message);
     }
 }

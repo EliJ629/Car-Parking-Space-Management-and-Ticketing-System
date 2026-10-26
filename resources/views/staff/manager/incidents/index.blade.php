@@ -13,9 +13,9 @@
     <a class="manager-text-link" href="{{ route('manager.incidents.index') }}">Clear</a>
   @endif
 </form>
-<div class="manager-table-wrap"><table class="manager-table"><thead><tr><th>ID</th><th>Reported</th><th>Category</th><th>Source</th><th>Vehicle / location</th><th>By</th><th>Status</th></tr></thead><tbody>
+<div class="manager-table-wrap"><table class="manager-table"><thead><tr><th>ID</th><th>Reported</th><th>Category</th><th>Review</th><th>Source</th><th>Vehicle / location</th><th>By</th><th>Status</th></tr></thead><tbody>
 @forelse ($incidents as $incident)
-<tr><th scope="row"><a class="manager-slot-code" href="{{ route('manager.incidents.show', $incident) }}">{{ $incident->code }}</a></th><td>{{ \App\Support\Lot::local($incident->reported_at)?->format('M j, g:i A') }}</td><td>{{ $incident->category }}</td><td><span class="badge {{ $incident->source === 'auto' ? 'b-pend' : 'b-done' }}">{{ strtoupper($incident->source) }}</span></td><td>{{ $incident->plate_number ?? '—' }}{{ $incident->slot ? ' / '.$incident->slot->code : ($incident->location ? ' / '.$incident->location : '') }}</td><td>{{ $incident->reporter?->name ?? ($incident->source === 'auto' ? 'System' : 'Former staff') }}</td><td>{{ strtoupper(str_replace('_', ' ', $incident->status)) }}</td></tr>
-@empty<tr><td colspan="7" class="manager-table-empty">No incidents match these filters.</td></tr>@endforelse
+<tr><th scope="row"><a class="manager-slot-code" href="{{ route('manager.incidents.show', $incident) }}">{{ $incident->code }}</a></th><td>{{ \App\Support\Lot::local($incident->reported_at)?->format('M j, g:i A') }}</td><td>{{ $incident->title() }}</td><td>{{ strtoupper($incident->confirmation) }}</td><td><span class="badge {{ $incident->source === 'auto' ? 'b-pend' : 'b-done' }}">{{ strtoupper($incident->source) }}</span></td><td>{{ $incident->plate_number ? \App\Support\Lot::plate($incident->plate_number) : '—' }}{{ $incident->slot ? ' / '.$incident->slot->code : ($incident->location ? ' / '.$incident->location : '') }}</td><td>{{ $incident->reporter?->name ?? ($incident->source === 'auto' ? 'System' : 'Former staff') }}</td><td>{{ strtoupper(str_replace('_', ' ', $incident->status)) }}</td></tr>
+@empty<tr><td colspan="8" class="manager-table-empty">No incidents match these filters.</td></tr>@endforelse
 </tbody></table></div>
 <div class="manager-table-footer"><span>Showing {{ $incidents->firstItem() ?? 0 }}–{{ $incidents->lastItem() ?? 0 }} of {{ $incidents->total() }}</span>{{ $incidents->links() }}</div>

@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['code', 'zone', 'type', 'status', 'notes', 'out_of_service_reason', 'layout_x', 'layout_y'])]
+#[Fillable(['code', 'zone', 'type', 'vehicle_class', 'status', 'notes', 'out_of_service_reason', 'layout_x', 'layout_y'])]
 class ParkingSlot extends Model
 {
     public const STATUS_AVAILABLE = 'available';
@@ -19,6 +19,10 @@ class ParkingSlot extends Model
     public const STATUS_PENDING_EXIT = 'pending_exit';
 
     public const STATUS_OUT_OF_SERVICE = 'out_of_service';
+
+    public const CLASS_CAR = 'car';
+
+    public const CLASS_MOTORCYCLE = 'motorcycle';
 
     public const TYPE_STANDARD = 'Standard';
 
@@ -44,6 +48,49 @@ class ParkingSlot extends Model
             'layout_x' => 'float',
             'layout_y' => 'float',
         ];
+    }
+
+    /** @return array<string, string> */
+    /** The slot class a zone's vehicle type gives its slots: a Motorcycle zone holds motorcycles, a Car zone everything else. */
+    public static function classForZoneType(?string $zoneVehicleType): string
+    {
+        return $zoneVehicleType === ParkingLayoutZone::VEHICLE_MOTORCYCLE ? self::CLASS_MOTORCYCLE : self::CLASS_CAR;
+    }
+
+    public static function vehicleClasses(): array
+    {
+        return [self::CLASS_CAR => 'Car zone', self::CLASS_MOTORCYCLE => 'Motorcycle zone'];
+    }
+
+    public function classLabel(): string
+    {
+        return self::vehicleClasses()[$this->vehicle_class] ?? 'Car zone';
+    }
+
+    /** True for a slot in a motorcycle zone. */
+    public function isMotorcycleZone(): bool
+    {
+        return $this->vehicle_class === self::CLASS_MOTORCYCLE;
+    }
+
+    /** Can a vehicle of this type park here? Motorcycles only in motorcycle zones, everything else only in car zones. */
+    public function acceptsType(?string $vehicleType): bool
+    {
+        return ($this->vehicle_class ?: self::CLASS_CAR) === Vehicle::zoneClassFor($vehicleType);
+    }
+
+    /** Why a vehicle type cannot use this slot, in words for the screen. Null when it can. */
+    public function wrongZoneMessage(?string $vehicleType): ?string
+    {
+        if ($this->acceptsType($vehicleType)) {
+            return null;
+        }
+
+        $type = $vehicleType ?: 'This vehicle';
+
+        return $this->isMotorcycleZone()
+            ? "Slot {$this->code} is in a motorcycle zone, for motorcycles only. A {$type} parks in a car zone. Choose a slot in a car zone."
+            : "Slot {$this->code} is in a car zone. A {$type} parks in a motorcycle zone. Choose a slot in a motorcycle zone.";
     }
 
     public function statusLabel(): string

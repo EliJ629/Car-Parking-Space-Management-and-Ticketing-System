@@ -181,7 +181,7 @@
 
         <div class="ba-form-group">
           <label class="ba-label" for="plate-seen-input">Plate seen on the vehicle</label>
-          <input class="ba-input" id="plate-seen-input" type="text" placeholder="Enter plate seen (e.g. ABC 1234)" maxlength="20" autocomplete="off" style="font-weight:800;letter-spacing:1px;text-transform:uppercase;">
+          <input class="ba-input" id="plate-seen-input" type="text" data-plate data-plate-optional autocomplete="off" placeholder="Enter plate seen (e.g. ABC 1234)" style="font-weight:800;letter-spacing:1px;text-transform:uppercase;">
           <div class="ba-err-msg" id="plate-mismatch-msg" hidden>Does not match reservation plate</div>
         </div>
 
@@ -206,7 +206,6 @@
   <!-- POP-UP BA-32: Confirm Check-in Modal -->
   <dialog class="badlg" id="confirm-checkin-dlg">
     <div class="in">
-      <button class="x" type="button" data-close aria-label="Close">&times;</button>
       <h2>Confirm check-in</h2>
 
       <div class="ba-detail-box" style="background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:16px;font-size:14px;color:var(--ink);">
@@ -246,7 +245,6 @@
 <!-- POP-UP BA-28: Plate Does Not Match -->
 <dialog class="badlg {{ (session('error_modal') && session('error_modal')['type'] === 'plate_mismatch') ? 'auto-open' : '' }}" id="plate-mismatch-dlg">
   <div class="in">
-    <button class="x" type="button" data-close aria-label="Close">&times;</button>
     <h2 style="color:var(--stop);margin:0 0 14px;">Plate does not match</h2>
 
     <!-- Visual Warning Segmented Progress Tracker -->
@@ -301,7 +299,6 @@
 <!-- POP-UP BA-29: Reservation Expired -->
 <dialog class="badlg" id="rsv-expired-dlg">
   <div class="in">
-    <button class="x" type="button" data-close aria-label="Close">&times;</button>
     <h2 style="color:var(--stop);">Reservation expired</h2>
 
     <div class="ba-detail-box" style="background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:16px;font-size:14px;color:var(--ink);">
@@ -323,7 +320,6 @@
 <!-- POP-UP BA-30: Reservation Invalid or Canceled -->
 <dialog class="badlg" id="rsv-canceled-dlg">
   <div class="in">
-    <button class="x" type="button" data-close aria-label="Close">&times;</button>
     <h2 style="color:var(--stop);">Reservation not valid</h2>
 
     <div class="ba-detail-box" style="background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:16px;font-size:14px;color:var(--ink);">
@@ -344,7 +340,6 @@
 <!-- Not approved yet, or turned down -->
 <dialog class="badlg" id="rsv-appr-dlg">
   <div class="in">
-    <button class="x" type="button" data-close aria-label="Close">&times;</button>
     <h2 id="appr-title">Reservation is not approved yet</h2>
     <p id="appr-msg"></p>
     <div class="actions">
@@ -357,7 +352,6 @@
 <!-- POP-UP: Reservation Already Used, Exited, or Pending Exit -->
 <dialog class="badlg" id="rsv-used-dlg">
   <div class="in">
-    <button class="x" type="button" data-close aria-label="Close">&times;</button>
     <h2 style="color:var(--stop);" id="used-dlg-title">Reservation already used</h2>
 
     <div class="ba-detail-box" style="background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:16px;font-size:14px;color:var(--ink);" id="used-dlg-box">
@@ -382,7 +376,6 @@
 <!-- POP-UP: Reservation Not Bookable Server Redirect -->
 <dialog class="badlg {{ (session('error_modal') && session('error_modal')['type'] === 'reservation_not_bookable') ? 'auto-open' : '' }}" id="rsv-not-bookable-dlg">
   <div class="in">
-    <button class="x" type="button" data-close aria-label="Close">&times;</button>
     <h2 style="color:var(--stop);">Cannot check in reservation</h2>
 
     <div class="ba-detail-box" style="background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:16px;font-size:14px;color:var(--ink);">
@@ -409,7 +402,6 @@
 <!-- POP-UP BA-31: Too Early to Check In -->
 <dialog class="badlg" id="rsv-early-dlg">
   <div class="in">
-    <button class="x" type="button" data-close aria-label="Close">&times;</button>
     <h2>Too early to check in</h2>
 
     <div class="ba-detail-box" style="background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:16px;font-size:14px;color:var(--ink);">
@@ -808,19 +800,22 @@ function showVerifyScreen(r) {
   setTimeout(() => plateSeen.focus(), 150);
 }
 
-// Plate seen change with validation (uppercase, no special characters, max 12)
+// Two plates are the same when they match once spaces and dashes are dropped (the same rule as the server).
+const plateKey = (v) => window.BaylinePlate ? window.BaylinePlate.normalize(v) : String(v || '').replace(/[\s-]+/g, '').toUpperCase();
+
+// Plate seen change with validation (uppercase, no special characters, max 20)
 const plateSeenInput = document.getElementById('plate-seen-input');
 if (plateSeenInput) {
   plateSeenInput.addEventListener('input', (e) => {
     // Disallow special characters: allow only letters, numbers, spaces, and hyphens
-    let clean = e.target.value.toUpperCase().replace(/[^A-Z0-9 -]/g, '').slice(0, 12);
+    let clean = e.target.value.toUpperCase().replace(/[^A-Z0-9 -]/g, '').slice(0, 20);
     if (e.target.value !== clean) {
       e.target.value = clean;
     }
     document.getElementById('hidden-rsv-plate').value = clean;
 
-    const normEntered = clean.replace(/[\s-]+/g, '');
-    const normExpected = (activeReservation?.plate_raw || '').replace(/[\s-]+/g, '').toUpperCase();
+    const normEntered = plateKey(clean);
+    const normExpected = plateKey(activeReservation?.plate_raw || '');
     const match = normEntered.length > 0 && normEntered === normExpected;
 
     document.getElementById('chk-plate-match').checked = match;
@@ -840,8 +835,8 @@ const btnOpenConfirm = document.getElementById('btn-open-confirm-checkin');
 if (btnOpenConfirm) {
   btnOpenConfirm.addEventListener('click', () => {
     const entered = (document.getElementById('plate-seen-input').value || '').trim();
-    const normEntered = entered.replace(/[\s-]+/g, '').toUpperCase();
-    const normExpected = (activeReservation?.plate_raw || '').replace(/[\s-]+/g, '').toUpperCase();
+    const normEntered = plateKey(entered);
+    const normExpected = plateKey(activeReservation?.plate_raw || '');
     const match = normEntered.length > 0 && normEntered === normExpected;
 
     if (!match) {
