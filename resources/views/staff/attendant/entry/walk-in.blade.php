@@ -105,7 +105,7 @@
           </div>
           <div class="ba-form-group">
             <label class="ba-label" for="det-phone">Phone number</label>
-            <input class="ba-input" id="det-phone" name="phone" type="tel" placeholder="0917 555 0199" maxlength="11" oninput="this.value = this.value.replace(/\D/g, '').slice(0, 11)">
+            <input class="ba-input" id="det-phone" name="phone" type="tel" placeholder="09175550199" maxlength="13" oninput="this.value = this.value.replace(/[^\d+]/g, '').replace(/(?!^)\+/g, '').slice(0, 13)">
           </div>
         </div>
 

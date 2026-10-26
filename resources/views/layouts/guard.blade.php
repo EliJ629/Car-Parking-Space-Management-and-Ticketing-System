@@ -18,7 +18,10 @@
     ];
     $idleMinutes = (int) \App\Models\SystemSetting::value('idle_timeout_minutes', 15);
     $flashModal = session('modal');
-    $flashToast = session('toast');
+    // A short message is shown as a pop-up the guard closes, not as a toast that disappears by itself.
+    if (! $flashModal && ($flashToast = session('toast'))) {
+        $flashModal = ['title' => $flashToast[0], 'body' => $flashToast[1] ?? '', 'primary' => ['label' => 'OK', 'close' => true]];
+    }
 @endphp
 <a class="g-skip" href="#main">Skip to content</a>
 <div class="g-shell" id="gshell"
@@ -49,10 +52,15 @@
   </div>
 </div>
 
-<div class="g-toasts" id="g-toasts" aria-live="polite"></div>
-@if ($flashToast)
-  <div class="g-toast" role="status"><b>{{ $flashToast[0] }}</b>{{ $flashToast[1] ?? '' }}</div>
-@endif
+{{-- A new alert arriving while the guard works opens this pop-up (filled by guard.js). --}}
+<dialog class="gdlg" id="live-dlg" aria-labelledby="live-t">
+  <div class="in">
+    <button class="x" type="button" data-close aria-label="Close">X</button>
+    <h2 id="live-t">New alert</h2>
+    <p id="live-body"></p>
+    <div class="actions"><a class="btn" id="live-open" href="#">Open</a><button class="btn ghost" type="button" data-close>Later</button></div>
+  </div>
+</dialog>
 
 @if ($flashModal)
   @include('guard.partials.modal', ['modal' => $flashModal, 'id' => 'flash-modal', 'auto' => true])

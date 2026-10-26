@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Incident;
 use App\Models\ParkingPayment;
+use App\Models\ParkingRateSet;
 use App\Models\ParkingReservation;
 use App\Models\ParkingSession;
 use App\Models\ParkingSlot;
@@ -15,7 +16,11 @@ use App\Support\Lot;
 use Database\Seeders\ManagerDefaultsSeeder;
 use Database\Seeders\ParkingSlotSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Routing\Middleware\ThrottleRequests;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
+use PHPUnit\Framework\AssertionFailedError;
 use Tests\TestCase;
 
 /** Input rules and lot-time behaviour found in the system audit. */
@@ -39,9 +44,9 @@ class AuditValidationTest extends TestCase
     private function signUp(array $override = []): array
     {
         return $override + [
-            'name' => 'Pedro Cruz', 'email' => 'pedro@example.com', 'phone' => '0917 123 4567', 'plate_number' => 'KLM 4455',
+            'name' => 'Pedro Cruz', 'email' => 'pedro.cruz@gmail.com', 'phone' => '09171234567', 'plate_number' => 'KLM 4455',
             'vehicle_type' => 'Car', 'make_model' => 'Toyota Vios', 'color' => 'Black',
-            'password' => 'Driver123x', 'password_confirmation' => 'Driver123x',
+            'password' => 'Driver123x!', 'password_confirmation' => 'Driver123x!',
         ];
     }
 
@@ -58,12 +63,13 @@ class AuditValidationTest extends TestCase
     public function test_sign_up_rejects_plates_names_phones_and_passwords_that_break_the_rules(): void
     {
         // The sign up route is rate limited; this test sends many bad forms in a row.
-        $this->withoutMiddleware(\Illuminate\Routing\Middleware\ThrottleRequests::class);
+        $this->withoutMiddleware(ThrottleRequests::class);
 
         foreach ([
-            ['plate_number' => 'AB12'],
-            ['plate_number' => 'ABCD123'],
-            ['plate_number' => 'ABC 12'],
+            ['plate_number' => 'A12'],
+            ['plate_number' => 'ABCDEFGHI1'],
+            ['plate_number' => '12345'],
+            ['plate_number' => 'ABC 12 3 45'],
             ['name' => 'Pedro 99'],
             ['name' => 'P'],
             ['phone' => '12345'],
@@ -72,15 +78,17 @@ class AuditValidationTest extends TestCase
             ['vehicle_type' => 'Tank'],
             ['password' => 'short1A', 'password_confirmation' => 'short1A'],
             ['password' => 'alllowercase1', 'password_confirmation' => 'alllowercase1'],
-            ['password' => 'NoNumbersHere', 'password_confirmation' => 'NoNumbersHere'],
-            ['password' => str_repeat('Aa1', 30), 'password_confirmation' => str_repeat('Aa1', 30)],
-            ['password_confirmation' => 'Different123'],
+            ['password' => 'NoNumbersHere!', 'password_confirmation' => 'NoNumbersHere!'],
+            ['password' => 'NoSpecial123x', 'password_confirmation' => 'NoSpecial123x'],
+            ['email' => 'pedro@example.com'],
+            ['password' => str_repeat('Aa1!', 30), 'password_confirmation' => str_repeat('Aa1!', 30)],
+            ['password_confirmation' => 'Different123!'],
         ] as $bad) {
             $key = array_key_first($bad) === 'password_confirmation' ? 'password' : array_key_first($bad);
             $response = $this->post(route('driver.register'), $this->signUp($bad));
             try {
                 $response->assertSessionHasErrors($key);
-            } catch (\PHPUnit\Framework\AssertionFailedError $e) {
+            } catch (AssertionFailedError $e) {
                 $this->fail('Not refused: '.json_encode($bad));
             }
         }
@@ -88,18 +96,44 @@ class AuditValidationTest extends TestCase
         $this->assertSame(0, User::where('role', User::ROLE_DRIVER)->count());
     }
 
+    public function test_sign_up_accepts_short_numeric_and_government_style_plates(): void
+    {
+        $this->withoutMiddleware(ThrottleRequests::class);
+
+        foreach (['7', '12', 'SENATE 5', 'PNP 1234', 'ABC 1234', '1234 AB'] as $i => $plate) {
+            $this->post(route('driver.register'), $this->signUp([
+                'plate_number' => $plate, 'name' => 'Driver '.chr(65 + $i).'ero', 'email' => "vip.driver{$i}@gmail.com", 'phone' => '0917123456'.$i,
+            ]))->assertSessionHasNoErrors();
+        }
+
+        // Each valid sign up waits for its link; nothing is saved as an account yet.
+        $this->assertSame(6, \App\Models\PendingRegistration::count());
+        $this->assertSame(0, Vehicle::count());
+    }
+
     public function test_sign_up_stores_a_clean_record_and_refuses_a_plate_that_is_already_registered(): void
     {
-        $this->post(route('driver.register'), $this->signUp(['name' => '  Pedro   Cruz ', 'email' => ' Pedro@Example.COM ']))
-            ->assertRedirect(route('driver.home'));
+        \Illuminate\Support\Facades\Mail::fake();
+        $this->post(route('driver.register'), $this->signUp(['name' => '  Pedro   Cruz ', 'email' => ' Pedro.Cruz@GMAIL.com ']))
+            ->assertRedirect(route('driver.register.sent'));
+        $this->assertNull(User::where('email', 'pedro.cruz@gmail.com')->first(), 'Nothing is saved before the link is clicked.');
 
-        $user = User::where('email', 'pedro@example.com')->firstOrFail();
+        $link = null;
+        \Illuminate\Support\Facades\Mail::assertSent(\App\Mail\ConfirmRegistrationMail::class, function ($mail) use (&$link) {
+            $link = $mail->link;
+
+            return $mail->hasTo('pedro.cruz@gmail.com');
+        });
+        $this->get($link)->assertRedirect(route('driver.login'));
+
+        $user = User::where('email', 'pedro.cruz@gmail.com')->firstOrFail();
+        $this->assertNotNull($user->email_verified_at, 'The link confirms the email.');
         $this->assertSame('Pedro Cruz', $user->name);
         $this->assertSame('09171234567', $user->phone);
         $this->assertSame('KLM4455', Vehicle::where('user_id', $user->id)->value('plate_number'));
 
         auth()->logout();
-        $this->post(route('driver.register'), $this->signUp(['email' => 'other@example.com', 'plate_number' => 'klm-4455']))
+        $this->post(route('driver.register'), $this->signUp(['email' => 'other.person@gmail.com', 'name' => 'Other Person', 'plate_number' => 'klm-4455']))
             ->assertSessionHasErrors('plate_number');
         $this->assertSame(1, Vehicle::count());
     }
@@ -114,7 +148,7 @@ class AuditValidationTest extends TestCase
                 ->assertSessionHasErrors('password');
         }
 
-        $this->put(route('driver.account.password.update'), ['current_password' => 'wrong', 'password' => 'Brandnew123', 'password_confirmation' => 'Brandnew123'])
+        $this->put(route('driver.account.password.update'), ['current_password' => 'wrong', 'password' => 'Brandnew123!', 'password_confirmation' => 'Brandnew123!'])
             ->assertSessionHasErrors('current_password');
         $this->assertTrue(Hash::check('Driver123_', $driver->fresh()->password));
     }
@@ -126,10 +160,13 @@ class AuditValidationTest extends TestCase
 
         $this->put(route('driver.account.profile.update'), ['name' => '12345', 'email' => 'maria@example.com', 'phone' => '09175550142'])->assertSessionHasErrors('name');
         $this->put(route('driver.account.profile.update'), ['name' => 'Maria Santos', 'email' => 'nope', 'phone' => '09175550142'])->assertSessionHasErrors('email');
+        $this->put(route('driver.account.profile.update'), ['name' => 'Maria Santos', 'email' => 'maria@yahoo.com', 'phone' => '09175550142'])->assertSessionHasErrors('email');
         $this->put(route('driver.account.profile.update'), ['name' => 'Maria Santos', 'email' => 'maria@example.com', 'phone' => '555'])->assertSessionHasErrors('phone');
-        $this->put(route('driver.account.profile.update'), ['name' => 'Maria Santos', 'email' => 'maria@example.com', 'phone' => '+63 917 555 0199'])
+        \Illuminate\Support\Facades\Mail::fake();
+        $this->put(route('driver.account.profile.update'), ['name' => 'Maria Santos', 'email' => 'maria@example.com', 'phone' => '+639175550199'])
             ->assertSessionHasNoErrors();
-        $this->assertSame('09175550199', $driver->fresh()->phone);
+        $this->assertSame('09175550199', $driver->fresh()->pending_phone, 'The number is held until the emailed code is entered.');
+        $this->assertSame('09175550142', $driver->fresh()->phone);
     }
 
     public function test_the_forced_staff_password_change_enforces_length_and_cannot_be_repeated_later(): void
@@ -163,6 +200,8 @@ class AuditValidationTest extends TestCase
         foreach ([
             ['name' => 'A1'], ['username' => 'ab'], ['username' => 'has space'], ['email' => 'bad'], ['phone' => '123'], ['role' => 'driver'],
             ['email' => '', 'phone' => ''],
+            ['email' => 'ana@example'], ['email' => 'ana@example.c'], ['email' => 'ana@example.123'],
+            ['phone' => '091711100001'], ['phone' => '08171110000'],
         ] as $bad) {
             $this->post(route('manager.accounts.store'), $bad + $good)->assertSessionHasErrors();
         }
@@ -206,10 +245,12 @@ class AuditValidationTest extends TestCase
         $this->post(route('manager.rates.store'), ['first_hour_fee' => -1] + $rate)->assertSessionHasErrors('first_hour_fee');
         $this->post(route('manager.rates.store'), ['first_hour_fee' => '12.345'] + $rate)->assertSessionHasErrors('first_hour_fee');
         $this->post(route('manager.rates.store'), ['effective_at' => Lot::now()->subDay()->format('Y-m-d H:i:s')] + $rate)->assertSessionHasErrors('effective_at');
+        $this->post(route('manager.rates.store'), ['ends_at' => $when->copy()->subMinute()->format('Y-m-d H:i:s')] + $rate)->assertSessionHasErrors('ends_at');
+        $this->post(route('manager.rates.store'), ['ends_at' => $when->format('Y-m-d H:i:s')] + $rate)->assertSessionHasErrors('ends_at');
         $this->post(route('manager.rates.store'), ['reason' => 'x'] + $rate)->assertSessionHasErrors('reason');
 
         $this->post(route('manager.rates.store'), $rate)->assertSessionHasNoErrors();
-        $stored = \App\Models\ParkingRateSet::latest('id')->firstOrFail();
+        $stored = ParkingRateSet::latest('id')->firstOrFail();
         $this->assertSame($when->copy()->setTimezone('UTC')->format('Y-m-d H:i'), $stored->effective_at->format('Y-m-d H:i'));
     }
 
@@ -271,8 +312,8 @@ class AuditValidationTest extends TestCase
     {
         $manager = $this->manager();
         // 17:00 UTC on Oct 15 is 01:00 on Oct 16 in Manila.
-        $this->makeSession('PK-LATE', \Illuminate\Support\Carbon::parse('2026-10-15 17:00:00', 'UTC'));
-        $this->makeSession('PK-EARLY', \Illuminate\Support\Carbon::parse('2026-10-15 15:00:00', 'UTC'), 'DEF5678');
+        $this->makeSession('PK-LATE', Carbon::parse('2026-10-15 17:00:00', 'UTC'));
+        $this->makeSession('PK-EARLY', Carbon::parse('2026-10-15 15:00:00', 'UTC'), 'DEF5678');
 
         $this->actingAs($manager)->get(route('manager.records.index', ['date' => '2026-10-16']))
             ->assertOk()->assertSee('PK-LATE')->assertDontSee('PK-EARLY');
@@ -287,7 +328,7 @@ class AuditValidationTest extends TestCase
     public function test_sales_totals_group_by_lot_day_and_refuse_unreasonable_ranges(): void
     {
         $manager = $this->manager();
-        $session = $this->makeSession('PK-5001', \Illuminate\Support\Carbon::parse('2026-10-15 16:00:00', 'UTC'));
+        $session = $this->makeSession('PK-5001', Carbon::parse('2026-10-15 16:00:00', 'UTC'));
         ParkingPayment::create([
             'receipt_number' => 'RC-5001', 'session_id' => $session->id, 'received_by' => $manager->id, 'base_fee' => 30, 'additional_fee' => 0,
             'penalty' => 0, 'discount' => 0, 'total' => 30, 'method' => 'cash', 'paid_at' => '2026-10-15 17:30:00',
@@ -310,7 +351,7 @@ class AuditValidationTest extends TestCase
         $this->assertSame('PK-0001', Csv::cell('PK-0001'));
 
         $manager = $this->manager();
-        $this->makeSession('=HYPERLINK("x")', \Illuminate\Support\Carbon::parse('2026-10-16 02:00:00', 'UTC'));
+        $this->makeSession('=HYPERLINK("x")', Carbon::parse('2026-10-16 02:00:00', 'UTC'));
 
         $csv = $this->actingAs($manager)->get(route('manager.records.export', ['tab' => 'sessions', 'date' => '2026-10-16']))->streamedContent();
         $this->assertStringContainsString("'=HYPERLINK", $csv);

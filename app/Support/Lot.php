@@ -114,7 +114,7 @@ class Lot
         return max(0, intdiv(max(0, $to->getTimestamp() - $from->getTimestamp()), 60));
     }
 
-    /** Format Philippine plates cleanly: "ABC1234" -> "ABC 1234", "AB12345" -> "AB 12345", "1" -> "1". */
+    /** "ABC1234" becomes "ABC 1234", "SENATE3" becomes "SENATE 3". Digits only, such as "5", stay as they are. */
     public static function plate(?string $plate): string
     {
         $plate = (string) $plate;
@@ -122,33 +122,16 @@ class Lot
             return '';
         }
 
-        // 1. Current & Legacy Cars: LLL-DDDD or LLL-DDD (ABC1234 -> ABC 1234, ABC123 -> ABC 123)
-        if (preg_match('/^[A-Z]{3}[0-9]{3,4}$/', $plate)) {
-            return substr($plate, 0, 3).' '.substr($plate, 3);
-        }
-
-        // 2. Modern & Legacy Motorcycles: LL-DDDDD or LL-DDDD (AB12345 -> AB 12345, AB1234 -> AB 1234)
-        if (preg_match('/^[A-Z]{2}[0-9]{4,5}$/', $plate)) {
-            return substr($plate, 0, 2).' '.substr($plate, 2);
-        }
-
-        // 3. Regional Motorcycle: DDDD-LL (1234AB -> 1234 AB)
-        if (preg_match('/^[0-9]{4}[A-Z]{2}$/', $plate)) {
-            return substr($plate, 0, 4).' '.substr($plate, 4);
-        }
-
-        // 4. Vintage: L-DDD-LL (A123BC -> A-123-BC)
+        // Vintage plates such as A123BC are written A-123-BC.
         if (preg_match('/^[A-Z][0-9]{3}[A-Z]{2}$/', $plate)) {
             return substr($plate, 0, 1).'-'.substr($plate, 1, 3).'-'.substr($plate, 4);
         }
 
-        // 5. Vintage: DDD-LLL (123ABC -> 123 ABC)
-        if (preg_match('/^[0-9]{3}[A-Z]{3}$/', $plate)) {
-            return substr($plate, 0, 3).' '.substr($plate, 3);
+        if (preg_match('/^([A-Z]+)([0-9]+)$/', $plate, $m) || preg_match('/^([0-9]+)([A-Z]+)$/', $plate, $m)) {
+            return $m[1].' '.$m[2];
         }
 
-        // 6. Protocol (1 to 17) or other formats
-        return strlen($plate) > 3 ? substr($plate, 0, 3).' '.substr($plate, 3) : $plate;
+        return $plate;
     }
 
     /** "0917 555 0142" */
@@ -161,12 +144,12 @@ class Lot
             : $phone;
     }
 
-    /** 0917 123 4567, 0917-123-4567 and +63 917 123 4567 all become 09171234567. */
+    /** +639171234567 becomes 09171234567. Anything else is returned as typed (trimmed), so the phone rule can refuse it. */
     public static function normalizePhone(?string $phone): string
     {
-        $phone = preg_replace('/[\s()\-]+/', '', (string) $phone);
+        $phone = trim((string) $phone);
 
-        if (preg_match('/^\+?63(9\d{9})$/', $phone, $matches)) {
+        if (preg_match('/^\+63(9\d{9})$/', $phone, $matches)) {
             return '0'.$matches[1];
         }
 
@@ -196,7 +179,20 @@ class Lot
 
     public static function advanceDays(): int
     {
-        return max(1, (int) self::setting('maximum_advance_booking_days', 7));
+        // The Parking Manager sets how far ahead drivers may reserve on the Settings screen.
+        return max(1, (int) self::setting('maximum_advance_booking_days', 2));
+    }
+
+    /** The most slots a single zone may hold. */
+    public static function maxSlotsPerZone(): int
+    {
+        return max(1, (int) self::setting('maximum_slots_per_zone', 20));
+    }
+
+    /** The most zones that may contain slots at the same time. */
+    public static function maxActiveZones(): int
+    {
+        return max(1, (int) self::setting('maximum_active_zones', 26));
     }
 
     public static function exitWindowMinutes(): int

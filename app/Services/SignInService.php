@@ -64,6 +64,14 @@ class SignInService
             $this->fail('This account cannot sign in right now. Please ask your supervisor.');
         }
 
+        // A driver signs in only after the email was confirmed with the code.
+        if ($area === self::AREA_DRIVER && ! $user->hasVerifiedEmail()) {
+            $user->clearFailedLogins();
+            ActivityLog::record('sign_in_failed', $user, $request, $identity, $area);
+
+            throw new EmailNotVerified($user);
+        }
+
         $user->clearFailedLogins();
         $user->forceFill(['last_login_at' => now()])->save();
 
@@ -75,6 +83,30 @@ class SignInService
         }
 
         ActivityLog::record('sign_in', $user, $request, null, $area);
+
+        return $user;
+    }
+
+    /**
+     * Sign a driver in after another service (Google) has already proved who they are, so no password is asked.
+     * The same rule applies as for a password sign in: a suspended driver sees the account notice, a closed account stays out.
+     */
+    public function signInTrusted(Request $request, User $user, string $via = 'google'): User
+    {
+        $suspendedDriver = $user->isDriver() && $user->isSuspended();
+
+        if (! $user->isDriver() || (! $user->isActive() && ! $suspendedDriver)) {
+            ActivityLog::record('sign_in_failed', $user, $request, $via, self::AREA_DRIVER);
+            $this->fail('This account cannot sign in right now. Please ask your supervisor.');
+        }
+
+        $user->clearFailedLogins();
+        $user->forceFill(['last_login_at' => now()])->save();
+
+        Auth::login($user);
+        $request->session()->regenerate();
+
+        ActivityLog::record('sign_in_'.$via, $user, $request, null, self::AREA_DRIVER);
 
         return $user;
     }

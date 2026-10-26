@@ -16,7 +16,6 @@
     }
   });
   document.querySelectorAll('dialog[data-autoopen]').forEach(openDialog);
-  document.querySelectorAll('.g-toast').forEach(function (t) { setTimeout(function () { t.hidden = true; }, 5000); });
   document.querySelectorAll('[data-print]').forEach(function (b) { b.addEventListener('click', function () { window.print(); }); });
   document.querySelectorAll('select[data-autosubmit]').forEach(function (s) { s.addEventListener('change', function () { s.form.submit(); }); });
 
@@ -44,12 +43,12 @@
     });
   }
 
-  /* Alerts: refresh the button and the panel, toast for a new alert. */
+  /* Alerts: refresh the button and the panel, pop-up for a new alert. */
   if (shell) {
     var list = document.getElementById('alert-list');
     var badge = document.getElementById('alert-count');
     var known = (list.getAttribute('data-keys') || '').split(',').filter(Boolean);
-    var toasts = document.getElementById('g-toasts');
+    var liveDlg = document.getElementById('live-dlg');
 
     var render = function (items) {
       list.innerHTML = '';
@@ -72,11 +71,13 @@
         render(d.items);
         d.items.forEach(function (a) {
           if (a.unread && known.indexOf(a.key) < 0) {
-            var t = document.createElement('a'); t.href = a.url; t.className = 'stop'; t.setAttribute('role', 'status');
-            var b = document.createElement('b'); b.textContent = a.title;
-            var s = document.createElement('span'); s.textContent = a.body + ' Open';
-            t.appendChild(b); t.appendChild(s); toasts.appendChild(t);
-            setTimeout(function () { t.remove(); }, 12000);
+            /* A pop-up, unless the guard is in the middle of another one. The badge still counts it. */
+            if (liveDlg && !document.querySelector('dialog[open]')) {
+              document.getElementById('live-t').textContent = a.title;
+              document.getElementById('live-body').textContent = a.body;
+              document.getElementById('live-open').href = a.url;
+              openDialog(liveDlg);
+            }
           }
         });
         known = d.items.map(function (a) { return a.key; });
@@ -153,6 +154,47 @@
       });
       var btn = go.querySelector('button[type=submit]'); if (btn) { setTimeout(function () { btn.disabled = true; btn.textContent = 'Approving'; }, 0); }
     });
+  }
+
+  /* Incident form: what the category requires, and a live check that the plate is parked now. */
+  var inc = document.querySelector('[data-incident-form]');
+  if (inc) {
+    var rules = JSON.parse(inc.getAttribute('data-rules') || '{}');
+    var plateIn = document.getElementById('plate_number'), placeIn = document.getElementById('location');
+    var plateTag = inc.querySelector('[data-need-plate]'), placeTag = inc.querySelector('[data-need-place]');
+    var live = document.getElementById('plate-live'), placeHint = document.getElementById('place-hint');
+    var timer = null, lastOk = false;
+    var cat = function () { var r = inc.querySelector('input[name=category]:checked'); return r ? r.value : ''; };
+    var need = function () { return rules[cat()] || { plate: 'optional', place: 'optional' }; };
+    var applyRules = function () {
+      var n = need(), c = cat();
+      if (!c) return;
+      plateTag.textContent = n.plate === 'required' ? '(required)' : '(optional)';
+      plateIn.required = n.plate === 'required';
+      var names = { slot: ['(required)', 'Slot, for example B-03.'], location: ['(required)', 'Say where it is: a slot like B-03 or a place like Zone A lane.'], auto: ['(filled in from the plate)', 'Taken from the parked vehicle.'], optional: ['(optional)', ''] };
+      var p = names[n.place] || names.optional;
+      placeTag.textContent = p[0]; if (placeHint) placeHint.textContent = p[1];
+      placeIn.required = n.place === 'slot' || n.place === 'location';
+      placeIn.readOnly = n.place === 'auto';
+    };
+    var say = function (text, bad) { if (!live) return; live.textContent = text; live.className = bad ? 'g-err' : 'hint'; plateIn.setAttribute('aria-invalid', bad ? 'true' : 'false'); };
+    var check = function () {
+      var v = plateIn.value.trim();
+      if (!v) { say('Only a vehicle that is parked in the lot now can be reported.', false); return; }
+      fetch(inc.getAttribute('data-check') + '?plate=' + encodeURIComponent(v), { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          if (plateIn.value.trim() !== v) return;
+          if (d.state === 'parked') { say(d.message, false); lastOk = true; if (placeIn && (need().place === 'auto' || !placeIn.value || placeIn.dataset.auto === '1')) { placeIn.value = d.slot; placeIn.dataset.auto = '1'; } }
+          else { lastOk = false; say(d.message || 'That vehicle is not parked now.', true); }
+        }).catch(function () {});
+    };
+    plateIn.addEventListener('input', function () { clearTimeout(timer); timer = setTimeout(check, 350); });
+    plateIn.addEventListener('blur', check);
+    placeIn.addEventListener('input', function () { placeIn.dataset.auto = '0'; });
+    inc.addEventListener('change', function (e) { if (e.target.name === 'category') applyRules(); });
+    applyRules();
+    if (plateIn.value) check();
   }
 
   /* Incident form: category radios and photo previews. */

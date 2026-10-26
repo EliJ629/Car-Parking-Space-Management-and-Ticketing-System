@@ -503,3 +503,59 @@ dialog.badlg .actions .btn{min-height:44px}
     box-shadow: none !important;
   }
 }
+
+/* Reservation approval */
+.ba-tabs .ba-badge{margin-left:6px;vertical-align:middle}
+.ba-rsv-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr));gap:16px;margin-bottom:24px}
+.ba-rsv-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.ba-rsv-head h2{margin:0}
+.ba-kv{margin:0 0 12px;display:grid;gap:6px;font-size:14px}
+.ba-kv div{display:flex;justify-content:space-between;gap:12px}
+.ba-kv dt{color:var(--muted)}
+.ba-kv dd{margin:0;font-weight:600;text-align:right}
+.ba-kv small{display:block;color:var(--muted);font-weight:500}
+.ba-pill.ok{border-color:var(--ok);color:var(--ok);background:var(--ok-bg)}
+.ba-pill.warn{border-color:var(--paint-deep);background:var(--warn-bg);color:var(--ink)}
+.ba-idphoto{display:block;position:relative;border:1px solid var(--line);border-radius:8px;overflow:hidden;margin-bottom:12px;background:var(--bg)}
+.ba-idphoto img{display:block;width:100%;max-height:220px;object-fit:contain}
+.ba-idphoto span{position:absolute;right:8px;bottom:8px;background:var(--ink);color:var(--bg);font-size:12px;font-weight:600;padding:3px 8px;border-radius:4px}
+.ba-warn{background:var(--stop-bg);border-left:4px solid var(--stop);padding:8px 12px;font-size:14px;margin:0 0 12px}
+.ba-rsv .actions{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
+.ba-rsv .actions form{margin:0}
+.ba-decided{list-style:none;margin:0;padding:0;display:grid;gap:8px;font-size:14px}
+.ba-decided small{display:block;color:var(--muted)}
+
+/* Responsive: the console works on a tablet at the booth and on a phone */
+@media (max-width:960px){
+  .ba-head .ba-w{flex-wrap:wrap;gap:10px}
+  .ba-clock{display:none}
+  .ba-chip small{display:none}
+  .ba-chip{max-width:46vw;overflow:hidden;text-overflow:ellipsis}
+}
+@media (max-width:640px){
+  .ba-w{padding-inline:14px}
+  .ba-head .brand b{font-size:26px}
+  .ba-head .brand small{display:none}
+  .ba-tabs{gap:6px;padding:12px 0;overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch;scrollbar-width:thin}
+  .ba-tabs a{flex:none;padding:0 14px;min-height:44px}
+  .ba-card{padding:16px}
+  .ba-page-title{font-size:30px}
+  dialog.badlg{width:calc(100vw - 24px);max-width:none}
+  dialog.badlg .actions{flex-wrap:wrap}
+  dialog.badlg .actions .btn{flex:1 1 140px}
+  .ba-rsv-list{grid-template-columns:1fr}
+}
+
+/* Responsive grids. Several screens set their columns inline, so these rules override them on narrow screens. */
+@media (max-width:860px){
+  main#main [style*="grid-template-columns"]:not(.ba-slot-grid):not(.ba-tiles):not(.ba-actions){grid-template-columns:1fr !important}
+  main#main .ba-tiles,main#main .ba-actions{grid-template-columns:repeat(2,1fr) !important}
+  main#main .ba-split{grid-template-columns:1fr}
+  main#main [style*="grid-template-columns"] > *,main#main .ba-split > *{min-width:0}
+  main#main .ba-slot-grid,main#main .ba-slot-grid.zone-b{grid-template-columns:repeat(4,1fr) !important}
+  main#main table{display:block;overflow-x:auto;max-width:100%}
+}
+@media (max-width:480px){
+  main#main .ba-tiles,main#main .ba-actions{grid-template-columns:1fr !important}
+  main#main .ba-slot-grid,main#main .ba-slot-grid.zone-b{grid-template-columns:repeat(3,1fr) !important}
+}

@@ -42,12 +42,17 @@ Route::prefix('driver')->name('driver.')->middleware(['area:driver', 'driver.act
 
     Route::get('notifications', [NoticeController::class, 'index'])->name('notices');
     Route::get('notifications/count', [NoticeController::class, 'count'])->name('notices.count')->withoutMiddleware('sweep');
+    Route::get('notifications/box', [NoticeController::class, 'box'])->name('notices.box')->withoutMiddleware('sweep');
     Route::post('notifications/read-all', [NoticeController::class, 'readAll'])->name('notices.read-all');
     Route::get('notifications/{notice}', [NoticeController::class, 'show'])->name('notices.show');
 
     Route::get('account', [AccountController::class, 'show'])->name('account');
     Route::get('account/profile', [AccountController::class, 'editProfile'])->name('account.profile');
     Route::put('account/profile', [AccountController::class, 'updateProfile'])->name('account.profile.update');
+    Route::get('account/confirm', [AccountController::class, 'confirmChange'])->name('account.confirm');
+    Route::post('account/confirm', [AccountController::class, 'checkChange'])->middleware('throttle:15,1')->name('account.confirm.check');
+    Route::post('account/confirm/resend', [AccountController::class, 'resendChange'])->middleware('throttle:5,1')->name('account.confirm.resend');
+    Route::post('account/confirm/cancel', [AccountController::class, 'cancelChange'])->name('account.confirm.cancel');
     Route::get('account/password', [AccountController::class, 'editPassword'])->name('account.password');
     Route::put('account/password', [AccountController::class, 'updatePassword'])->name('account.password.update');
 });

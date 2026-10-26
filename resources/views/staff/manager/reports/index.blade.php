@@ -1,8 +1,7 @@
 <section class="manager-page-heading"><p class="eyebrow">Manager reports</p><h1>Occupancy and activity</h1><p class="manager-page-lede">Occupancy, peak arrival hours, reservation results, and incidents derived from recorded activity.</p></section>
-<form class="manager-filter-panel" method="GET" action="{{ route('manager.reports.index') }}">
-  <div class="manager-filter-field"><label class="f" for="report-from">From</label><input id="report-from" name="from" type="date" value="{{ $from }}" required></div>
-  <div class="manager-filter-field"><label class="f" for="report-to">To</label><input id="report-to" name="to" type="date" value="{{ $to }}" required></div>
-  <button class="btn sm" type="submit">Run report</button>
+<form class="manager-filter-panel" method="GET" action="{{ route('manager.reports.index') }}" data-auto-filter>
+  <div class="manager-filter-field"><label class="f" for="report-from">From</label><input id="report-from" name="from" type="date" value="{{ $from }}" data-range-start required></div>
+  <div class="manager-filter-field"><label class="f" for="report-to">To</label><input id="report-to" name="to" type="date" value="{{ $to }}" data-range-end required></div>
   <a class="btn ghost sm" href="{{ route('manager.reports.export', ['from' => $from, 'to' => $to]) }}">Export CSV</a>
 </form>
 @if ($sessionCount === 0)

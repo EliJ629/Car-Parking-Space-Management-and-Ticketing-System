@@ -5,6 +5,7 @@ use App\Http\Controllers\Attendant\EntryController;
 use App\Http\Controllers\Attendant\ExitController;
 use App\Http\Controllers\Attendant\HomeController;
 use App\Http\Controllers\Attendant\RecordsController;
+use App\Http\Controllers\Attendant\ReservationController;
 use App\Http\Controllers\Attendant\ShiftController;
 use App\Http\Controllers\Attendant\SlotController;
 use Illuminate\Support\Facades\Route;
@@ -31,6 +32,12 @@ Route::prefix('staff/attendant')->name('attendant.')->middleware(['area:staff', 
     Route::get('entry/reserved', [EntryController::class, 'reserved'])->name('entry.reserved');
     Route::post('entry/reserved/lookup', [EntryController::class, 'lookupReservation'])->name('entry.reserved.lookup');
     Route::post('entry/reserved/check-in', [EntryController::class, 'checkInReservation'])->name('entry.reserved.check-in');
+
+    // Reservation approval (PWD ID check)
+    Route::get('reservations', [ReservationController::class, 'index'])->name('reservations.index');
+    Route::get('reservations/{reservation}/id-photo', [ReservationController::class, 'idPhoto'])->name('reservations.id-photo');
+    Route::post('reservations/{reservation}/approve', [ReservationController::class, 'approve'])->name('reservations.approve');
+    Route::post('reservations/{reservation}/reject', [ReservationController::class, 'reject'])->name('reservations.reject');
 
     // Exit and Payment
     Route::get('exit', [ExitController::class, 'index'])->name('exit.index');

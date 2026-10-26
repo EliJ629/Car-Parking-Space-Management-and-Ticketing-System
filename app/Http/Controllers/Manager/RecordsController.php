@@ -15,25 +15,34 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 class RecordsController extends ManagerController
 {
     /** Statuses a record can have, sessions and reservations together. */
-    public const STATUSES = ['active', 'paid', 'completed', 'booked', 'checked_in', 'expired', 'canceled'];
+    public const STATUSES = ['active', 'paid', 'completed', 'booked', 'checked_in', 'expired', 'canceled', 'rejected'];
 
     public function index(Request $request): View
     {
         $filters = $request->validate([
             'tab' => ['nullable', 'in:sessions,payments,reservations'],
-            'date' => ['nullable', 'date_format:Y-m-d', 'after:2000-01-01', 'before:2100-01-01'],
+            'from' => ['nullable', 'date_format:Y-m-d', 'after:2000-01-01', 'regex:/^20[0-9]{2}-[0-9]{2}-[0-9]{2}$/'],
+            'to' => ['nullable', 'date_format:Y-m-d', 'after:2000-01-01', 'regex:/^20[0-9]{2}-[0-9]{2}-[0-9]{2}$/', 'after_or_equal:from'],
+            'date' => ['nullable', 'date_format:Y-m-d', 'after:2000-01-01', 'regex:/^20[0-9]{2}-[0-9]{2}-[0-9]{2}$/'],
             'q' => ['nullable', 'string', 'max:100'],
             'status' => ['nullable', Rule::in(self::STATUSES)],
         ], [
+            'from.date_format' => 'Enter the start date as year-month-day.',
+            'from.after' => 'Choose a start date after the year 2000.',
+            'from.regex' => 'Choose a start date between the years 2000 and 2099.',
+            'to.date_format' => 'Enter the end date as year-month-day.',
+            'to.after' => 'Choose an end date after the year 2000.',
+            'to.regex' => 'Choose an end date between the years 2000 and 2099.',
+            'to.after_or_equal' => 'The end date cannot be earlier than the start date.',
             'date.date_format' => 'Enter the date as year-month-day.',
             'date.after' => 'Choose a date after the year 2000.',
-            'date.before' => 'Choose a date before the year 2100.',
+            'date.regex' => 'Choose a date between the years 2000 and 2099.',
             'status.in' => 'Choose a status from the list.',
             'q.max' => 'The search can have up to 100 characters.',
         ]);
         $tab = $filters['tab'] ?? 'sessions';
-        $date = $filters['date'] ?? Lot::now()->toDateString();
-        [$from, $to] = [Lot::parse($date), Lot::parse($date, '23:59:59')];
+        [$fromDate, $toDate] = $this->resolveDateRange($filters);
+        [$from, $to] = [Lot::parse($fromDate), Lot::parse($toDate, '23:59:59')];
         $search = trim($filters['q'] ?? '');
 
         $sessions = ParkingSession::query()->with(['slot', 'payment', 'attendant'])
@@ -64,9 +73,11 @@ class RecordsController extends ManagerController
 
         return $this->managerPage('Parking records', 'records', view('staff.manager.records.index', [
             'tab' => $tab,
-            'date' => $date,
+            'fromDate' => $fromDate,
+            'toDate' => $toDate,
             'search' => $search,
             'status' => $filters['status'] ?? '',
+            'filters' => $filters,
             'sessions' => $sessions,
             'payments' => $payments,
             'reservations' => $reservations,
@@ -86,11 +97,19 @@ class RecordsController extends ManagerController
     {
         $filters = $request->validate([
             'tab' => ['nullable', 'in:sessions,payments,reservations'],
-            'date' => ['nullable', 'date_format:Y-m-d', 'after:2000-01-01', 'before:2100-01-01'],
+            'from' => ['nullable', 'date_format:Y-m-d', 'after:2000-01-01', 'regex:/^20[0-9]{2}-[0-9]{2}-[0-9]{2}$/'],
+            'to' => ['nullable', 'date_format:Y-m-d', 'after:2000-01-01', 'regex:/^20[0-9]{2}-[0-9]{2}-[0-9]{2}$/', 'after_or_equal:from'],
+            'date' => ['nullable', 'date_format:Y-m-d', 'after:2000-01-01', 'regex:/^20[0-9]{2}-[0-9]{2}-[0-9]{2}$/'],
+        ], [
+            'from.date_format' => 'Enter the start date as year-month-day.',
+            'from.regex' => 'Choose a start date between the years 2000 and 2099.',
+            'to.date_format' => 'Enter the end date as year-month-day.',
+            'to.regex' => 'Choose an end date between the years 2000 and 2099.',
+            'to.after_or_equal' => 'The end date cannot be earlier than the start date.',
         ]);
         $tab = $filters['tab'] ?? 'sessions';
-        $date = $filters['date'] ?? Lot::now()->toDateString();
-        [$from, $to] = [Lot::parse($date), Lot::parse($date, '23:59:59')];
+        [$fromDate, $toDate] = $this->resolveDateRange($filters);
+        [$from, $to] = [Lot::parse($fromDate), Lot::parse($toDate, '23:59:59')];
 
         return response()->streamDownload(function () use ($tab, $from, $to): void {
             $output = fopen('php://output', 'w');
@@ -130,6 +149,25 @@ class RecordsController extends ManagerController
             }
 
             fclose($output);
-        }, "bayline-{$tab}-{$date}.csv", ['Content-Type' => 'text/csv; charset=UTF-8']);
+        }, "bayline-{$tab}-{$fromDate}-{$toDate}.csv", ['Content-Type' => 'text/csv; charset=UTF-8']);
+    }
+
+    /**
+     * A single date (the old query parameter) still opens that one day. Otherwise the
+     * selected range is used, defaulting to today when no date was chosen.
+     *
+     * @param  array<string, mixed>  $filters
+     * @return array{string, string}
+     */
+    private function resolveDateRange(array $filters): array
+    {
+        if (! isset($filters['from']) && ! isset($filters['to']) && isset($filters['date'])) {
+            return [$filters['date'], $filters['date']];
+        }
+
+        $from = $filters['from'] ?? $filters['to'] ?? Lot::now()->toDateString();
+        $to = $filters['to'] ?? $from;
+
+        return [$from, $to];
     }
 }

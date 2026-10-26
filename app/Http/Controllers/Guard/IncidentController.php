@@ -5,14 +5,17 @@ namespace App\Http\Controllers\Guard;
 use App\Http\Controllers\Controller;
 use App\Models\Incident;
 use App\Models\ParkingSession;
+use App\Models\ParkingSlot;
 use App\Models\Vehicle;
 use App\Services\GateService;
 use App\Services\IncidentService;
 use App\Support\Lot;
 use App\Support\Rules;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 /** Incident list, new incident, long-parked report, detail, notes and status. */
@@ -43,6 +46,8 @@ class IncidentController extends Controller
 
         return view('guard.incidents.create', [
             'categories' => Incident::CATEGORIES,
+            'requirements' => Incident::REQUIREMENTS,
+            'slotCodes' => ParkingSlot::query()->orderBy('code')->pluck('code'),
             'prefill' => [
                 'category' => in_array($category, Incident::CATEGORIES, true) ? $category : '',
                 'plate_number' => (string) $request->query('plate', ''),
@@ -71,6 +76,8 @@ class IncidentController extends Controller
             'photos.*' => ['file', 'mimes:jpg,jpeg,png', 'max:5120'],
         ], $this->messages());
 
+        $data = $this->checkVehicleAndPlace($data, $incidents);
+
         $incident = $incidents->createManual($request->user(), $data, $request->file('photos', []), $request);
 
         return redirect()->route('guard.incidents.show', $incident)->with('modal', [
@@ -79,6 +86,110 @@ class IncidentController extends Controller
             'note' => $incident->driver_notified ? 'The driver was notified.' : ($incident->driver_notice_reason ?: 'No driver was notified.'),
             'primary' => ['label' => 'View incident', 'close' => true],
             'secondary' => ['label' => 'Report another', 'url' => route('guard.incidents.create')],
+        ]);
+    }
+
+    /** Live check for the form: is this plate parked in the lot right now, and in which slot? */
+    public function checkPlate(Request $request, IncidentService $incidents): JsonResponse
+    {
+        $plate = Vehicle::normalizePlate((string) $request->query('plate', ''));
+
+        if ($plate === '') {
+            return response()->json(['state' => 'empty']);
+        }
+
+        if (! preg_match(Vehicle::PLATE_PATTERN, $plate)) {
+            return response()->json(['state' => 'invalid', 'message' => 'Enter a plate like ABC 1234.']);
+        }
+
+        $session = $incidents->openSession($plate);
+
+        if ($session) {
+            return response()->json([
+                'state' => 'parked', 'plate' => Lot::plate($plate), 'slot' => $session->slot?->code ?? $session->slot_code,
+                'message' => Lot::plate($plate).' is parked in '.($session->slot?->code ?? $session->slot_code).'.',
+            ]);
+        }
+
+        return response()->json(['state' => 'gone', 'message' => $this->plateProblem($plate)]);
+    }
+
+    /** Why a plate cannot be reported, or null when the vehicle is parked now. */
+    private function plateProblem(string $plate): ?string
+    {
+        if (app(IncidentService::class)->openSession($plate)) {
+            return null;
+        }
+
+        $ever = ParkingSession::query()->where('plate_number', $plate)->latest('entered_at')->first();
+
+        return $ever
+            ? Lot::plate($plate).' is no longer parked. It left the lot at '.Lot::stamp($ever->exited_at ?? $ever->entered_at).'. Only vehicles parked now can be reported.'
+            : 'No vehicle with plate '.Lot::plate($plate).' is parked in the lot. Check the plate on the vehicle.';
+    }
+
+    /**
+     * The rules that depend on the category: which of plate and slot are required, that a plate belongs to a vehicle
+     * parked now, and that the slot exists and is the one the vehicle is in.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private function checkVehicleAndPlace(array $data, IncidentService $incidents): array
+    {
+        $need = Incident::requirements($data['category']);
+        $plate = (string) ($data['plate_number'] ?? '');
+        $place = trim((string) ($data['location'] ?? ''));
+
+        // "b3", "b 03" and "B-03" are the same slot.
+        if (preg_match('/^([A-Za-z])\s*-?\s*0*(\d{1,2})$/', $place, $m)) {
+            $place = sprintf('%s-%02d', strtoupper($m[1]), (int) $m[2]);
+        }
+
+        $errors = [];
+        $session = null;
+
+        if ($plate === '' && ! empty($data['session_id'])) {
+            $session = ParkingSession::query()->with('slot')->whereIn('status', ParkingSession::OPEN_STATUSES)->find($data['session_id']);
+            $plate = $session?->plate_number ?? '';
+        }
+
+        if ($plate === '') {
+            if ($need['plate'] === 'required') {
+                $errors['plate_number'] = 'Enter the plate number of the vehicle. This kind of report needs it.';
+            }
+        } elseif (! $session) {
+            $session = $incidents->openSession($plate);
+
+            if (! $session) {
+                $errors['plate_number'] = $this->plateProblem($plate);
+            }
+        }
+
+        $parkedSlot = $session ? (string) ($session->slot?->code ?? $session->slot_code) : '';
+
+        if ($need['place'] === 'auto') {
+            $place = $parkedSlot;
+        } elseif ($need['place'] === 'slot') {
+            if ($place === '') {
+                $errors['location'] = 'Enter the slot, for example B-03. This kind of report needs it.';
+            } elseif (! ParkingSlot::query()->where('code', $place)->exists()) {
+                $errors['location'] = "There is no slot {$place}. Use a slot code like B-03.";
+            } elseif ($parkedSlot !== '' && $parkedSlot !== $place && ! isset($errors['plate_number'])) {
+                $errors['location'] = Lot::plate($plate)." is parked in {$parkedSlot}, not {$place}.";
+            }
+        } elseif ($need['place'] === 'location' && $place === '') {
+            $errors['location'] = 'Say where it is, for example Zone A lane or a slot like B-03.';
+        }
+
+        if ($errors !== []) {
+            throw ValidationException::withMessages($errors);
+        }
+
+        return array_merge($data, [
+            'plate_number' => $plate !== '' ? $plate : null,
+            'location' => $place !== '' ? $place : null,
+            'session_id' => $session?->id,
         ]);
     }
 
@@ -103,7 +214,7 @@ class IncidentController extends Controller
             ] : [
                 'title' => 'Plate not found',
                 'body' => 'There is no parking session for '.Lot::plate($plate).'. Check the plate on the vehicle and try again.',
-                'note' => 'For a vehicle that never got a ticket, use New incident and choose Unauthorized parking.',
+                'note' => 'A vehicle that never got a ticket cannot be reported by plate. Use New incident, choose Suspicious vehicle, and say where it is.',
                 'primary' => ['label' => 'Enter another plate', 'close' => true],
                 'secondary' => ['label' => 'New incident', 'url' => route('guard.incidents.create')],
             ]]);
@@ -242,7 +353,7 @@ class IncidentController extends Controller
             'description.required' => 'Describe what you saw.',
             'description.min' => 'Write at least 10 characters.',
             'description.max' => 'The description can have up to 500 characters.',
-            'plate_number.regex' => 'Enter a plate like ABC 1234, or leave it empty.',
+            'plate_number.regex' => 'Enter a plate like ABC 1234.',
             'location.max' => 'The location can have up to 120 characters.',
             'session_id.exists' => 'There is no parking session with that number.',
             'photos.max' => 'You can add up to 3 photos.',

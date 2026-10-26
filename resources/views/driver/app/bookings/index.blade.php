@@ -14,11 +14,11 @@
   @if ($tab === 'upcoming')
     @include('driver.app.partials.empty', [
       'title' => $neverBooked ? 'No reservations yet' : 'Nothing coming up',
-      'text' => 'Reserving a slot is free. Pick a day, a time and a slot, and show the QR code to the booth attendant when you arrive.',
+      'text' => 'Reserving a slot is free. Pick a day, a time and a slot, and the booth attendant approves it, then show the QR code when you arrive.',
       'cta' => ['Reserve a slot', route('driver.reserve')],
     ])
   @else
-    @include('driver.app.partials.empty', ['title' => 'No past reservations', 'text' => 'Completed, expired and canceled reservations appear here.'])
+    @include('driver.app.partials.empty', ['title' => 'No past reservations', 'text' => 'Completed, expired, canceled and not approved reservations appear here.'])
   @endif
 @else
   <ul class="dlist">

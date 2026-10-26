@@ -10,17 +10,23 @@
     $me = auth()->user();
     $alertItems = app(\App\Services\AttendantAlerts::class)->items();
     $alertCount = $alertItems->where('unread', true)->count();
+    $pendingApprovals = app(\App\Services\AttendantAlerts::class)->pendingApprovals();
     $tab = trim($__env->yieldContent('tab'));
     $tabs = [
         'home' => ['Home', route('attendant.home')],
         'entry' => ['New entry', route('attendant.entry.index')],
+        'reservations' => ['Reservations', route('attendant.reservations.index')],
         'exit' => ['Exit and payment', route('attendant.exit.index')],
         'slots' => ['Parking slots', route('attendant.slots.index')],
         'records' => ['Parking records', route('attendant.records.index')],
         'shift' => ['Shift summary', route('attendant.shift.index')],
     ];
     $idleMinutes = (int) \App\Models\SystemSetting::value('idle_timeout_minutes', 15);
-    $flashToast = session('toast');
+    $flashModal = session('modal');
+    // A short message is shown as a pop-up the attendant closes, not as a toast that disappears by itself.
+    if (! $flashModal && ($flashToast = session('toast'))) {
+        $flashModal = ['title' => $flashToast[0], 'body' => $flashToast[1] ?? '', 'primary' => ['label' => 'OK', 'close' => true]];
+    }
     $errorModal = session('error_modal');
 @endphp
 
@@ -58,7 +64,7 @@
   <div class="ba-w">
     <nav class="ba-tabs" aria-label="Booth attendant console">
       @foreach ($tabs as $key => [$label, $url])
-        <a href="{{ $url }}" @if ($tab === $key) aria-current="page" @endif>{{ $label }}</a>
+        <a href="{{ $url }}" @if ($tab === $key) aria-current="page" @endif>{{ $label }}@if ($key === 'reservations' && $pendingApprovals > 0) <span class="ba-badge" title="Waiting for approval">{{ $pendingApprovals }}</span>@endif</a>
       @endforeach
     </nav>
 
@@ -68,15 +74,9 @@
   </div>
 </div>
 
-<!-- Real-time Toasts (BA-56, BA-66) -->
-<div class="ba-toasts" id="ba-toasts" aria-live="polite">
-  @if ($flashToast)
-    <div class="ba-toast" role="status">
-      <b>{{ $flashToast[0] }}</b>
-      <span>{{ $flashToast[1] ?? '' }}</span>
-    </div>
-  @endif
-</div>
+@if ($flashModal)
+  @include('partials.ba-modal', ['modal' => $flashModal, 'id' => 'flash-modal', 'auto' => true])
+@endif
 
 <!-- Alerts Panel Modal (BA-65) -->
 <dialog class="badlg wide" id="alerts-dlg" aria-labelledby="alerts-t">

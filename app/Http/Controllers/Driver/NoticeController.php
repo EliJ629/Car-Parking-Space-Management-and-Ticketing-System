@@ -46,9 +46,21 @@ class NoticeController extends Controller
         return view('driver.app.notices.show', ['notice' => $notice, 'subject' => $subject]);
     }
 
-    public function readAll(Request $request): RedirectResponse
+    /** The notifications box: the latest notices as a small piece of page that opens over whatever the driver is on. */
+    public function box(Request $request): View
+    {
+        $notices = Notice::query()->forDriver($request->user())->latest('id')->limit(15)->get();
+
+        return view('driver.app.notices.box', ['notices' => $notices, 'unread' => $notices->whereNull('read_at')->count()]);
+    }
+
+    public function readAll(Request $request): RedirectResponse|JsonResponse
     {
         Notice::query()->forDriver($request->user())->unread()->update(['read_at' => now()]);
+
+        if ($request->expectsJson()) {
+            return response()->json(['count' => 0]);
+        }
 
         return redirect()->route('driver.notices');
     }

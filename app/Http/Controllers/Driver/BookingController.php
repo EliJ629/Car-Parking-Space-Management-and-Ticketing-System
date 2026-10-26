@@ -15,7 +15,7 @@ class BookingController extends Controller
     public function index(Request $request): View
     {
         $tab = $request->query('tab') === 'past' ? 'past' : 'upcoming';
-        $query = ParkingReservation::query()->where('driver_id', $request->user()->id)->with(['slot', 'vehicle']);
+        $query = ParkingReservation::query()->where('driver_id', $request->user()->id)->with(['slot', 'vehicle', 'session']);
 
         $items = $tab === 'upcoming'
             ? $query->whereIn('status', [ParkingReservation::STATUS_BOOKED, ParkingReservation::STATUS_CHECKED_IN])->orderBy('scheduled_at')->get()

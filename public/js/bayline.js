@@ -2,8 +2,15 @@
 var root=document.documentElement,tb=document.getElementById('theme'),KEY='bayline-theme';
 function eff(){var t=root.getAttribute('data-theme');if(t)return t;return matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}
 function lab(){if(!tb)return;var t=eff()==='dark'?'Switch to light mode':'Switch to dark mode';tb.setAttribute('title',t);if(!tb.textContent.trim())tb.setAttribute('aria-label',t)}
-try{var saved=localStorage.getItem(KEY);if(saved==='dark'||saved==='light')root.setAttribute('data-theme',saved)}catch(e){}
-if(tb){tb.addEventListener('click',function(){var n=eff()==='dark'?'light':'dark';root.setAttribute('data-theme',n);try{localStorage.setItem(KEY,n)}catch(e){}lab()});lab()}
+/* The chosen theme is kept in localStorage and in a cookie. The cookie is shared by every port of the same address, and it is the
+   fallback when the browser clears or blocks localStorage. Other open tabs follow the change. */
+function readSaved(){var t=null;try{t=localStorage.getItem(KEY)}catch(e){}if(t!=='dark'&&t!=='light'){var m=document.cookie.match(/(?:^|; )bayline-theme=(dark|light)/);t=m?m[1]:null}return t==='dark'||t==='light'?t:null}
+function save(t){try{localStorage.setItem(KEY,t)}catch(e){}try{document.cookie=KEY+'='+t+'; path=/; max-age=31536000; SameSite=Lax'}catch(e){}}
+function apply(t){if(t)root.setAttribute('data-theme',t);lab()}
+var saved=readSaved();if(saved)save(saved);apply(saved);
+if(tb){tb.addEventListener('click',function(){var n=eff()==='dark'?'light':'dark';save(n);apply(n)})}
+window.addEventListener('storage',function(e){if(e.key===KEY&&(e.newValue==='dark'||e.newValue==='light'))apply(e.newValue)});
+window.addEventListener('pageshow',function(e){if(e.persisted)apply(readSaved())});
 document.querySelectorAll('[data-open-dialog]').forEach(function(button){
   button.addEventListener('click',function(){
     var dialog=document.getElementById(button.getAttribute('data-open-dialog'));
@@ -13,7 +20,7 @@ document.querySelectorAll('[data-open-dialog]').forEach(function(button){
 document.querySelectorAll('.manager-dialog[data-open-on-load]').forEach(function(dialog){
   if(typeof dialog.showModal==='function'&&!dialog.open)dialog.showModal();
 });
-document.querySelectorAll('.manager-dialog').forEach(function(dialog){
+document.querySelectorAll('.manager-dialog,.vdlg').forEach(function(dialog){
   dialog.addEventListener('click',function(event){
     if(event.target===dialog)dialog.close();
   });
@@ -48,6 +55,159 @@ document.querySelectorAll('form[data-busy]').forEach(function(form){
     var b=form.querySelector('button[type=submit]');
     if(b){setTimeout(function(){b.disabled=true;b.textContent=b.getAttribute('data-busy-label')||'Please wait'},0)}
   });
+});
+
+/* Password rules tick off while typing: <input data-pwcheck="#rules" data-pwconfirm="#confirm" data-pwmatch="#match"> */
+document.querySelectorAll('input[data-pwcheck]').forEach(function(input){
+  var list=document.querySelector(input.getAttribute('data-pwcheck'));
+  var confirm=input.getAttribute('data-pwconfirm')?document.querySelector(input.getAttribute('data-pwconfirm')):null;
+  var match=input.getAttribute('data-pwmatch')?document.querySelector(input.getAttribute('data-pwmatch')):null;
+  if(!list)return;
+  var tests={len:function(v){return v.length>=10},num:function(v){return /[0-9]/.test(v)},upper:function(v){return /[A-Z]/.test(v)},special:function(v){return /[^A-Za-z0-9\s]/.test(v)}};
+  function run(){
+    var v=input.value;
+    list.querySelectorAll('[data-rule]').forEach(function(li){
+      var ok=tests[li.getAttribute('data-rule')](v);
+      li.classList.toggle('ok',ok);
+      var s=li.querySelector('.sr');if(s)s.textContent=ok?' (done)':' (not yet)';
+    });
+    if(confirm&&match){
+      if(!confirm.value){match.textContent='';match.className='hint'}
+      else if(confirm.value===v){match.textContent='Passwords match.';match.className='hint okline'}
+      else{match.textContent='Passwords do not match yet.';match.className='hint badline'}
+    }
+  }
+  input.addEventListener('input',run);if(confirm)confirm.addEventListener('input',run);run();
+});
+/* Phone fields take digits and a leading + only. Letters, spaces and dashes are removed as they are typed or pasted. */
+document.querySelectorAll('input[type=tel]').forEach(function(input){
+  input.maxLength=13;
+  function clean(){
+    var v=input.value.replace(/[^0-9+]/g,'');
+    v=(v.charAt(0)==='+'?'+':'')+v.replace(/\+/g,'');
+    v=v.slice(0,13);
+    if(v!==input.value)input.value=v;
+  }
+  input.addEventListener('input',clean);input.addEventListener('change',clean);clean();
+});
+/* Gmail address check while typing: <input data-live-gmail data-live-target="#email-note"> */
+document.querySelectorAll('input[data-live-gmail]').forEach(function(input){
+  var note=document.querySelector(input.getAttribute('data-live-target'));
+  var re=/^(?=[^@]{6,30}@)[a-z0-9]+(?:\.[a-z0-9]+)*@gmail\.com$/;
+  var url=input.getAttribute('data-check-url'),timer=null,seq=0;
+  function plain(){note.textContent='We send a confirmation link to this Gmail address.';note.className='hint'}
+  function run(){
+    var v=input.value.trim().toLowerCase();
+    if(!note)return;
+    clearTimeout(timer);seq++;
+    if(!v){plain();return}
+    if(!re.test(v)){note.textContent='Use a Gmail address, for example maria.santos@gmail.com.';note.className='hint badline';return}
+    plain();
+    if(!url||typeof fetch!=='function')return;
+    var mine=seq;
+    timer=setTimeout(function(){
+      fetch(url+'?email='+encodeURIComponent(v),{headers:{'Accept':'application/json'},credentials:'same-origin'})
+        .then(function(r){return r.ok?r.json():null})
+        .then(function(d){
+          if(mine!==seq||!d)return;
+          if(d.taken){note.textContent='This Gmail account is already registered. Sign in instead.';note.className='hint badline'}
+        }).catch(function(){});
+    },400);
+  }
+  input.addEventListener('input',run);run();
+});
+/* Filter panels update themselves: <form data-auto-filter>.
+   Selects and dates submit straight away; typed searches wait briefly so each key does not send a request.
+   Paired date inputs marked data-range-start / data-range-end validate the range before submitting. */
+document.querySelectorAll('form[data-auto-filter]').forEach(function(form){
+  var timer=null;
+  var starts=[].slice.call(form.querySelectorAll('[data-range-start]'));
+  var ends=[].slice.call(form.querySelectorAll('[data-range-end]'));
+
+  function checkRange(show){
+    var ok=true;
+    starts.forEach(function(start,index){
+      var end=ends[index];
+      if(!end)return;
+      if(start.value){end.min=start.value}else{end.removeAttribute('min')}
+      var message='';
+      if(start.value&&end.value&&end.value<start.value)message='The end date cannot be before the start date.';
+      end.setCustomValidity(message);
+      if(message){ok=false;if(show)end.reportValidity()}
+    });
+    return ok;
+  }
+
+  function submit(){
+    if(timer){clearTimeout(timer);timer=null}
+    if(!checkRange(true))return;
+    var page=form.querySelector('input[name=page]');if(page)page.value='1';
+    if(typeof form.requestSubmit==='function')form.requestSubmit();else form.submit();
+  }
+
+  starts.concat(ends).forEach(function(input){
+    input.addEventListener('change',function(){checkRange(false);submit()});
+  });
+
+  form.addEventListener('change',function(event){
+    var field=event.target;
+    if(!field.matches('select,input[type=date],input[type=checkbox],input[type=radio]'))return;
+    if(field.hasAttribute('data-range-start')||field.hasAttribute('data-range-end'))return;
+    submit();
+  });
+
+  form.addEventListener('input',function(event){
+    var field=event.target;
+    if(field.tagName!=='INPUT'||field.type==='hidden')return;
+    if(field.matches('[type=date],[type=checkbox],[type=radio]'))return;
+    if(timer)clearTimeout(timer);
+    timer=setTimeout(submit,450);
+  });
+
+  form.addEventListener('keydown',function(event){
+    if(event.key!=='Enter'||event.target.tagName!=='INPUT')return;
+    if(event.target.type==='hidden')return;
+    event.preventDefault();submit();
+  });
+
+  form.addEventListener('submit',function(event){
+    if(!checkRange(true))event.preventDefault();
+  });
+
+  checkRange(false);
+});
+/* A form that only needs a start/end check: <form data-range-check data-range-strict>.
+   Strict means the end must be later than the start, not merely the same day. */
+document.querySelectorAll('form[data-range-check]').forEach(function(form){
+  var starts=[].slice.call(form.querySelectorAll('[data-range-start]'));
+  var ends=[].slice.call(form.querySelectorAll('[data-range-end]'));
+  var strict=form.hasAttribute('data-range-strict');
+
+  function check(show){
+    var ok=true;
+    starts.forEach(function(start,index){
+      var end=ends[index];
+      if(!end)return;
+      if(!end.hasAttribute('data-base-min'))end.setAttribute('data-base-min',end.getAttribute('min')||'');
+      var base=end.getAttribute('data-base-min');
+      if(start.value){end.min=start.value}else if(base){end.min=base}else{end.removeAttribute('min')}
+      var message='';
+      if(start.value&&end.value){
+        if(end.value<start.value)message='The end time cannot be before the start time.';
+        else if(strict&&end.value===start.value)message='The end time must be later than the start time.';
+      }
+      end.setCustomValidity(message);
+      if(message){ok=false;if(show)end.reportValidity()}
+    });
+    return ok;
+  }
+
+  starts.concat(ends).forEach(function(input){
+    input.addEventListener('input',function(){check(false)});
+    input.addEventListener('change',function(){check(false)});
+  });
+  form.addEventListener('submit',function(event){if(!check(true))event.preventDefault()});
+  check(false);
 });
 })();
 window.LOT=[['A-01','av'],['A-02','occ'],['A-03','av'],['A-04','res'],['A-05','occ'],['A-06','av'],['A-07','pend'],['A-08','av'],['B-01','occ'],['B-02','av'],['B-03','res'],['B-04','out']];

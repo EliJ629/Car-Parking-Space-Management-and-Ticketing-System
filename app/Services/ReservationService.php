@@ -10,6 +10,8 @@ use App\Models\User;
 use App\Models\Vehicle;
 use App\Support\Lot;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -21,6 +23,11 @@ use Illuminate\Support\Facades\DB;
 class ReservationService
 {
     private const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
+    /** Where the ID photos for PWD slots are kept. A private disk, never a public URL. */
+    public const ID_DISK = 'local';
+
+    public const ID_DIR = 'reservation-ids';
 
     public function __construct(private NoticeService $notices) {}
 
@@ -109,9 +116,15 @@ class ReservationService
     }
 
     /** Create the reservation or throw a ReservationException that says why not. */
-    public function create(User $driver, Vehicle $vehicle, ParkingSlot $slot, Carbon $at, ?Request $request = null): ParkingReservation
+    public function create(User $driver, Vehicle $vehicle, ParkingSlot $slot, Carbon $at, ?Request $request = null, ?UploadedFile $idPhoto = null): ParkingReservation
     {
         $now = now();
+        $needsId = $slot->type === ParkingSlot::TYPE_PWD;
+
+        if ($needsId && ! $idPhoto) {
+            throw new ReservationException('id_required', 'A PWD slot needs a photo of your PWD ID. Upload it to continue.');
+        }
+
         $localAt = Lot::local($at);
         $latestDay = Lot::now()->addDays(Lot::advanceDays())->endOfDay();
 
@@ -127,7 +140,7 @@ class ReservationService
             throw new ReservationException('no_vehicle', 'Choose one of your saved vehicles.');
         }
 
-        $reservation = DB::transaction(function () use ($driver, $vehicle, $slot, $at) {
+        $reservation = DB::transaction(function () use ($driver, $vehicle, $slot, $at, $needsId) {
             // Lock the driver row so two quick taps cannot both pass the one-reservation check.
             User::query()->lockForUpdate()->find($driver->id);
 
@@ -170,6 +183,11 @@ class ReservationService
                 'plate_number' => $vehicle->plate_number,
                 'scheduled_at' => $at,
                 'status' => ParkingReservation::STATUS_BOOKED,
+                // Only a PWD slot waits for the booth attendant, who checks the ID photo. Any other slot is
+                // confirmed at once, so there is nothing for the attendant to approve.
+                'approval_status' => $needsId ? ParkingReservation::APPROVAL_PENDING : ParkingReservation::APPROVAL_APPROVED,
+                'approved_at' => $needsId ? null : now(),
+                'requires_id' => $needsId,
             ]);
 
             $this->holdSlotIfToday($reservation, $fresh);
@@ -177,13 +195,101 @@ class ReservationService
             return $reservation;
         });
 
+        if ($needsId && $idPhoto) {
+            $path = $idPhoto->storeAs(self::ID_DIR, $reservation->code.'-'.bin2hex(random_bytes(6)).'.'.$this->photoExtension($idPhoto), self::ID_DISK);
+            $reservation->update(['id_photo_path' => $path]);
+        }
+
         $reservation->load(['slot', 'driver']);
-        $this->notices->reservationConfirmed($reservation);
+        if ($needsId) {
+            $this->notices->reservationSubmitted($reservation);
+            $this->notices->staffReservationPending($reservation);
+        } else {
+            $this->notices->reservationConfirmed($reservation);
+        }
         ActivityLog::record('reservation_created', $driver, $request, $reservation->code, 'driver', [
             'slot' => $reservation->slot_code, 'plate' => $reservation->plate_number, 'scheduled_at' => $reservation->scheduled_at->toIso8601String(),
+            'needs_id' => $needsId,
         ]);
 
         return $reservation;
+    }
+
+    /** The booth attendant accepts the request. The driver gets the QR code. Returns false when it was not waiting. */
+    public function approve(ParkingReservation $reservation, User $attendant, ?Request $request = null): bool
+    {
+        $done = DB::transaction(function () use ($reservation, $attendant) {
+            $fresh = ParkingReservation::query()->lockForUpdate()->find($reservation->id);
+
+            // Only a PWD reservation is ever approved by hand. Others are confirmed when they are made.
+            if (! $fresh || ! $fresh->requires_id || ! $fresh->isAwaitingApproval()) {
+                return false;
+            }
+
+            $fresh->update([
+                'approval_status' => ParkingReservation::APPROVAL_APPROVED,
+                'approved_by' => $attendant->id,
+                'approved_at' => now(),
+            ]);
+
+            return true;
+        });
+
+        if ($done) {
+            $reservation->refresh()->load(['slot', 'driver']);
+            $this->notices->reservationConfirmed($reservation);
+            ActivityLog::record('reservation_approved', $attendant, $request, $reservation->code, 'attendant', ['slot' => $reservation->slot_code]);
+        }
+
+        return $done;
+    }
+
+    /** The booth attendant turns the request down. The slot is released and the driver is told to pick another. */
+    public function reject(ParkingReservation $reservation, User $attendant, string $reason, ?Request $request = null): bool
+    {
+        $done = DB::transaction(function () use ($reservation, $attendant, $reason) {
+            $fresh = ParkingReservation::query()->lockForUpdate()->find($reservation->id);
+
+            if (! $fresh || ! $fresh->isAwaitingApproval()) {
+                return false;
+            }
+
+            $fresh->update([
+                'status' => ParkingReservation::STATUS_REJECTED,
+                'approval_status' => ParkingReservation::APPROVAL_REJECTED,
+                'approved_by' => $attendant->id,
+                'rejected_at' => now(),
+                'rejection_reason' => $reason,
+            ]);
+            $this->releaseSlot($fresh);
+
+            return true;
+        });
+
+        if ($done) {
+            $reservation->refresh()->load(['slot', 'driver']);
+            $this->discardIdPhoto($reservation);
+            $this->notices->reservationRejected($reservation);
+            ActivityLog::record('reservation_rejected', $attendant, $request, $reservation->code, 'attendant', ['slot' => $reservation->slot_code, 'reason' => $reason]);
+        }
+
+        return $done;
+    }
+
+    /** The ID photo is only needed to decide. Once the request is turned down it is deleted. */
+    private function discardIdPhoto(ParkingReservation $reservation): void
+    {
+        if ($reservation->id_photo_path) {
+            Storage::disk(self::ID_DISK)->delete($reservation->id_photo_path);
+            $reservation->update(['id_photo_path' => null]);
+        }
+    }
+
+    private function photoExtension(UploadedFile $file): string
+    {
+        $ext = strtolower((string) ($file->guessExtension() ?: $file->getClientOriginalExtension()));
+
+        return in_array($ext, ['jpg', 'jpeg', 'png', 'webp'], true) ? $ext : 'jpg';
     }
 
     /** Cancel a booking that is still Reserved. Returns false, changing nothing, when it is not. */
@@ -204,6 +310,7 @@ class ReservationService
 
         if ($done) {
             $reservation->refresh()->load(['slot', 'driver']);
+            $this->discardIdPhoto($reservation);
             $this->notices->reservationCanceled($reservation);
             ActivityLog::record('reservation_canceled', $actor, $request, $reservation->code, 'driver', ['slot' => $reservation->slot_code]);
         }
@@ -239,6 +346,7 @@ class ReservationService
 
             if ($expired) {
                 $expired->load(['slot', 'driver']);
+                $this->discardIdPhoto($expired);
                 $this->notices->reservationExpired($expired);
                 $this->notices->staffReservationExpired($expired);
                 ActivityLog::record('reservation_expired', null, null, $expired->code, 'system', [

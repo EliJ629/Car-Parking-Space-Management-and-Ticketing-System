@@ -14,7 +14,8 @@
   <div class="g-banner stop" role="alert" style="margin-top:14px"><b>Check the form</b>{{ $errors->count() === 1 ? 'One thing needs fixing.' : $errors->count().' things need fixing.' }}</div>
 @endif
 
-<form class="g-form" method="POST" action="{{ route('guard.incidents.store') }}" enctype="multipart/form-data" data-busy data-busy-label="Submitting" novalidate style="margin-top:16px">
+<form class="g-form" method="POST" action="{{ route('guard.incidents.store') }}" enctype="multipart/form-data" data-busy data-busy-label="Submitting" novalidate style="margin-top:16px"
+      data-incident-form data-check="{{ route('guard.incidents.check-plate') }}" data-rules='@json($requirements)'>
   @csrf
   <input type="hidden" name="session_id" value="{{ old('session_id', $prefill['session_id']) }}">
   <div class="g-two">
@@ -34,13 +35,16 @@
     <section class="g-card">
       <p class="g-lab" style="margin-bottom:10px">Vehicle and place</p>
       <div class="fld">
-        <label class="f" for="plate_number">Plate (optional)</label>
-        <input id="plate_number" name="plate_number" type="text" value="{{ $val('plate_number') }}" placeholder="For example ABC 1234" autocapitalize="characters" autocomplete="off" spellcheck="false" @error('plate_number') aria-invalid="true" @enderror>
+        <label class="f" for="plate_number">Plate <span data-need-plate>(choose a category first)</span></label>
+        <input id="plate_number" name="plate_number" type="text" value="{{ $val('plate_number') }}" placeholder="For example ABC 1234" autocapitalize="characters" autocomplete="off" spellcheck="false" aria-describedby="plate-live" @error('plate_number') aria-invalid="true" @enderror>
+        <p class="hint" id="plate-live" aria-live="polite">Only a vehicle that is parked in the lot now can be reported.</p>
         @error('plate_number')<p class="g-err">{{ $message }}</p>@enderror
       </div>
       <div class="fld">
-        <label class="f" for="location">Slot or location</label>
-        <input id="location" name="location" type="text" value="{{ $val('location') }}" placeholder="For example B-03 or Zone A lane" maxlength="120">
+        <label class="f" for="location">Slot <span data-need-place>(choose a category first)</span></label>
+        <input id="location" name="location" type="text" value="{{ $val('location') }}" placeholder="For example B-03" maxlength="120" list="slot-codes" autocapitalize="characters" autocomplete="off" @error('location') aria-invalid="true" @enderror>
+        <datalist id="slot-codes">@foreach ($slotCodes as $code)<option value="{{ $code }}">@endforeach</datalist>
+        @error('location')<p class="g-err">{{ $message }}</p>@else<p class="hint" id="place-hint"></p>@enderror
       </div>
       <p class="g-lab" style="margin-top:4px">Photos (optional, up to 3)</p>
       <div class="g-photos">
