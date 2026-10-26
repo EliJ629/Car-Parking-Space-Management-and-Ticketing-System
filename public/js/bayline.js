@@ -222,7 +222,7 @@ document.querySelectorAll('[data-layout-canvas]').forEach(function(canvas){
   function moveToModal(){
     if(!modalContent||!editor)return;
     editorWidth=editor.style.width;
-    editor.style.width=editor.getBoundingClientRect().width+'px';
+    editor.style.width='';
     modalContent.appendChild(actions);modalContent.appendChild(editor);
     if(form)modalContent.appendChild(form);
     panel=modalContent;

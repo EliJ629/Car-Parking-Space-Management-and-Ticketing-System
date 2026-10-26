@@ -164,9 +164,13 @@
 .manager-inline-delete{display:inline-block;margin-left:8px}
 .manager-inline-delete button{padding:0;border:0;border-bottom:2px solid var(--stop);background:none;color:var(--ink);font:600 11px var(--f-b);cursor:pointer}
 .manager-dialog{position:fixed;z-index:1000;width:min(520px,calc(100vw - 24px));max-height:calc(100vh - 24px);padding:0;border:0;border-radius:9px;background:var(--surface);color:var(--ink);box-shadow:0 20px 60px rgba(0,0,0,.4)}
-.manager-layout-dialog{width:min(1200px,calc(100vw - 24px));max-width:none}
+.manager-layout-dialog{width:min(1400px,calc(100vw - 32px));max-width:none}
 .manager-layout-dialog .manager-dialog-inner{max-height:calc(100vh - 24px)}
-.manager-layout-dialog .manager-layout{width:100%}
+.manager-layout-dialog [data-layout-modal-content]{display:grid;grid-template-columns:minmax(0,1fr) 150px;gap:14px;align-items:start}
+.manager-layout-dialog [data-layout-actions]{grid-column:2;grid-row:1;display:grid;align-content:start;gap:8px;position:sticky;top:0}
+.manager-layout-dialog [data-layout-actions] .btn,.manager-layout-dialog [data-layout-actions] .manager-text-link{width:100%;text-align:center}
+.manager-layout-dialog .manager-layout{grid-column:1;grid-row:1;width:100%;min-width:0}
+.manager-layout-dialog .manager-layout-form{grid-column:1 / -1;grid-row:2}
 .manager-dialog::backdrop{background:rgba(10,14,18,.62)}
 .manager-dialog-inner{padding:22px;border-top:5px solid var(--paint);border-radius:9px;overflow:auto}
 .manager-dialog-inner h2{margin:4px 48px 8px 0;font-family:var(--f-d);font-size:30px}
@@ -202,5 +206,6 @@
 .manager-incident-stats{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
 .manager-filter-field input[type=date],.manager-field input[type=date],.manager-field input[type=datetime-local]{padding:0 9px}
 @media(max-width:900px){.manager-stat-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.manager-dashboard-grid{grid-template-columns:1fr}.manager-side-stack{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:900px){.manager-layout-dialog [data-layout-modal-content]{grid-template-columns:1fr}.manager-layout-dialog [data-layout-actions]{grid-column:1;grid-row:2;display:flex;justify-content:flex-end;position:static}.manager-layout-dialog [data-layout-actions] .btn,.manager-layout-dialog [data-layout-actions] .manager-text-link{width:auto}.manager-layout-dialog .manager-layout-form{grid-row:3}}
 @media(max-width:640px){.manager-clock{display:none}.manager-header-inner{gap:8px}.manager-user span{display:none}.manager-nav{gap:5px}.manager-nav a,.manager-nav-planned{min-height:32px;padding:0 9px;font-size:10px}.manager-main{padding-bottom:30px}.manager-stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.manager-side-stack{grid-template-columns:1fr}.manager-filter-panel{align-items:stretch}.manager-filter-field,.manager-search-field{width:100%}.manager-filter-panel>.btn{width:100%}.manager-form-panel{padding:15px}.manager-form-grid{grid-template-columns:1fr}.manager-field-wide{grid-column:auto}.manager-current-status{align-items:flex-start;flex-direction:column}.manager-row-actions{gap:8px}.manager-table{min-width:760px}.manager-detail-item{grid-template-columns:1fr;gap:3px}.manager-detail-children .manager-detail-item{grid-template-columns:1fr}}
 @media(prefers-reduced-motion:reduce){.manager-stat{transition:none}}
