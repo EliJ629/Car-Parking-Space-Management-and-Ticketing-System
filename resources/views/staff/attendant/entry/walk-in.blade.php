@@ -17,7 +17,7 @@
 </div>
 
 @if ($errors->any())
-  <div style="background:#FEF2F2;border-left:5px solid #EF4444;border-radius:0 8px 8px 0;padding:14px 18px;margin-bottom:20px;color:#991B1B;">
+  <div style="background:var(--stop-bg);border-left:5px solid var(--stop);border-radius:0 8px 8px 0;padding:14px 18px;margin-bottom:20px;color:var(--stop);">
     <b style="font-size:15px;display:block;margin-bottom:4px;">Cannot create ticket &mdash; please check the details:</b>
     <ul style="margin:0;padding-left:18px;font-size:13px;">
       @foreach ($errors->all() as $err)
@@ -43,10 +43,17 @@
         
         <div class="ba-form-group">
           <label class="ba-label" for="plate-input">Plate number</label>
-          <input class="ba-input" id="plate-input" name="plate" type="text"
-                 placeholder="e.g. ABC 1234, AB 12345, or 1" style="font-size:24px;font-weight:800;letter-spacing:1px;text-transform:uppercase;"
-                 autocomplete="off" autofocus oninput="this.value = this.value.toUpperCase().replace(/[^A-Z0-9\s-]/g, '')">
-          <p style="font-size:12px;color:var(--muted);margin-top:4px;">Philippine standard (ABC 1234, AB 12345), legacy, vintage, or protocol plates (e.g. 1 for President).</p>
+          <div style="position:relative;">
+            <input class="ba-input" id="plate-input" name="plate" type="text"
+                   maxlength="20"
+                   value="{{ request('plate', '') }}"
+                   placeholder="e.g. ABC 1234, AB 12345, or 1" style="font-size:24px;font-weight:800;letter-spacing:1px;text-transform:uppercase;padding-right:44px;transition:border-color .15s, background-color .15s;"
+                   autocomplete="off" autofocus>
+            <span id="plate-live-icon" style="position:absolute;right:14px;top:50%;transform:translateY(-50%);font-size:18px;display:none;pointer-events:none;"></span>
+          </div>
+          <div id="plate-live-feedback" style="font-size:12px;color:var(--muted);margin-top:6px;font-weight:600;min-height:18px;display:flex;align-items:center;gap:4px;">
+            Philippine standard (ABC 1234, AB 12345), legacy, vintage, vanity, or protocol plates (e.g. 1 for President).
+          </div>
           <div class="ba-err-msg" id="plate-err" hidden></div>
         </div>
 
@@ -63,16 +70,16 @@
             <div><span style="color:var(--muted);">Last visit:</span> <b id="lbl-driver-last">-</b></div>
           </div>
 
-          <div id="expired-warning-box" style="display:none;background:#FEF2F2;border:1px solid #FECACA;border-radius:6px;padding:10px;margin-top:12px;color:#991B1B;font-size:13px;">
+          <div id="expired-warning-box" style="display:none;background:var(--stop-bg);border:1px solid var(--stop);border-radius:6px;padding:10px;margin-top:12px;color:var(--stop);font-size:13px;">
             <b>Reservation <span id="lbl-expired-code"></span> expired</b><br>
             This arrival is entered as a walk-in. The old code cannot be used.
           </div>
         </div>
 
         <!-- Result Box: Guest Vehicle (BA-14) -->
-        <div id="guest-vehicle-box" style="display:none;background:#F8FAFC;border:1.5px solid #CBD5E1;border-radius:8px;padding:16px;margin-bottom:18px;">
-          <b style="color:#334155;font-size:15px;display:block;">No saved vehicle for <span id="lbl-guest-plate"></span></b>
-          <p style="font-size:13px;color:#64748B;margin:3px 0 0;">Enter the vehicle details by hand. The entry is saved as a guest vehicle without a driver account.</p>
+        <div id="guest-vehicle-box" class="ba-detail-box" style="display:none;background:var(--bg);border:1.5px solid var(--line);border-radius:8px;padding:16px;margin-bottom:18px;color:var(--ink);">
+          <b style="color:var(--ink);font-size:15px;display:block;">No saved vehicle for <span id="lbl-guest-plate"></span></b>
+          <p style="font-size:13px;color:var(--muted);margin:3px 0 0;">Enter the vehicle details by hand. The entry is saved as a guest vehicle without a driver account.</p>
         </div>
 
         <!-- Step 2 Buttons -->
@@ -98,35 +105,51 @@
       <div class="ba-card" id="section-details" style="display:none;">
         <h2>Vehicle details</h2>
 
+        <!-- Direct Guest Arrival Banner -->
+        <div id="guest-details-banner" class="ba-detail-box" style="display:none;background:var(--bg);border-left:4px solid var(--paint);border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:18px;color:var(--ink);">
+          <b style="color:var(--ink);font-size:14px;display:block;">Guest arrival &mdash; <span id="lbl-guest-plate-title"></span></b>
+          <p style="font-size:12.5px;color:var(--muted);margin:2px 0 0;">No saved profile found for this plate. Please enter the car color and vehicle type below.</p>
+        </div>
+
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
           <div class="ba-form-group">
             <label class="ba-label">Plate number</label>
             <input class="ba-input" id="det-plate" type="text" readonly style="font-weight:700;">
           </div>
+
           <div class="ba-form-group">
-            <label class="ba-label" for="det-phone">Phone number</label>
-            <input class="ba-input" id="det-phone" name="phone" type="tel" placeholder="09175550199" maxlength="13" oninput="this.value = this.value.replace(/[^\d+]/g, '').replace(/(?!^)\+/g, '').slice(0, 13)">
+            <label class="ba-label" for="det-phone">Phone number (optional)</label>
+            <input class="ba-input" id="det-phone" name="phone" type="tel" placeholder="09171234567" maxlength="11"
+                   oninput="this.value = this.value.replace(/\D/g, '').slice(0, 11); const pe = document.getElementById('phone-err-msg'); if (pe) pe.hidden = true;">
+            <p style="font-size:12px;color:var(--muted);margin-top:4px;">11-digit mobile starting with 09 (e.g. 09171234567)</p>
+            <div class="ba-err-msg" id="phone-err-msg" hidden style="margin-top:4px;font-size:12px;"></div>
           </div>
         </div>
 
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
           <div class="ba-form-group">
-            <label class="ba-label" for="det-color">Car color</label>
+            <label class="ba-label" for="det-color">Vehicle color</label>
             <select class="ba-input" id="det-color" name="color">
               <option value="">Select a color</option>
               @foreach ($vehicleColors as $col)
                 <option value="{{ $col }}">{{ $col }}</option>
               @endforeach
             </select>
+            <div id="color-other-wrap" style="display:none;margin-top:8px;">
+              <input class="ba-input" id="det-color-other" type="text" placeholder="Type custom color (e.g. Bronze)" maxlength="20"
+                     oninput="this.value = this.value.replace(/[^A-Za-z\s-]/g, '').slice(0, 20); const ce = document.getElementById('color-err-msg'); if (ce) ce.hidden = true;">
+            </div>
+            <div class="ba-err-msg" id="color-err-msg" hidden style="margin-top:4px;font-size:12px;"></div>
           </div>
           <div class="ba-form-group">
-            <label class="ba-label" for="det-type">Car type</label>
+            <label class="ba-label" for="det-type">Vehicle type</label>
             <select class="ba-input" id="det-type" name="type">
               <option value="">Select a type</option>
               @foreach ($vehicleTypes as $vt)
                 <option value="{{ $vt }}">{{ $vt }}</option>
               @endforeach
             </select>
+            <div class="ba-err-msg" id="type-err-msg" hidden style="margin-top:4px;font-size:12px;"></div>
           </div>
         </div>
 
@@ -166,27 +189,22 @@
         @endif
 
         <div class="ba-card">
-          <!-- PWD Priority Banner -->
-          <div id="pwd-banner" style="display:none;background:#EFF6FF;border:1.5px solid #3B82F6;border-radius:8px;padding:12px 16px;margin-bottom:16px;color:#1E40AF;align-items:center;justify-content:space-between;gap:12px;">
-            <div style="display:flex;align-items:center;gap:10px;">
-              <span style="font-size:22px;line-height:1;">♿</span>
-              <div>
-                <b style="font-size:14px;display:block;">PWD Priority Active</b>
-                <span style="font-size:12.5px;color:#2563EB;">Available accessible (PWD) slots are highlighted in glowing blue and prioritized.</span>
-              </div>
+          <!-- PWD Slot Verification Banner (Appears on top when an attendant clicks a PWD slot) -->
+          <div id="pwd-verification-banner" style="display:none;background:#EFF6FF;border:1.5px solid #3B82F6;border-radius:8px;padding:12px 16px;margin-bottom:16px;color:#1E40AF;align-items:center;gap:12px;">
+            <span style="font-size:24px;line-height:1;">♿</span>
+            <div>
+              <b style="font-size:14px;display:block;margin-bottom:2px;color:#1D4ED8;">
+                Accessible (PWD) Bay Selected &mdash; <span id="pwd-banner-slot-code">Slot</span>
+              </b>
+              <span style="font-size:13px;color:#1E40AF;">
+                Please visually verify that the vehicle displays an <strong>LTO PWD car sticker</strong> or the driver/passenger presents a valid <strong>PWD ID card</strong>.
+              </span>
             </div>
-            <button type="button" id="btn-toggle-pwd" class="btn sm ghost" style="border-color:#93C5FD;background:#DBEAFE;color:#1D4ED8;font-size:12px;padding:4px 10px;height:auto;min-height:28px;">Remove filter</button>
           </div>
 
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px;">
-            <div>
-              <h2 style="margin:0 0 4px;">Lot map</h2>
-              <p style="font-size:13px;color:var(--muted);margin:0;">Only Available slots can be picked. Other slots are dimmed.</p>
-            </div>
-            <label style="display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;cursor:pointer;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:6px 12px;color:var(--ink);">
-              <input type="checkbox" id="map-pwd-filter" style="width:16px;height:16px;">
-              <span>Highlight PWD slots</span>
-            </label>
+          <div style="margin-bottom:14px;">
+            <h2 style="margin:0 0 4px;">Lot map</h2>
+            <p style="font-size:13px;color:var(--muted);margin:0;">Only Available slots can be picked. Other slots are dimmed.</p>
           </div>
 
           <div class="ba-lot-map">
@@ -278,9 +296,6 @@
             <span style="color:var(--muted);">Slot</span>
             <b id="sum-slot" style="color:var(--paint-deep);">None picked</b>
           </div>
-          <div id="side-pwd-badge" style="display:none;margin-top:10px;padding:8px 12px;background:#EFF6FF;border:1px solid #BFDBFE;border-radius:6px;font-size:12.5px;color:#1E40AF;">
-            ♿ <strong>Accessible (PWD) Bay</strong> &mdash; verify PWD car sticker or ID.
-          </div>
 
           <div style="display:flex;gap:10px;margin-top:20px;">
             <button class="btn primary" type="button" id="btn-confirm-slot" disabled data-open="#confirm-slot-dlg">Confirm slot</button>
@@ -297,7 +312,7 @@
       <button class="x" type="button" data-close aria-label="Close">&times;</button>
       <h2>Assign slot <span id="dlg-slot-code"></span>?</h2>
       
-      <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;padding:16px;margin-bottom:16px;font-size:14px;">
+      <div class="ba-detail-box" style="background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:16px;font-size:14px;color:var(--ink);">
         <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
           <span style="color:var(--muted);">Plate</span>
           <b id="dlg-plate"></b>
@@ -343,7 +358,7 @@
     <button class="x" type="button" data-close aria-label="Close">&times;</button>
     <h2 style="color:var(--stop);">This plate already has an active session</h2>
     
-    <div style="background:#F8FAFC;border:1.5px dashed #94A3B8;border-radius:8px;padding:18px;margin-bottom:16px;font-family:'Courier New',Courier,monospace;">
+    <div class="ba-detail-box" style="background:var(--bg);border:1.5px dashed var(--line);border-radius:8px;padding:18px;margin-bottom:16px;font-family:'Courier New',Courier,monospace;color:var(--ink);">
       <div style="font-size:12px;color:var(--muted);margin-bottom:4px;">Ticket number</div>
       <div style="font-size:24px;font-weight:800;" id="dup-ticket">{{ session('error_modal')['ticket'] ?? '' }}</div>
       <div style="margin-top:10px;font-size:14px;">
@@ -384,9 +399,13 @@ let selectedSlot = null;
 const lookupUrl = "{{ route('attendant.entry.walk-in.lookup') }}";
 const csrfToken = "{{ csrf_token() }}";
 
-// DOM Elements
+// Validation Pattern matching PHP Vehicle::PLATE_PATTERN
+const PLATE_REGEX = /^(?:[A-Z]{3}[0-9]{2,4}|[A-Z]{2}[0-9]{3,5}|[A-Z][0-9]{4,5}|[A-Z][0-9]{3,4}[A-Z]{2}|[0-9]{3}[A-Z]{3}|[0-9]{4}[A-Z]{2}|[1-9]|1[0-7]|(?:SENATE|CONGRESS|GOV|PNP)[0-9]{1,4}|[0-9]{6,7}|[0-9]{15})$/;
+
 const plateInput = document.getElementById('plate-input');
 const plateErr = document.getElementById('plate-err');
+const plateLiveIcon = document.getElementById('plate-live-icon');
+const plateLiveFeedback = document.getElementById('plate-live-feedback');
 const btnLookup = document.getElementById('btn-lookup');
 const knownBox = document.getElementById('known-vehicle-box');
 const guestBox = document.getElementById('guest-vehicle-box');
@@ -394,13 +413,67 @@ const knownBtns = document.getElementById('known-btns');
 const guestBtns = document.getElementById('guest-btns');
 const plateBtns = document.getElementById('plate-btns');
 
+function checkPlateValidity(val) {
+  const norm = (val || '').toUpperCase().replace(/[\s-]+/g, '');
+  if (!norm) return { valid: false, empty: true, norm: '' };
+  return { valid: PLATE_REGEX.test(norm), empty: false, norm };
+}
+
+function handlePlateLiveValidation() {
+  // Format input: uppercase, allowed plate characters
+  plateInput.value = plateInput.value.toUpperCase().replace(/[^A-Z0-9\s-]/g, '');
+  plateErr.hidden = true;
+
+  const result = checkPlateValidity(plateInput.value);
+
+  if (result.empty) {
+    plateInput.style.borderColor = 'var(--line)';
+    plateInput.style.backgroundColor = '';
+    plateLiveIcon.style.display = 'none';
+    plateLiveFeedback.innerHTML = 'Philippine standard (ABC 1234, AB 12345), legacy, vintage, vanity, or protocol plates (e.g. 1 for President).';
+    plateLiveFeedback.style.color = 'var(--muted)';
+    return;
+  }
+
+  if (result.valid) {
+    plateInput.style.borderColor = 'var(--ok)';
+    plateInput.style.backgroundColor = '';
+    plateLiveIcon.textContent = '✓';
+    plateLiveIcon.style.color = 'var(--ok)';
+    plateLiveIcon.style.fontWeight = '900';
+    plateLiveIcon.style.display = 'block';
+    plateLiveFeedback.innerHTML = '<span style="color:var(--ok);font-weight:900;">✓</span> Valid Philippine plate format';
+    plateLiveFeedback.style.color = 'var(--ok)';
+  } else {
+    plateInput.style.borderColor = 'var(--paint)';
+    plateInput.style.backgroundColor = '';
+    plateLiveIcon.textContent = '•';
+    plateLiveIcon.style.color = 'var(--paint)';
+    plateLiveIcon.style.fontWeight = '900';
+    plateLiveIcon.style.display = 'block';
+    plateLiveFeedback.innerHTML = '<span style="color:var(--paint);font-weight:900;">●</span> Type standard (e.g. ABC 1234, AB 12345), vanity, or protocol (e.g. 1 to 17)';
+    plateLiveFeedback.style.color = 'var(--paint)';
+  }
+}
+
+plateInput.addEventListener('input', handlePlateLiveValidation);
+
 // Lookup handler
 async function doLookup() {
-  const plate = plateInput.value.trim();
+  const rawPlate = plateInput.value.trim();
   plateErr.hidden = true;
-  if (!plate) {
-    plateErr.textContent = 'Enter a valid Philippine plate (e.g. ABC 1234, AB 12345, or 1).';
+
+  const result = checkPlateValidity(rawPlate);
+  if (result.empty || !result.valid) {
+    plateInput.style.borderColor = 'var(--stop)';
+    plateInput.style.backgroundColor = '';
+    plateLiveIcon.textContent = '✕';
+    plateLiveIcon.style.color = 'var(--stop)';
+    plateLiveIcon.style.fontWeight = '900';
+    plateLiveIcon.style.display = 'block';
+    plateErr.textContent = 'Please enter a valid Philippine plate (e.g. ABC 1234, AB 12345, or 1).';
     plateErr.hidden = false;
+    plateInput.focus();
     return;
   }
 
@@ -408,7 +481,7 @@ async function doLookup() {
     const res = await fetch(lookupUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json' },
-      body: JSON.stringify({ plate })
+      body: JSON.stringify({ plate: rawPlate })
     });
     const data = await res.json();
 
@@ -428,11 +501,11 @@ async function doLookup() {
       return;
     }
 
-    plateBtns.style.display = 'none';
-
     if (data.status === 'registered') {
+      plateBtns.style.display = 'none';
       const v = data.vehicle;
-      vehicleState = { plate: v.plate, phone: v.phone, color: v.color, type: v.type, isRegistered: true, driverId: v.driver_id };
+      const cleanPhone = (v.phone || '').replace(/[\s-]+/g, '');
+      vehicleState = { plate: v.plate, phone: cleanPhone, color: v.color, type: v.type, isRegistered: true, driverId: v.driver_id };
       document.getElementById('lbl-driver-name').textContent = v.driver_name;
       document.getElementById('lbl-driver-phone').textContent = v.phone;
       document.getElementById('lbl-driver-color').textContent = v.color;
@@ -450,11 +523,14 @@ async function doLookup() {
       knownBtns.style.display = 'flex';
       guestBox.style.display = 'none';
     } else {
+      // Guest vehicle: Skip redundant confirmation screen & go directly to Step 3: Vehicle details!
       vehicleState = { plate: data.plate, phone: '', color: '', type: '', isRegistered: false, driverId: null };
-      document.getElementById('lbl-guest-plate').textContent = data.plate;
-      guestBox.style.display = 'block';
-      guestBtns.style.display = 'flex';
-      knownBox.style.display = 'none';
+      goToDetails(false);
+      document.getElementById('guest-details-banner').style.display = 'block';
+      document.getElementById('lbl-guest-plate-title').textContent = data.plate;
+      setTimeout(() => {
+        document.getElementById('det-color').focus();
+      }, 50);
     }
   } catch (e) {
     console.error(e);
@@ -464,6 +540,12 @@ async function doLookup() {
 btnLookup.addEventListener('click', doLookup);
 plateInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); doLookup(); } });
 
+// Auto-lookup if plate was passed via query parameter (e.g. from reserved mismatch lockout)
+if (plateInput.value.trim() !== '') {
+  handlePlateLiveValidation();
+  doLookup();
+}
+
 // Search again reset
 function resetLookup() {
   knownBox.style.display = 'none';
@@ -471,6 +553,7 @@ function resetLookup() {
   knownBtns.style.display = 'none';
   guestBtns.style.display = 'none';
   plateBtns.style.display = 'flex';
+  handlePlateLiveValidation();
   plateInput.focus();
 }
 document.getElementById('btn-search-again-1').addEventListener('click', resetLookup);
@@ -485,7 +568,8 @@ function goToDetails(populate = false) {
 
   document.getElementById('det-plate').value = vehicleState.plate;
   if (populate) {
-    document.getElementById('det-phone').value = vehicleState.phone;
+    document.getElementById('guest-details-banner').style.display = 'none';
+    document.getElementById('det-phone').value = (vehicleState.phone || '').replace(/[\s-]+/g, '');
     document.getElementById('det-color').value = vehicleState.color;
     document.getElementById('det-type').value = vehicleState.type;
   }
@@ -509,26 +593,96 @@ document.getElementById('btn-back-to-plate').addEventListener('click', () => {
   document.getElementById('section-plate').style.display = 'block';
   document.getElementById('step-details').classList.remove('active');
   document.getElementById('step-plate').classList.add('active');
+  resetLookup();
 });
+
+
+// Toggle Other color input field
+const detColorSelect = document.getElementById('det-color');
+const colorOtherWrap = document.getElementById('color-other-wrap');
+const detColorOther = document.getElementById('det-color-other');
+
+if (detColorSelect) {
+  detColorSelect.addEventListener('change', () => {
+    const ce = document.getElementById('color-err-msg');
+    if (ce) ce.hidden = true;
+    if (detColorSelect.value === 'Other') {
+      colorOtherWrap.style.display = 'block';
+      setTimeout(() => detColorOther.focus(), 50);
+    } else {
+      colorOtherWrap.style.display = 'none';
+      detColorOther.value = '';
+    }
+  });
+}
 
 // Step 3 to Step 4: Slot Selection
 function goToSlot() {
-  const color = document.getElementById('det-color').value;
+  const phoneErr = document.getElementById('phone-err-msg');
+  const colorErr = document.getElementById('color-err-msg');
+  const typeErr = document.getElementById('type-err-msg');
+
+  if (phoneErr) phoneErr.hidden = true;
+  if (colorErr) colorErr.hidden = true;
+  if (typeErr) typeErr.hidden = true;
+
+  const rawColor = document.getElementById('det-color').value;
   const type = document.getElementById('det-type').value;
 
-  if (!color || !type) {
-    alert('Please choose a color and a type.');
+  if (!type) {
+    if (typeErr) {
+      typeErr.textContent = 'Please select a vehicle type.';
+      typeErr.hidden = false;
+    }
+    document.getElementById('det-type').focus();
     return;
   }
 
-  const phoneVal = document.getElementById('det-phone').value.trim();
-  if (phoneVal && !/^09\d{9}$/.test(phoneVal)) {
-    alert('Please enter a valid 11-digit mobile number starting with 09 (e.g. 09171234567).');
-    document.getElementById('det-phone').focus();
+  if (!rawColor) {
+    if (colorErr) {
+      colorErr.textContent = 'Please choose a vehicle color.';
+      colorErr.hidden = false;
+    }
+    document.getElementById('det-color').focus();
     return;
   }
 
-  vehicleState.color = color;
+  let finalColor = rawColor;
+  if (rawColor === 'Other') {
+    const customColor = (detColorOther.value || '').trim();
+    if (!customColor) {
+      if (colorErr) {
+        colorErr.textContent = 'Please type the custom vehicle color.';
+        colorErr.hidden = false;
+      }
+      detColorOther.focus();
+      return;
+    }
+    finalColor = customColor;
+
+    // Ensure form submits the actual custom color name
+    let opt = Array.from(detColorSelect.options).find(o => o.value === finalColor);
+    if (!opt) {
+      opt = new Option(finalColor, finalColor, true, true);
+      detColorSelect.add(opt);
+    }
+    detColorSelect.value = finalColor;
+  }
+
+  const phoneVal = (document.getElementById('det-phone').value || '').trim();
+  if (phoneVal) {
+    if (!/^09\d{9}$/.test(phoneVal)) {
+      if (phoneErr) {
+        phoneErr.textContent = 'Mobile number must be exactly 11 digits starting with 09 (e.g. 09171234567).';
+        phoneErr.hidden = false;
+      }
+      document.getElementById('det-phone').focus();
+      return;
+    }
+  }
+
+  document.getElementById('det-phone').value = phoneVal;
+  vehicleState.color = finalColor;
   vehicleState.type = type;
   vehicleState.phone = phoneVal;
 
@@ -548,55 +702,31 @@ function goToSlot() {
 
   document.getElementById('hidden-driver-id').value = vehicleState.driverId || '';
 
-  // Synchronize and apply PWD highlight (do NOT auto-select; attendant picks the slot)
+  // Apply PWD highlight if checked on vehicle details
   const isPwd = document.getElementById('det-pwd').checked;
-  applyPwdFilter(isPwd);
+  applyPwdHighlight(isPwd);
 }
 
-function applyPwdFilter(isPwd) {
-  const detPwd = document.getElementById('det-pwd');
-  const mapPwd = document.getElementById('map-pwd-filter');
-  const banner = document.getElementById('pwd-banner');
-
-  if (detPwd) detPwd.checked = isPwd;
-  if (mapPwd) mapPwd.checked = isPwd;
-
-  if (isPwd) {
-    if (banner) banner.style.display = 'flex';
-    document.querySelectorAll('.ba-slot').forEach(s => {
-      if (s.dataset.type === 'PWD' && s.classList.contains('available')) {
-        s.classList.add('pwd-highlight');
-      } else {
-        s.classList.remove('pwd-highlight');
-      }
-    });
-  } else {
-    if (banner) banner.style.display = 'none';
-    document.querySelectorAll('.ba-slot.pwd-highlight').forEach(s => s.classList.remove('pwd-highlight'));
-  }
+function applyPwdHighlight(isPwd) {
+  document.querySelectorAll('.ba-slot').forEach(s => {
+    if (isPwd && s.dataset.type === 'PWD' && s.classList.contains('available')) {
+      s.classList.add('pwd-highlight');
+    } else {
+      s.classList.remove('pwd-highlight');
+    }
+  });
 }
 
 document.getElementById('btn-to-slot').addEventListener('click', goToSlot);
-
-const mapPwdToggle = document.getElementById('map-pwd-filter');
-if (mapPwdToggle) {
-  mapPwdToggle.addEventListener('change', (e) => {
-    applyPwdFilter(e.target.checked);
-  });
-}
-
-const btnTogglePwd = document.getElementById('btn-toggle-pwd');
-if (btnTogglePwd) {
-  btnTogglePwd.addEventListener('click', () => {
-    applyPwdFilter(false, false);
-  });
-}
 
 document.getElementById('btn-back-to-details').addEventListener('click', () => {
   document.getElementById('section-slot').style.display = 'none';
   document.getElementById('section-details').style.display = 'block';
   document.getElementById('step-slot').classList.remove('active');
   document.getElementById('step-details').classList.add('active');
+
+  const topPwdBanner = document.getElementById('pwd-verification-banner');
+  if (topPwdBanner) topPwdBanner.style.display = 'none';
 
   document.getElementById('summary-title').textContent = 'Lot now';
   document.getElementById('side-lot-now').style.display = 'block';
@@ -629,8 +759,17 @@ window.selectSlot = function(el) {
   const pwdNotice = document.getElementById('dlg-pwd-notice');
   if (pwdNotice) pwdNotice.style.display = isPwdSlot ? 'block' : 'none';
 
-  const sidePwd = document.getElementById('side-pwd-badge');
-  if (sidePwd) sidePwd.style.display = isPwdSlot ? 'block' : 'none';
+  // Top banner verification notice
+  const topPwdBanner = document.getElementById('pwd-verification-banner');
+  if (topPwdBanner) {
+    if (isPwdSlot) {
+      topPwdBanner.style.display = 'flex';
+      const slotLabel = document.getElementById('pwd-banner-slot-code');
+      if (slotLabel) slotLabel.textContent = `Slot ${selectedSlot.code}`;
+    } else {
+      topPwdBanner.style.display = 'none';
+    }
+  }
 };
 </script>
 @endpush

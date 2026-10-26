@@ -5,23 +5,36 @@
 
 @section('content')
 <h1 class="ba-page-title">Parking records</h1>
-<p class="ba-sub">Today by default. Sessions with an entry or an exit today are listed.</p>
+<p class="ba-sub">Showing records for <b>{{ $filterLabel }}</b>. Sessions with an entry or an exit in this period are listed.</p>
 
 <div class="ba-card" style="margin-bottom:20px;">
-  <form method="GET" action="{{ route('attendant.records.index') }}" style="display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap;">
-    <div>
-      <label class="ba-label" for="rec-date">Date</label>
-      <input class="ba-input" id="rec-date" name="date" type="date" value="{{ $selectedDate->format('Y-m-d') }}" style="min-width:180px;">
+  <form method="GET" action="{{ route('attendant.records.index') }}" id="records-filter-form" style="display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap;">
+    <div style="flex:1;min-width:220px;">
+      <label class="ba-label" for="rec-q">Search</label>
+      <input class="ba-input" id="rec-q" name="q" type="text" value="{{ $q }}" placeholder="Ticket, plate, or attendant"
+             maxlength="20" oninput="this.value = this.value.toUpperCase().replace(/[^A-Z0-9\s-]/g, '').slice(0, 20);">
     </div>
 
-    <div style="flex:1;min-width:240px;">
-      <label class="ba-label" for="rec-q">Search</label>
-      <input class="ba-input" id="rec-q" name="q" type="text" value="{{ $q }}" placeholder="Ticket or plate">
+    <div style="min-width:160px;">
+      <label class="ba-label" for="rec-filter">Period</label>
+      <select class="ba-input" id="rec-filter" name="filter" style="cursor:pointer;">
+        <option value="today" @selected($filter === 'today')>Today</option>
+        <option value="this_week" @selected($filter === 'this_week')>This week</option>
+        <option value="this_month" @selected($filter === 'this_month')>This month</option>
+        <option value="custom" @selected($filter === 'custom')>Custom</option>
+      </select>
+    </div>
+
+    <div id="custom-date-field" style="display:{{ $filter === 'custom' ? 'block' : 'none' }};min-width:160px;">
+      <label class="ba-label" for="rec-date">Date</label>
+      <input class="ba-input" id="rec-date" name="date" type="date" value="{{ $customDate }}" max="{{ now()->toDateString() }}">
     </div>
 
     <div style="display:flex;gap:8px;">
       <button class="btn primary" type="submit">Search</button>
-      <a class="btn ghost" href="{{ route('attendant.records.index') }}">Today</a>
+      @if ($q || $filter !== 'today')
+        <a class="btn ghost" href="{{ route('attendant.records.index') }}">Reset</a>
+      @endif
     </div>
   </form>
 </div>
@@ -31,11 +44,11 @@
   <div class="ba-card" style="text-align:center;padding:48px 24px;">
     <h2 style="font-size:24px;margin-bottom:8px;">No records found</h2>
     <p style="color:var(--muted);max-width:32em;margin:0 auto 20px;">
-      No parking record matches <b>{{ $q ?: 'the selected criteria' }}</b> on {{ $selectedDate->format('M j, Y') }}. Check the text or choose another date.
+      No parking record matches <b>{{ $q ?: 'the selected criteria' }}</b> for <b>{{ $filterLabel }}</b>. Check the text or choose another period.
     </p>
     <div style="display:flex;gap:10px;justify-content:center;">
       @if ($q)
-        <a class="btn ghost" href="{{ route('attendant.records.index', ['date' => $selectedDate->format('Y-m-d')]) }}">Clear search</a>
+        <a class="btn ghost" href="{{ route('attendant.records.index', ['filter' => $filter, 'date' => $customDate]) }}">Clear search</a>
       @endif
       <a class="btn primary" href="{{ route('attendant.records.index') }}">Back to today</a>
     </div>
@@ -119,7 +132,7 @@
     <button class="x" type="button" data-close aria-label="Close">&times;</button>
     <h2>Record <span id="rd-ticket"></span></h2>
 
-    <div style="display:flex;flex-direction:column;gap:10px;font-size:14px;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;padding:16px;margin-bottom:18px;">
+    <div class="ba-detail-box" style="display:flex;flex-direction:column;gap:10px;font-size:14px;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:18px;color:var(--ink);">
       <div style="display:flex;justify-content:space-between;"><span style="color:var(--muted);">Ticket</span><b id="rd-ticket-val"></b></div>
       <div style="display:flex;justify-content:space-between;"><span style="color:var(--muted);">Plate</span><b id="rd-plate"></b></div>
       <div style="display:flex;justify-content:space-between;"><span style="color:var(--muted);">Vehicle</span><b id="rd-veh"></b></div>
@@ -140,6 +153,35 @@
 
 @push('scripts')
 <script>
+document.addEventListener('DOMContentLoaded', () => {
+  const filterSelect = document.getElementById('rec-filter');
+  const customDateField = document.getElementById('custom-date-field');
+  const dateInput = document.getElementById('rec-date');
+  const form = document.getElementById('records-filter-form');
+
+  if (filterSelect && customDateField && form) {
+    filterSelect.addEventListener('change', () => {
+      if (filterSelect.value === 'custom') {
+        customDateField.style.display = 'block';
+        if (dateInput) {
+          dateInput.focus();
+        }
+      } else {
+        customDateField.style.display = 'none';
+        form.submit();
+      }
+    });
+
+    if (dateInput) {
+      dateInput.addEventListener('change', () => {
+        if (filterSelect.value === 'custom') {
+          form.submit();
+        }
+      });
+    }
+  }
+});
+
 window.openRecordDetail = function(rec) {
   document.getElementById('rd-ticket').textContent = rec.ticket;
   document.getElementById('rd-ticket-val').textContent = rec.ticket;

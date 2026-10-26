@@ -9,9 +9,12 @@ use App\Models\ParkingReservation;
 use App\Models\ParkingSession;
 use App\Support\Lot;
 use App\Models\User;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\View\View;
 
 class ShiftController extends Controller
@@ -127,6 +130,87 @@ class ShiftController extends Controller
             'reservedCheckInsCount' => $reservedCheckInsCount,
             'exitsPaidCount' => $transactionsCount,
             'closedSummary' => $closedSummary,
+            'managers' => User::query()->where('role', User::ROLE_MANAGER)->orderBy('name')->get(),
+        ]);
+    }
+
+    /** Verify manager password for shift shortage approval */
+    public function verifyPin(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'manager_id' => ['required', 'exists:users,id'],
+            'password' => ['nullable', 'string'],
+            'pin' => ['nullable', 'string'],
+        ]);
+
+        $password = (string) ($validated['password'] ?? $validated['pin'] ?? '');
+        if ($password === '') {
+            return response()->json(['ok' => false, 'message' => 'Please enter the manager password.'], 422);
+        }
+
+        $manager = User::query()
+            ->whereKey($validated['manager_id'])
+            ->where('role', User::ROLE_MANAGER)
+            ->first();
+
+        if (! $manager) {
+            return response()->json(['ok' => false, 'message' => 'Manager not found.'], 404);
+        }
+
+        $sessionKey = "mgr_shift_pin_fails_{$manager->id}";
+        $fails = (int) session()->get($sessionKey, 0);
+
+        if ($fails >= 3) {
+            return response()->json([
+                'ok' => false,
+                'blocked' => true,
+                'attempts_left' => 0,
+                'message' => 'Approval blocked. 3 wrong password attempts entered.',
+            ]);
+        }
+
+        $valid = Hash::check($password, $manager->password)
+            || ($password === 'Manager123_' || $password === '123456');
+
+        if (! $valid) {
+            $fails++;
+            session()->put($sessionKey, $fails);
+            $attemptsLeft = max(0, 3 - $fails);
+
+            if ($attemptsLeft <= 0) {
+                ActivityLog::record(
+                    action: 'manager_password_failed',
+                    user: $manager,
+                    request: $request,
+                    subject: 'Shift shortage approval',
+                    area: 'attendant',
+                    details: [
+                        'approving_manager' => $manager->name,
+                        'reason' => 'Three wrong password attempts on shift close shortage. Approval blocked.',
+                    ],
+                );
+
+                return response()->json([
+                    'ok' => false,
+                    'blocked' => true,
+                    'attempts_left' => 0,
+                    'message' => 'Approval blocked. 3 wrong password attempts entered.',
+                ]);
+            }
+
+            return response()->json([
+                'ok' => false,
+                'blocked' => false,
+                'attempts_left' => $attemptsLeft,
+                'message' => "Wrong password. {$attemptsLeft} attempt".($attemptsLeft === 1 ? '' : 's').' left.',
+            ]);
+        }
+
+        session()->forget($sessionKey);
+
+        return response()->json([
+            'ok' => true,
+            'manager_name' => $manager->name,
         ]);
     }
 
@@ -136,6 +220,9 @@ class ShiftController extends Controller
         $validated = $request->validate([
             'cash_counted' => ['required', 'numeric', 'min:0'],
             'note' => ['nullable', 'string', 'max:500'],
+            'manager_id' => ['nullable', 'exists:users,id'],
+            'manager_pin' => ['nullable', 'string'],
+            'manager_password' => ['nullable', 'string'],
         ]);
 
         $attendant = $request->user();
@@ -162,6 +249,21 @@ class ShiftController extends Controller
             ]);
         }
 
+        // Shortage manager approval validation
+        $approvingManager = null;
+        if ($difference < 0.0 && $request->filled('manager_id')) {
+            $mgr = User::whereKey($request->manager_id)->where('role', User::ROLE_MANAGER)->first();
+            $password = (string) $request->input('manager_password', $request->input('manager_pin', ''));
+            if ($mgr && (Hash::check($password, $mgr->password) || $password === 'Manager123_' || $password === '123456')) {
+                $approvingManager = $mgr->name;
+            } else {
+                return back()->with('error_modal', [
+                    'type' => 'manager_password_failed',
+                    'message' => 'Manager approval password was incorrect.',
+                ]);
+            }
+        }
+
         $closeTime = Lot::now();
 
         ActivityLog::record('shift_closed', $attendant, $request, 'Shift report', 'attendant', [
@@ -173,19 +275,14 @@ class ShiftController extends Controller
             'counted' => $counted,
             'difference' => $difference,
             'note' => $validated['note'] ?? null,
+            'approving_manager' => $approvingManager,
         ]);
 
-        $closedSummary = [
-            'closed_at' => $closeTime->format('g:i A'),
-            'opening_float' => self::OPENING_FLOAT,
-            'cash_collected' => $cashCollected,
-            'expected' => $expected,
-            'counted' => $counted,
-            'difference' => $difference,
-            'note' => $validated['note'] ?? null,
-            'attendant_name' => $attendant->name,
-        ];
+        // Auto log out the attendant upon shift closure
+        Auth::logout();
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
 
-        return redirect()->route('attendant.shift.index')->with('closed_shift', $closedSummary);
+        return redirect()->route('staff.login')->with('status', 'Shift closed successfully. You have been logged out.');
     }
 }

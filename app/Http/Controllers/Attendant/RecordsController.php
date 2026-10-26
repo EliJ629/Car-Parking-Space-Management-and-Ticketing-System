@@ -15,19 +15,54 @@ class RecordsController extends Controller
     /** BA-57 to BA-60: Parking records list, search, and date filter */
     public function index(Request $request): View
     {
+        $filter = (string) $request->query('filter', 'today');
         $dateParam = $request->query('date');
         $q = trim((string) $request->query('q', ''));
 
-        $selectedDate = $dateParam ? Carbon::parse($dateParam, Lot::TIMEZONE) : Lot::now();
+        // If a date is explicitly provided without an explicit filter, default to custom
+        if ($request->filled('date') && ! $request->has('filter')) {
+            $filter = 'custom';
+        }
 
-        $dayStart = $selectedDate->copy()->startOfDay()->setTimezone('UTC');
-        $dayEnd = $selectedDate->copy()->endOfDay()->setTimezone('UTC');
+        $now = Lot::now();
+        $customDate = $dateParam ?: $now->format('Y-m-d');
+
+        switch ($filter) {
+            case 'this_week':
+                $start = $now->copy()->startOfWeek()->setTimezone('UTC');
+                $end = $now->copy()->endOfWeek()->setTimezone('UTC');
+                $filterLabel = 'This week';
+                break;
+            case 'this_month':
+                $start = $now->copy()->startOfMonth()->setTimezone('UTC');
+                $end = $now->copy()->endOfMonth()->setTimezone('UTC');
+                $filterLabel = 'This month';
+                break;
+            case 'custom':
+                try {
+                    $parsed = Carbon::parse($customDate, Lot::TIMEZONE);
+                } catch (\Throwable) {
+                    $parsed = $now;
+                    $customDate = $now->format('Y-m-d');
+                }
+                $start = $parsed->copy()->startOfDay()->setTimezone('UTC');
+                $end = $parsed->copy()->endOfDay()->setTimezone('UTC');
+                $filterLabel = $parsed->format('M j, Y');
+                break;
+            case 'today':
+            default:
+                $filter = 'today';
+                $start = $now->copy()->startOfDay()->setTimezone('UTC');
+                $end = $now->copy()->endOfDay()->setTimezone('UTC');
+                $filterLabel = 'Today';
+                break;
+        }
 
         $query = ParkingSession::query()
             ->with(['slot', 'payment', 'attendant', 'exitApprover'])
-            ->where(function ($w) use ($dayStart, $dayEnd) {
-                $w->whereBetween('entered_at', [$dayStart, $dayEnd])
-                    ->orWhereBetween('exited_at', [$dayStart, $dayEnd]);
+            ->where(function ($w) use ($start, $end) {
+                $w->whereBetween('entered_at', [$start, $end])
+                    ->orWhereBetween('exited_at', [$start, $end]);
             });
 
         if ($q !== '') {
@@ -42,7 +77,9 @@ class RecordsController extends Controller
 
         return view('staff.attendant.records.index', [
             'sessions' => $sessions,
-            'selectedDate' => $selectedDate,
+            'filter' => $filter,
+            'filterLabel' => $filterLabel,
+            'customDate' => $customDate,
             'q' => $q,
             'searched' => $q !== '',
         ]);

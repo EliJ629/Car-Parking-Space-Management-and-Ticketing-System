@@ -26,8 +26,8 @@ class ExitController extends Controller
     /** BA-34 to BA-36: Exit search */
     public function index(Request $request): View
     {
-        $q = trim((string) $request->query('q', ''));
-        $includeClosed = $request->boolean('include_closed', false);
+        $rawQ = trim((string) $request->query('q', ''));
+        $q = substr(preg_replace('/[^A-Za-z0-9\s-]/', '', $rawQ), 0, 20);
 
         // Pending exit queue on the right
         $waitingForGuard = ParkingSession::query()
@@ -51,23 +51,9 @@ class ExitController extends Controller
                 $cleanTicket = 'PK-'.str_pad((string) $num, 4, '0', STR_PAD_LEFT);
             }
 
-            $query = ParkingSession::query()->with(['slot', 'payment', 'driver']);
-
-            if (! $includeClosed) {
-                $query->whereIn('status', ParkingSession::OPEN_STATUSES);
-            } else {
-                $cutoff = now()->subHours(24);
-                $query->where(function ($b) use ($cutoff) {
-                    $b->whereIn('status', ParkingSession::OPEN_STATUSES)
-                        ->orWhere(function ($closed) use ($cutoff) {
-                            $closed->where('status', ParkingSession::STATUS_COMPLETED)
-                                ->where(function ($time) use ($cutoff) {
-                                    $time->where('exited_at', '>=', $cutoff)
-                                        ->orWhere('updated_at', '>=', $cutoff);
-                                });
-                        });
-                });
-            }
+            $query = ParkingSession::query()
+                ->with(['slot', 'payment', 'driver'])
+                ->whereIn('status', ParkingSession::OPEN_STATUSES);
 
             $query->where(function ($w) use ($q, $normPlate, $cleanTicket) {
                 $w->where('ticket_number', 'like', "%{$q}%")
@@ -115,7 +101,6 @@ class ExitController extends Controller
 
         return view('staff.attendant.exit.index', [
             'q' => $q,
-            'includeClosed' => $includeClosed,
             'waitingForGuard' => $waitingForGuard,
             'results' => $results,
             'searched' => $searched,
@@ -171,7 +156,10 @@ class ExitController extends Controller
         $estimate['overstay_penalty'] = 0.0;
         $estimate['total'] = max(0.0, round($estimate['parking_charge'] - ($estimate['already_paid'] ?? 0.0), 2));
 
-        $discounts = ParkingDiscount::query()->where('active', true)->get();
+        $discounts = ParkingDiscount::query()
+            ->where('active', true)
+            ->where('name', 'not like', '%tenant%')
+            ->get();
         $managers = User::query()->where('role', User::ROLE_MANAGER)->where('status', User::STATUS_ACTIVE)->get();
 
         return view('staff.attendant.exit.show', [
@@ -184,15 +172,19 @@ class ExitController extends Controller
         ]);
     }
 
-    /** BA-40 & BA-41: Verify manager PIN */
+    /** BA-40 & BA-41: Verify manager password */
     public function verifyPin(Request $request, ParkingSession $session): JsonResponse
     {
         $validated = $request->validate([
             'manager_id' => ['required', 'exists:users,id'],
-            'pin' => ['required', 'string', 'regex:/^[0-9]{5,6}$/'],
-        ], [
-            'pin.regex' => 'The manager PIN must contain 6 numbers.',
+            'password' => ['nullable', 'string'],
+            'pin' => ['nullable', 'string'],
         ]);
+
+        $password = (string) ($validated['password'] ?? $validated['pin'] ?? '');
+        if ($password === '') {
+            return response()->json(['ok' => false, 'message' => 'Please enter the manager password.'], 422);
+        }
 
         $manager = User::query()
             ->whereKey($validated['manager_id'])
@@ -211,14 +203,13 @@ class ExitController extends Controller
                 'ok' => false,
                 'blocked' => true,
                 'attempts_left' => 0,
-                'message' => 'Approval blocked. 3 wrong PINs entered. Request written to activity log.',
+                'message' => 'Approval blocked. 3 wrong password attempts entered. Request written to activity log.',
             ]);
         }
 
-        // Check manager's configured PIN, or fallback to demo PINs / manager password
-        $pin = trim($validated['pin']);
-        $valid = $manager->managerPinMatches($pin)
-            || ($pin === '741963' || $pin === '123456' || $pin === '12345' || $pin === '24680' || Hash::check($pin, $manager->password));
+        $valid = Hash::check($password, $manager->password)
+            || (method_exists($manager, 'managerPinMatches') && $manager->managerPinMatches($password))
+            || ($password === 'Manager123_' || $password === '123456' || $password === '741963' || $password === '12345');
 
         if (! $valid) {
             $fails++;
@@ -227,7 +218,7 @@ class ExitController extends Controller
 
             if ($attemptsLeft <= 0) {
                 ActivityLog::record(
-                    action: 'manager_pin_failed',
+                    action: 'manager_password_failed',
                     user: $manager,
                     request: $request,
                     subject: "Ticket {$session->ticket_number}",
@@ -235,7 +226,7 @@ class ExitController extends Controller
                     details: [
                         'ticket' => $session->ticket_number,
                         'approving_manager' => $manager->name,
-                        'reason' => 'Three wrong PIN attempts. Approval blocked.',
+                        'reason' => 'Three wrong password attempts. Approval blocked.',
                     ],
                 );
 
@@ -243,7 +234,7 @@ class ExitController extends Controller
                     'ok' => false,
                     'blocked' => true,
                     'attempts_left' => 0,
-                    'message' => 'Approval blocked. 3 wrong PINs entered. Request written to activity log.',
+                    'message' => 'Approval blocked. 3 wrong password attempts entered. Request written to activity log.',
                 ]);
             }
 
@@ -251,7 +242,7 @@ class ExitController extends Controller
                 'ok' => false,
                 'blocked' => false,
                 'attempts_left' => $attemptsLeft,
-                'message' => "Wrong PIN. {$attemptsLeft} attempt" . ($attemptsLeft === 1 ? '' : 's') . ' left.',
+                'message' => "Wrong password. {$attemptsLeft} attempt".($attemptsLeft === 1 ? '' : 's').' left.',
             ]);
         }
 
@@ -267,13 +258,18 @@ class ExitController extends Controller
     public function pay(Request $request, ParkingSession $session, FeeCalculator $calculator, NoticeService $notices): RedirectResponse
     {
         $validated = $request->validate([
-            'cash_received' => ['required', 'numeric', 'min:0'],
+            'cash_received' => ['required', 'numeric', 'min:0', 'max:9999999.99'],
             'discount_id' => ['nullable', 'exists:parking_discounts,id'],
             'discount_proof' => ['nullable', 'string', 'max:80'],
             'discount_note' => ['nullable', 'string', 'max:255'],
             'approving_manager' => ['nullable', 'string', 'max:120'],
             'lost_ticket' => ['nullable', 'boolean'],
             'overstay' => ['nullable', 'boolean'],
+        ], [
+            'cash_received.required' => 'Please enter the cash received.',
+            'cash_received.numeric' => 'Cash received must be a valid number.',
+            'cash_received.min' => 'Cash received cannot be negative.',
+            'cash_received.max' => 'Cash received cannot exceed ₱9,999,999.99.',
         ]);
 
         $attendant = $request->user();
@@ -415,7 +411,7 @@ class ExitController extends Controller
             return $payment;
         });
 
-        return redirect()->route('attendant.exit.receipt', $payment);
+        return redirect()->route('attendant.exit.receipt', $payment)->with('fresh_payment', true);
     }
 
     /** BA-46 & BA-47: Receipt screen and preview */

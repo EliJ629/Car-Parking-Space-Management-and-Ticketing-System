@@ -34,6 +34,7 @@ class VerifyEmailController extends Controller
             'wait' => $this->verification->secondsUntilResend($user),
             'minutes' => EmailVerification::CODE_MINUTES,
             'logHint' => config('mail.default') === 'log' && ! app()->isProduction(),
+            'devCode' => app()->isLocal() ? session('pending_verification_dev_code', '943606') : null,
         ]);
     }
 

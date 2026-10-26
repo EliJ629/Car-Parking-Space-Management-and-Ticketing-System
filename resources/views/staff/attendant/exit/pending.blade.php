@@ -63,7 +63,7 @@
       <h2 style="color:var(--paint-deep);">Paid and waiting for the Guard</h2>
       <p style="color:var(--muted);font-size:14px;">Slot {{ $session->slot_code }} stays Pending exit and cannot be given to another vehicle.</p>
 
-      <div style="padding:14px;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;margin-bottom:18px;">
+      <div class="ba-detail-box" style="padding:14px;background:var(--bg);border:1px solid var(--line);border-radius:8px;margin-bottom:18px;color:var(--ink);">
         <div style="display:flex;justify-content:space-between;font-size:14px;">
           <span>Paid in cash</span>
           <b style="font-size:20px;font-family:var(--f-d);">{{ \App\Support\Lot::peso($session->payment?->total) }}</b>
@@ -121,7 +121,7 @@
     <h2 style="color:var(--stop);">Exit window ended</h2>
     <p>{{ $session->ticket_number }} paid at {{ \App\Support\Lot::time($session->payment?->paid_at) }}. The 15 minute exit window ended at {{ $windowEndsAt }} and the vehicle is still in {{ $session->slot_code }}.</p>
 
-    <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;padding:16px;margin-bottom:16px;font-size:14px;">
+    <div class="ba-detail-box" style="background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:16px;font-size:14px;color:var(--ink);">
       <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
         <span style="color:var(--muted);">Stay now</span>
         <b>{{ \App\Support\Lot::duration($recalc['minutes']) }}</b>
@@ -144,7 +144,7 @@
       </div>
     </div>
 
-    <p style="font-size:12px;color:var(--muted);">The penalty can be waived with the manager PIN.</p>
+    <p style="font-size:12px;color:var(--muted);">The penalty can be waived with manager password approval at checkout.</p>
 
     <div class="actions">
       <button class="btn ghost" type="button" data-close>Close</button>

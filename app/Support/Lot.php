@@ -122,9 +122,24 @@ class Lot
             return '';
         }
 
-        // Vintage plates such as A123BC are written A-123-BC.
+        // Vintage RA 11698 plates such as A1234BC are written A-1234-BC.
+        if (preg_match('/^[A-Z][0-9]{4}[A-Z]{2}$/', $plate)) {
+            return substr($plate, 0, 1).'-'.substr($plate, 1, 4).'-'.substr($plate, 5);
+        }
+
+        // Vintage / Motorcycle plates such as A123BC are written A-123-BC.
         if (preg_match('/^[A-Z][0-9]{3}[A-Z]{2}$/', $plate)) {
             return substr($plate, 0, 1).'-'.substr($plate, 1, 3).'-'.substr($plate, 4);
+        }
+
+        // Temporary transit motorcycle format (15 digits, e.g. 1301-00000012345)
+        if (preg_match('/^[0-9]{15}$/', $plate)) {
+            return substr($plate, 0, 4).'-'.substr($plate, 4);
+        }
+
+        // Diplomatic or 6-7 digit plates (e.g. 100 1234, 100 123, 123 456)
+        if (preg_match('/^[0-9]{6,7}$/', $plate)) {
+            return substr($plate, 0, 3).' '.substr($plate, 3);
         }
 
         if (preg_match('/^([A-Z]+)([0-9]+)$/', $plate, $m) || preg_match('/^([0-9]+)([A-Z]+)$/', $plate, $m)) {

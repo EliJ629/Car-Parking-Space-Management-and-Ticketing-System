@@ -87,15 +87,21 @@
       @endif
     </div>
 
-    <div style="display:flex;gap:12px;">
-      <button class="btn primary" type="button" data-open="#print-preview-dlg" id="btn-open-ticket-print">Print ticket</button>
-      <a class="btn ghost guard-unprinted-ticket" href="{{ route('attendant.entry.index') }}">New entry</a>
+    <div style="display:flex;gap:12px;align-items:center;">
+      <button class="btn primary" type="button" data-open="#print-preview-dlg" id="btn-open-ticket-print" style="padding:0 24px;font-size:15px;display:inline-flex;align-items:center;gap:8px;">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>
+        <span>Print ticket</span>
+      </button>
+      <a class="btn ghost guard-unprinted-ticket" href="{{ route('attendant.entry.index') }}">+ New entry</a>
     </div>
   </div>
 
   <!-- Right Column: Thermal Ticket Preview -->
   <div>
-    <div class="ba-thermal">
+    <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;display:flex;align-items:center;gap:6px;">
+      <span>🖨️ Thermal Paper Preview (58 mm)</span>
+    </div>
+    <div class="ba-thermal" style="box-shadow:0 10px 25px rgba(0,0,0,0.12);border-radius:4px;">
       <h4>{{ \App\Support\Lot::lotName() }}</h4>
       <p class="subt">{{ \App\Support\Lot::lotAddress() }}</p>
       <p class="subt" style="margin-top:2px;font-weight:700;">Parking ticket</p>
@@ -149,27 +155,46 @@
 
     <div class="actions">
       <button class="btn ghost" type="button" data-close>Cancel</button>
-      <button class="btn primary" type="button" id="btn-do-print-ticket" onclick="markTicketPrinted(); window.baPrint('#ticket-print-slip');">Print</button>
+      <button class="btn primary" type="button" id="btn-do-print-ticket" onclick="triggerTicketPrint();">Print</button>
     </div>
   </div>
 </dialog>
 
-<!-- Unprinted Ticket Warning Modal (Option A) -->
+<!-- Confirmation Modal to verify physical printout -->
+<dialog class="badlg" id="print-confirm-dlg">
+  <div class="in">
+    <button class="x" type="button" data-close aria-label="Close">&times;</button>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+      <span style="font-size:26px;">🖨️</span>
+      <h2 style="margin:0;">Did the ticket print?</h2>
+    </div>
+    <p>Please check your thermal printer. Did ticket <b>{{ $session->ticket_number }}</b> print successfully?</p>
+    <div style="font-size:13px;color:var(--ink);background:var(--bg);padding:12px 14px;border-radius:6px;border-left:3px solid var(--paint);margin-bottom:16px;">
+      If printing was cancelled or jammed, click <strong>Cancel / Retry</strong> so the ticket remains marked as unprinted.
+    </div>
+    <div class="actions" style="justify-content:flex-end;">
+      <button class="btn ghost" type="button" onclick="cancelTicketPrint();">Cancel / Retry</button>
+      <button class="btn primary" type="button" id="btn-confirm-printed" onclick="confirmTicketPrinted();">✓ Yes, ticket printed</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- Unprinted Ticket Warning Modal -->
 <dialog class="badlg" id="unprinted-ticket-dlg">
   <div class="in">
     <button class="x" type="button" data-close aria-label="Close">&times;</button>
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
       <span style="font-size:26px;">⚠️</span>
-      <h2 style="margin:0;">Ticket not printed</h2>
+      <h2 style="margin:0;">Ticket print required</h2>
     </div>
     <p>
       The thermal ticket for slot <b>{{ $session->slot_code }}</b> (Ticket <b>{{ $session->ticket_number }}</b>) has not been printed yet.
     </p>
     <div style="font-size:13px;color:var(--ink);background:var(--bg);padding:12px 14px;border-radius:6px;border-left:3px solid var(--paint);margin-bottom:16px;">
-      Drivers need their physical ticket to verify their assigned slot and present it to the booth upon exit.
+      Printing is required so the driver has their physical ticket to locate their assigned slot and present it to the booth upon exit.
     </div>
     <div class="actions" style="justify-content:flex-end;">
-      <a class="btn ghost" id="unprinted-ticket-proceed-btn" href="{{ route('attendant.entry.index') }}">Proceed without printing</a>
+      <button class="btn ghost" type="button" data-close>Back</button>
       <button class="btn primary" type="button" onclick="document.getElementById('unprinted-ticket-dlg').close(); document.getElementById('print-preview-dlg').showModal();">Print ticket now</button>
     </div>
   </div>
@@ -178,6 +203,48 @@
 <script>
   let hasPrintedTicket = false;
   let pendingTicketUrl = '{{ route('attendant.entry.index') }}';
+
+  function triggerTicketPrint() {
+    const previewDlg = document.getElementById('print-preview-dlg');
+    if (previewDlg && typeof previewDlg.close === 'function') {
+      previewDlg.close();
+    }
+
+    // Send to thermal printer
+    window.baPrint('#ticket-print-slip');
+
+    // Prompt attendant to confirm physical printout
+    setTimeout(() => {
+      const confirmDlg = document.getElementById('print-confirm-dlg');
+      if (confirmDlg && typeof confirmDlg.showModal === 'function') {
+        confirmDlg.showModal();
+        const yesBtn = document.getElementById('btn-confirm-printed');
+        if (yesBtn) yesBtn.focus();
+      }
+    }, 700);
+  }
+
+  function confirmTicketPrinted() {
+    const confirmDlg = document.getElementById('print-confirm-dlg');
+    if (confirmDlg && typeof confirmDlg.close === 'function') {
+      confirmDlg.close();
+    }
+    markTicketPrinted();
+  }
+
+  function cancelTicketPrint() {
+    const confirmDlg = document.getElementById('print-confirm-dlg');
+    if (confirmDlg && typeof confirmDlg.close === 'function') {
+      confirmDlg.close();
+    }
+    hasPrintedTicket = false;
+    const btn = document.getElementById('btn-open-ticket-print');
+    if (btn) {
+      btn.innerHTML = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg> <span>Print ticket</span>`;
+      btn.classList.remove('ghost');
+      btn.classList.add('primary');
+    }
+  }
 
   function markTicketPrinted() {
     hasPrintedTicket = true;
@@ -199,10 +266,6 @@
         if (!hasPrintedTicket) {
           e.preventDefault();
           pendingTicketUrl = el.href;
-          const proceedBtn = document.getElementById('unprinted-ticket-proceed-btn');
-          if (proceedBtn) {
-            proceedBtn.href = pendingTicketUrl;
-          }
           const dlg = document.getElementById('unprinted-ticket-dlg');
           if (dlg && typeof dlg.showModal === 'function') {
             dlg.showModal();
@@ -212,7 +275,21 @@
     });
   }
 
-  document.addEventListener('DOMContentLoaded', setupTicketNavigationGuard);
+  document.addEventListener('DOMContentLoaded', () => {
+    setupTicketNavigationGuard();
+    // Pressing 'p' or 'Enter' opens the print preview directly if no other dialog is open
+    document.addEventListener('keydown', (e) => {
+      if (e.target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
+      if (document.querySelector('dialog[open]')) return;
+      if (e.key === 'p' || e.key === 'P' || e.key === 'Enter') {
+        const btn = document.getElementById('btn-open-ticket-print');
+        if (btn) {
+          e.preventDefault();
+          btn.click();
+        }
+      }
+    });
+  });
   setupTicketNavigationGuard();
 </script>
 @endsection

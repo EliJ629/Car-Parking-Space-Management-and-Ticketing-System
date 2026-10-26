@@ -64,7 +64,7 @@ class EntryController extends Controller
             'slots' => $slots,
             'counts' => $counts,
             'nextTicket' => $nextTicket,
-            'vehicleTypes' => Vehicle::TYPES,
+            'vehicleTypes' => Vehicle::DRIVER_TYPES,
             'vehicleColors' => Vehicle::COLORS,
             'nearestPending' => $nearestPending,
         ]);
@@ -147,18 +147,24 @@ class EntryController extends Controller
     /** BA-17/BA-18: Store Walk-in and Create Ticket */
     public function storeWalkIn(Request $request, NoticeService $notices): RedirectResponse
     {
+        $rawPhone = $request->input('phone');
+        $cleanPhone = is_string($rawPhone) ? preg_replace('/[\s-]+/', '', $rawPhone) : $rawPhone;
+
         $request->merge([
             'plate' => Vehicle::normalizePlate($request->input('plate')),
-            'phone' => Lot::normalizePhone($request->input('phone')),
+            'phone' => Lot::normalizePhone($cleanPhone),
         ]);
 
         $validated = $request->validate([
             'plate' => Rules::plate(true),
             'phone' => Rules::mobile(false),
-            'color' => ['required', 'string'],
-            'type' => ['required', 'string'],
-            'slot_code' => ['required', 'string'],
+            'color' => ['required', 'string', 'max:30', 'regex:/^[A-Za-z\s-]+$/'],
+            'type' => ['required', 'string', \Illuminate\Validation\Rule::in(Vehicle::DRIVER_TYPES)],
+            'slot_code' => ['required', 'string', 'exists:parking_slots,code'],
             'driver_id' => ['nullable', 'exists:users,id'],
+        ], [
+            'type.in' => 'Please select an allowed vehicle type (Car, SUV, Van, Pickup, or Motorcycle).',
+            'color.regex' => 'Vehicle color must contain letters only.',
         ]);
 
         $normPlate = Vehicle::normalizePlate($validated['plate']);

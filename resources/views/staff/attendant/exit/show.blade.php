@@ -16,6 +16,17 @@
   <span class="ba-step">5. Guard approval</span>
 </div>
 
+@if ($errors->any())
+  <div style="background:var(--stop-bg);border-left:5px solid var(--stop);border-radius:0 8px 8px 0;padding:14px 18px;margin-bottom:20px;color:var(--stop);">
+    <b style="font-size:15px;display:block;margin-bottom:4px;">Cannot process payment &mdash; please check details:</b>
+    <ul style="margin:0;padding-left:18px;font-size:13px;">
+      @foreach ($errors->all() as $err)
+        <li>{{ $err }}</li>
+      @endforeach
+    </ul>
+  </div>
+@endif
+
 <div style="display:grid;grid-template-columns:1.2fr 1.4fr;gap:24px;align-items:start;">
   
   <!-- Left Column: Parking Session Details Card (BA-37, BA-43) -->
@@ -143,7 +154,7 @@
       <!-- State 1: No discount (BA-37) -->
       <div id="disc-unapplied-box">
         <p style="color:var(--muted);font-size:14px;margin-bottom:16px;">
-          No discount applied. Senior and PWD need an ID number. Tenant validation needs a manager PIN.
+          No discount applied. Senior and PWD discounts require a valid ID number.
         </p>
         <button class="btn ghost sm" type="button" data-open="#apply-discount-dlg">Apply discount</button>
       </div>
@@ -185,7 +196,7 @@
             <b>{{ $d->name }}, {{ $d->percent }}%</b>
             <small style="color:var(--muted);display:block;">
               @if ($d->requires_manager_pin)
-                Needs manager approval PIN
+                Needs manager password approval
               @else
                 Needs an ID number
               @endif
@@ -197,14 +208,16 @@
 
     <div class="ba-form-group">
       <label class="ba-label" for="disc-proof-input" id="disc-proof-label">ID number / Proof</label>
-      <input class="ba-input" id="disc-proof-input" type="text" placeholder="e.g. SC-0048215" autocomplete="off" oninput="this.value = this.value.toUpperCase().replace(/[^A-Z0-9\s\/-]/g, '')">
+      <input class="ba-input" id="disc-proof-input" type="text" placeholder="e.g. SC-0048215" autocomplete="off"
+             maxlength="30" oninput="this.value = this.value.toUpperCase().replace(/[^A-Z0-9\s\/-]/g, '').slice(0, 30)">
       <p id="disc-proof-hint" style="font-size:12px;color:var(--muted);margin-top:4px;">OSCA ID card number, Senior Citizen card, or PhilSys PCN</p>
       <div class="ba-err-msg" id="disc-proof-err" hidden style="margin-top:6px;font-size:13px;"></div>
     </div>
 
     <div class="ba-form-group">
       <label class="ba-label" for="disc-note-input">Note (optional)</label>
-      <input class="ba-input" id="disc-note-input" type="text" placeholder="Optional note (e.g. ID verified at booth)" oninput="this.value = this.value.replace(/[<>{}\`\\]/g, '')">
+      <input class="ba-input" id="disc-note-input" type="text" placeholder="Optional note (e.g. ID verified at booth)"
+             maxlength="120" oninput="this.value = this.value.replace(/[<>{}\`\\]/g, '').slice(0, 120)">
     </div>
 
     <div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:6px;padding:12px;margin-bottom:18px;font-size:13px;color:#166534;">
@@ -219,12 +232,12 @@
   </div>
 </dialog>
 
-<!-- POP-UP BA-40 & BA-41: Manager Approval PIN Modal -->
+<!-- POP-UP BA-40 & BA-41: Manager Approval Password Modal -->
 <dialog class="badlg" id="manager-pin-dlg">
   <div class="in">
     <button class="x" type="button" data-close aria-label="Close">&times;</button>
     <h2>Manager approval needed</h2>
-    <p>Tenant validation (50%) and penalty waivers need the approval of the Parking manager.</p>
+    <p>Manager password authorization is required to approve this request.</p>
 
     <div class="ba-form-group">
       <label class="ba-label" for="approving-mgr-select">Approving manager</label>
@@ -236,10 +249,10 @@
     </div>
 
     <div class="ba-form-group">
-      <label class="ba-label" for="manager-pin-input">Manager PIN</label>
-      <input class="ba-input" id="manager-pin-input" type="password" inputmode="numeric" pattern="[0-9]{6}" minlength="6" maxlength="6" placeholder="••••••" autocomplete="off" style="letter-spacing:6px;font-size:20px;">
-      <p style="font-size:12px;color:var(--muted);margin-top:4px;">Enter the 6-digit PIN. The attendant does not see it.</p>
-      <div class="ba-err-msg" id="pin-err-msg" hidden>Wrong PIN. 2 attempts left.</div>
+      <label class="ba-label" for="manager-pin-input">Manager password</label>
+      <input class="ba-input" id="manager-pin-input" type="password" placeholder="Enter manager password" autocomplete="current-password" style="font-size:16px;">
+      <p style="font-size:12px;color:var(--muted);margin-top:4px;">Enter the manager's account password. The attendant does not see it.</p>
+      <div class="ba-err-msg" id="pin-err-msg" hidden>Wrong password. 2 attempts left.</div>
     </div>
 
     <div class="actions">
@@ -283,7 +296,7 @@
 </dialog>
 
 <!-- POP-UP BA-44 & BA-45: Take Cash Payment Modal -->
-<dialog class="badlg" id="cash-payment-dlg">
+<dialog class="badlg {{ $errors->has('cash_received') ? 'auto-open' : '' }}" id="cash-payment-dlg">
   <form class="in" method="POST" action="{{ route('attendant.exit.pay', $session) }}">
     @csrf
     <input type="hidden" name="discount_id" id="pay-hidden-disc-id" value="">
@@ -303,12 +316,16 @@
 
     <div class="ba-form-group">
       <label class="ba-label" for="cash-received-input">Cash received</label>
-      <input class="ba-input" id="cash-received-input" name="cash_received" type="number" step="any" min="0"
-             value="{{ $estimate['total'] }}"
-             style="font-size:24px;font-weight:800;" autofocus
-             onkeydown="if(['-','+','e','E'].includes(event.key))event.preventDefault();"
-             oninput="if(parseFloat(this.value)<0)this.value=0;">
-      <div class="ba-err-msg" id="cash-error-msg" hidden></div>
+      <div style="position:relative;">
+        <span style="position:absolute;left:14px;top:50%;transform:translateY(-50%);font-size:22px;font-weight:800;color:var(--muted);pointer-events:none;">₱</span>
+        <input class="ba-input" id="cash-received-input" type="text" inputmode="decimal" maxlength="12"
+               value="{{ old('cash_received') ? number_format((float) old('cash_received'), 2) : number_format($estimate['total'], 2) }}"
+               style="font-size:24px;font-weight:800;padding-left:36px;letter-spacing:0.5px;" autofocus autocomplete="off">
+      </div>
+      <input type="hidden" name="cash_received" id="hidden-cash-received" value="{{ old('cash_received', $estimate['total']) }}">
+      <div class="ba-err-msg" id="cash-error-msg" {{ $errors->has('cash_received') ? '' : 'hidden' }} style="margin-top:6px;font-size:13px;color:var(--stop);font-weight:600;">
+        {{ $errors->first('cash_received') }}
+      </div>
     </div>
 
     <!-- Quick Amount Buttons (BA-44) -->
@@ -319,8 +336,9 @@
       <button class="btn ghost sm" type="button" data-quick-cash="500">₱500</button>
     </div>
 
-    <div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:6px;padding:12px;margin-bottom:20px;font-size:14px;">
-      Change to give back: <b id="change-val" style="font-size:20px;color:#166534;margin-left:8px;">₱0.00</b>
+    <div class="ba-detail-box" style="background:var(--ok-bg);border:1px solid var(--ok);margin-bottom:20px;font-size:14px;display:flex;justify-content:space-between;align-items:center;">
+      <span style="color:var(--ink);">Change to give back:</span>
+      <b id="change-val" style="font-size:20px;color:var(--ok);">₱0.00</b>
     </div>
 
     <div class="actions">
@@ -341,7 +359,7 @@ const exitCsrf = "{{ csrf_token() }}";
 
 function recalculateFinal() {
   const subtotal = baseCharge + currentPenalty;
-  let discAmt = 0.0;
+  let discAmt = 0;
   if (currentDiscount) {
     discAmt = Math.round((subtotal * currentDiscount.percent) / 100 * 100) / 100;
   }
@@ -363,7 +381,7 @@ function recalculateFinal() {
   }
   const cashIn = document.getElementById('cash-received-input');
   if (cashIn) {
-    cashIn.value = total.toFixed(2);
+    cashIn.value = total.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
     cashIn.dispatchEvent(new Event('input'));
   }
 }
@@ -375,8 +393,13 @@ if (openPayBtn) {
     const cashIn = document.getElementById('cash-received-input');
     const dueVal = document.getElementById('due-amount-val');
     if (cashIn && dueVal) {
-      cashIn.value = parseFloat(dueVal.dataset.due || '0').toFixed(2);
+      const rawDue = parseFloat(dueVal.dataset.due || '0');
+      cashIn.value = rawDue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
       cashIn.dispatchEvent(new Event('input'));
+      setTimeout(() => {
+        cashIn.focus();
+        cashIn.select();
+      }, 80);
     }
   });
 }
@@ -574,11 +597,10 @@ document.getElementById('btn-remove-discount').addEventListener('click', () => {
   recalculateFinal();
 });
 
-// Manager PIN input handling (digits only, max 6)
+// Manager password input handling
 const mgrPinInput = document.getElementById('manager-pin-input');
 if (mgrPinInput) {
   mgrPinInput.addEventListener('input', function() {
-    this.value = this.value.replace(/\D/g, '').slice(0, 6);
     document.getElementById('pin-err-msg').hidden = true;
   });
 
@@ -586,25 +608,20 @@ if (mgrPinInput) {
     if (e.key === 'Enter') {
       e.preventDefault();
       document.getElementById('btn-submit-pin').click();
-      return;
-    }
-    const allowedKeys = ['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Tab', 'Escape'];
-    if (!allowedKeys.includes(e.key) && !/^[0-9]$/.test(e.key) && !e.ctrlKey && !e.metaKey) {
-      e.preventDefault();
     }
   });
 }
 
-// Submit Manager PIN (BA-40 & BA-41)
+// Submit Manager Password (BA-40 & BA-41)
 document.getElementById('btn-submit-pin').addEventListener('click', async () => {
   const managerId = document.getElementById('approving-mgr-select').value;
   const pinInput = document.getElementById('manager-pin-input');
-  const pin = pinInput.value.trim();
+  const password = pinInput.value;
   const pinErr = document.getElementById('pin-err-msg');
   pinErr.hidden = true;
 
-  if (pin.length !== 6 || !/^\d{6}$/.test(pin)) {
-    pinErr.textContent = 'Please enter a 6-digit manager PIN.';
+  if (!password) {
+    pinErr.textContent = 'Please enter the manager password.';
     pinErr.hidden = false;
     pinInput.focus();
     return;
@@ -614,12 +631,12 @@ document.getElementById('btn-submit-pin').addEventListener('click', async () => 
     const res = await fetch(verifyPinUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': exitCsrf, 'Accept': 'application/json' },
-      body: JSON.stringify({ manager_id: managerId, pin })
+      body: JSON.stringify({ manager_id: managerId, password: password, pin: password })
     });
     const data = await res.json();
 
     if (!data.ok) {
-      pinErr.textContent = data.message || 'Wrong PIN.';
+      pinErr.textContent = data.message || 'Wrong password.';
       pinErr.hidden = false;
       if (data.blocked) {
         pinInput.disabled = true;
@@ -635,7 +652,7 @@ document.getElementById('btn-submit-pin').addEventListener('click', async () => 
     applyDiscountDirectly(window.pendingDiscount, data.manager_name);
   } catch (e) {
     console.error(e);
-    pinErr.textContent = 'Could not verify PIN. Please try again.';
+    pinErr.textContent = 'Could not verify manager password. Please try again.';
     pinErr.hidden = false;
   }
 });

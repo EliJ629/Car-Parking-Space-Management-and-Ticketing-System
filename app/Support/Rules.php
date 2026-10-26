@@ -158,7 +158,7 @@ class Rules
         return [$required ? 'required' : 'nullable', 'regex:'.Vehicle::PLATE_PATTERN];
     }
 
-    public const PLATE_MESSAGE = 'Enter a plate like ABC 1234. Short plates of high offices, such as 5 or SENATE 3, are accepted too.';
+    public const PLATE_MESSAGE = 'Enter a valid Philippine plate like ABC 1234, AB 12345, vanity, or protocol plates (e.g. 1 for President).';
 
     public static function makeModel(): array
     {

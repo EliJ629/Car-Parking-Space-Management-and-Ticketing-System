@@ -58,6 +58,7 @@ Route::prefix('staff/attendant')->name('attendant.')->middleware(['area:staff', 
     // Shift Summary & Reconciliation
     Route::get('shift', [ShiftController::class, 'index'])->name('shift.index');
     Route::post('shift/close', [ShiftController::class, 'closeShift'])->name('shift.close');
+    Route::post('shift/verify-pin', [ShiftController::class, 'verifyPin'])->name('shift.verify-pin');
 
     // Alerts
     Route::get('alerts', [AlertController::class, 'index'])->name('alerts')->withoutMiddleware('sweep');

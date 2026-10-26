@@ -26,4 +26,8 @@ Homestead.json
 Homestead.yaml
 Thumbs.db
 .bayline-backup/
+.env.*
+*.sqlite
+*.sqlite-journal
+neondb
 

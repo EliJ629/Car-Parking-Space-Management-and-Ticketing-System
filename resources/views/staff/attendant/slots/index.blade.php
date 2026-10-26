@@ -8,7 +8,7 @@
 <p class="ba-sub">Click a slot to see its details or to correct its status.</p>
 
 @if ($errors->any())
-  <div style="background:#FEF2F2;border-left:5px solid #EF4444;border-radius:0 8px 8px 0;padding:14px 18px;margin-bottom:20px;color:#991B1B;">
+  <div style="background:var(--stop-bg);border-left:5px solid var(--stop);border-radius:0 8px 8px 0;padding:14px 18px;margin-bottom:20px;color:var(--stop);">
     <b style="font-size:15px;display:block;margin-bottom:4px;">Cannot update slot status:</b>
     <ul style="margin:0;padding-left:18px;font-size:13px;">
       @foreach ($errors->all() as $err)
