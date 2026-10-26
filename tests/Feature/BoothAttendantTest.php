@@ -13,6 +13,7 @@ use App\Support\Lot;
 use Database\Seeders\ManagerDefaultsSeeder;
 use Database\Seeders\ParkingSlotSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
 class BoothAttendantTest extends TestCase
@@ -422,7 +423,7 @@ class BoothAttendantTest extends TestCase
         $correctRes->assertJson(['ok' => true]);
 
         // Manager's configured 6-digit PIN
-        $manager->forceFill(['manager_pin_hash' => \Illuminate\Support\Facades\Hash::make('987654')])->save();
+        $manager->forceFill(['manager_pin_hash' => Hash::make('987654')])->save();
         $configuredRes = $this->actingAs($attendant)->postJson(route('attendant.exit.verify-pin', $session2), [
             'manager_id' => $manager->id,
             'pin' => '987654',
@@ -512,14 +513,14 @@ class BoothAttendantTest extends TestCase
         $validPlates = [
             'ABC 1234' => 'ABC 1234',   // Current Standard Car (MVSP)
             'AB 12345' => 'AB 12345',   // Current Standard Motorcycle (MVSP)
-            'ABC 123'  => 'ABC 123',    // Legacy Car (1981-2014)
-            'AB 1234'  => 'AB 1234',    // Legacy Motorcycle
-            '1234 AB'  => '1234 AB',    // Regional Motorcycle
+            'ABC 123' => 'ABC 123',    // Legacy Car (1981-2014)
+            'AB 1234' => 'AB 1234',    // Legacy Motorcycle
+            '1234 AB' => '1234 AB',    // Regional Motorcycle
             'A-123-BC' => 'A-123-BC',   // Vintage L-DDD-LL
-            '123-ABC'  => '123 ABC',    // Vintage DDD-LLL
-            '1'        => '1',          // Protocol: President of the Philippines
-            '7'        => '7',          // Protocol: Senator
-            '16'       => '16',         // Protocol: Regional Trial Court Judge
+            '123-ABC' => '123 ABC',    // Vintage DDD-LLL
+            '1' => '1',          // Protocol: President of the Philippines
+            '7' => '7',          // Protocol: Senator
+            '16' => '16',         // Protocol: Regional Trial Court Judge
         ];
 
         foreach ($validPlates as $rawPlate => $expectedDisplay) {

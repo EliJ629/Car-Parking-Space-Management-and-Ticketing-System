@@ -3,8 +3,8 @@
 namespace App\Http\Controllers\Driver;
 
 use App\Http\Controllers\Controller;
-use App\Models\ActivityLog;
 use App\Mail\ConfirmRegistrationMail;
+use App\Models\ActivityLog;
 use App\Models\PendingRegistration;
 use App\Models\User;
 use App\Models\Vehicle;

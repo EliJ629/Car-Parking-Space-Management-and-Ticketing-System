@@ -3,6 +3,7 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Mail\ResetPasswordMail;
 use App\Support\Rules;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -77,7 +78,7 @@ class User extends Authenticatable
     /** The reset email is Bayline's own message, with a link to the new password form. */
     public function sendPasswordResetNotification($token): void
     {
-        Mail::to($this->email)->send(new \App\Mail\ResetPasswordMail(
+        Mail::to($this->email)->send(new ResetPasswordMail(
             $this->name,
             route($this->isDriver() ? 'password.reset' : 'staff.password.reset', ['token' => $token, 'email' => $this->email]),
             (int) config('auth.passwords.'.config('auth.defaults.passwords').'.expire', 60),

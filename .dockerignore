@@ -5,3 +5,6 @@
 .github
 .phpunit.result.cache
 storage/*.key
+/public/build
+/public/hot
+/public/storage

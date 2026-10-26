@@ -8,10 +8,15 @@ use App\Models\ParkingSession;
 use App\Models\ParkingSlot;
 use App\Models\SystemSetting;
 use App\Models\User;
+use App\Services\ReservationService;
 use App\Support\Lot;
+use App\Support\PwdPhoto;
 use Database\Seeders\ManagerDefaultsSeeder;
 use Database\Seeders\ParkingSlotSeeder;
+use Illuminate\Contracts\Debug\ExceptionHandler;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Exceptions\PostTooLargeException;
+use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
@@ -110,7 +115,7 @@ class ReservationApprovalTest extends TestCase
         $this->assertSame('pending', $reservation->fresh()->approval_status);
 
         // Even a direct call to the service refuses it.
-        $this->assertFalse(app(\App\Services\ReservationService::class)->approve($reservation, $attendant));
+        $this->assertFalse(app(ReservationService::class)->approve($reservation, $attendant));
     }
 
     public function test_the_migration_confirms_standard_reservations_that_were_waiting(): void
@@ -187,7 +192,7 @@ class ReservationApprovalTest extends TestCase
     {
         $this->lot();
         $driver = $this->driver();
-        $big = UploadedFile::fake()->create('pwd-id.jpg', (int) (\App\Support\PwdPhoto::limitKb() + 400), 'image/jpeg');
+        $big = UploadedFile::fake()->create('pwd-id.jpg', (int) (PwdPhoto::limitKb() + 400), 'image/jpeg');
         $form = $this->form($driver, 'A-01');
         $step3 = ['step' => 3, 'date' => $form['date'], 'time' => $form['time'], 'slot' => $form['slot'], 'vehicle' => $form['vehicle']];
 
@@ -200,9 +205,9 @@ class ReservationApprovalTest extends TestCase
         $this->assertMatchesRegularExpression('/<dialog[^>]*id="confirm-res"[^>]*data-autoopen/', $html);
         $this->assertMatchesRegularExpression('/<dialog[^>]*id="confirm-res".*?id="id-photo-warning"[^>]*role="alert"[^>]*>(?:(?!hidden).)*?too large.*?<\/dialog>/s', $html);
         $this->assertStringContainsString('Photo not accepted', $html);
-        $this->assertStringContainsString('data-max-bytes="'.\App\Support\PwdPhoto::limitBytes().'"', $html);
+        $this->assertStringContainsString('data-max-bytes="'.PwdPhoto::limitBytes().'"', $html);
         // The old warning above the pop-up is gone, so the reason is shown once and in the pop-up.
-        $this->assertSame(1, substr_count($html, \App\Support\PwdPhoto::tooLargeMessage()));
+        $this->assertSame(1, substr_count($html, PwdPhoto::tooLargeMessage()));
     }
 
     public function test_the_warning_box_is_hidden_until_there_is_something_to_say(): void
@@ -230,8 +235,8 @@ class ReservationApprovalTest extends TestCase
         $step3 = route('driver.reserve', ['step' => 3, 'date' => $form['date'], 'time' => $form['time'], 'slot' => $form['slot'], 'vehicle' => $form['vehicle']]);
 
         // PHP drops the whole form when it is over post_max_size, so the handler turns that into a redirect.
-        $request = \Illuminate\Http\Request::create(route('driver.reserve.store'), 'POST', [], [], [], ['HTTP_REFERER' => $step3]);
-        $response = app(\Illuminate\Contracts\Debug\ExceptionHandler::class)->render($request, new \Illuminate\Http\Exceptions\PostTooLargeException);
+        $request = Request::create(route('driver.reserve.store'), 'POST', [], [], [], ['HTTP_REFERER' => $step3]);
+        $response = app(ExceptionHandler::class)->render($request, new PostTooLargeException);
 
         $this->assertTrue($response->isRedirection());
         $target = $response->headers->get('Location');
@@ -239,21 +244,21 @@ class ReservationApprovalTest extends TestCase
         $this->assertStringEndsWith('&photo=too_large', $target);
 
         // Another page's oversize upload is left to the normal error page.
-        $other = \Illuminate\Http\Request::create('http://localhost/driver/vehicles', 'POST');
-        $this->assertSame(413, app(\Illuminate\Contracts\Debug\ExceptionHandler::class)->render($other, new \Illuminate\Http\Exceptions\PostTooLargeException)->getStatusCode());
+        $other = Request::create('http://localhost/driver/vehicles', 'POST');
+        $this->assertSame(413, app(ExceptionHandler::class)->render($other, new PostTooLargeException)->getStatusCode());
 
         $this->actingAs($driver)->get($target)->assertOk()
-            ->assertSee(\App\Support\PwdPhoto::tooLargeMessage(), false)->assertSee('data-autoopen', false);
+            ->assertSee(PwdPhoto::tooLargeMessage(), false)->assertSee('data-autoopen', false);
     }
 
     public function test_the_size_limit_follows_php_when_php_is_stricter(): void
     {
-        $this->assertSame(2 * 1024 * 1024, \App\Support\PwdPhoto::iniBytes('2M'));
-        $this->assertSame(512 * 1024, \App\Support\PwdPhoto::iniBytes('512K'));
-        $this->assertSame(1024 ** 3, \App\Support\PwdPhoto::iniBytes('1G'));
-        $this->assertSame(0, \App\Support\PwdPhoto::iniBytes('-1'));
-        $this->assertLessThanOrEqual(5 * 1024 * 1024, \App\Support\PwdPhoto::limitBytes());
-        $this->assertMatchesRegularExpression('/^\d+(\.\d)? MB$/', \App\Support\PwdPhoto::limitLabel());
+        $this->assertSame(2 * 1024 * 1024, PwdPhoto::iniBytes('2M'));
+        $this->assertSame(512 * 1024, PwdPhoto::iniBytes('512K'));
+        $this->assertSame(1024 ** 3, PwdPhoto::iniBytes('1G'));
+        $this->assertSame(0, PwdPhoto::iniBytes('-1'));
+        $this->assertLessThanOrEqual(5 * 1024 * 1024, PwdPhoto::limitBytes());
+        $this->assertMatchesRegularExpression('/^\d+(\.\d)? MB$/', PwdPhoto::limitLabel());
     }
 
     public function test_a_pwd_slot_needs_an_id_photo_that_is_really_a_photo(): void

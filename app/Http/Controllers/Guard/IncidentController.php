@@ -7,7 +7,6 @@ use App\Models\Incident;
 use App\Models\ParkingSession;
 use App\Models\ParkingSlot;
 use App\Models\Vehicle;
-use App\Services\GateService;
 use App\Services\IncidentService;
 use App\Support\Lot;
 use App\Support\Rules;

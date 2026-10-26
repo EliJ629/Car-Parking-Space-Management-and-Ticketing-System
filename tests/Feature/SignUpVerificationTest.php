@@ -2,14 +2,13 @@
 
 namespace Tests\Feature;
 
-use App\Mail\ConfirmRegistrationMail;
 use App\Mail\VerifyEmailMail;
 use App\Models\PendingRegistration;
 use App\Models\User;
 use App\Models\Vehicle;
-use App\Services\EmailVerification;
 use App\Support\VehicleCatalog;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Routing\Middleware\ThrottleRequests;
 use Illuminate\Support\Facades\Mail;
 use Tests\Feature\Concerns\ConfirmsSignUp;
 use Tests\TestCase;
@@ -23,7 +22,7 @@ class SignUpVerificationTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->withoutMiddleware(\Illuminate\Routing\Middleware\ThrottleRequests::class);
+        $this->withoutMiddleware(ThrottleRequests::class);
     }
 
     /** @return array<string, mixed> */

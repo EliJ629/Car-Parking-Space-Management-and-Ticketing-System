@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\Lot;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -45,7 +46,7 @@ class Vehicle extends Model
      */
     public function displayPlate(): string
     {
-        return \App\Support\Lot::plate($this->plate_number);
+        return Lot::plate($this->plate_number);
     }
 
     /** "Toyota Vios, white sedan" style line. */

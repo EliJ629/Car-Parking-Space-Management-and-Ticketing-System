@@ -11,10 +11,10 @@ use App\Models\Vehicle;
 use App\Support\Lot;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * Reservations (process document 6.3): list the slots free at a time, create,

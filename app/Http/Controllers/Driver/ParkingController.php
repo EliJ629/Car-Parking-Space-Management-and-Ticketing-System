@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Driver;
 use App\Http\Controllers\Controller;
 use App\Models\ParkingRateSet;
 use App\Models\ParkingReservation;
+use App\Models\ParkingSession;
 use App\Models\ParkingSlot;
 use App\Models\Vehicle;
 use App\Services\DriverData;
@@ -15,7 +16,6 @@ use App\Support\Lot;
 use App\Support\PwdPhoto;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
 use Illuminate\View\View;
 
 /** Find parking (live board) and the three step reservation. */
@@ -251,7 +251,7 @@ class ParkingController extends Controller
     /** The pop-up for a driver who still has a reservation or a parked car. */
     private function busyModal(ReservationException $e): array
     {
-        $parked = $e->context instanceof \App\Models\ParkingSession;
+        $parked = $e->context instanceof ParkingSession;
         $checkedIn = $e->context instanceof ParkingReservation && $e->context->status === ParkingReservation::STATUS_CHECKED_IN;
 
         return [

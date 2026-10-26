@@ -251,7 +251,7 @@ class ExitController extends Controller
                 'ok' => false,
                 'blocked' => false,
                 'attempts_left' => $attemptsLeft,
-                'message' => "Wrong PIN. {$attemptsLeft} attempt" . ($attemptsLeft === 1 ? '' : 's') . ' left.',
+                'message' => "Wrong PIN. {$attemptsLeft} attempt".($attemptsLeft === 1 ? '' : 's').' left.',
             ]);
         }
 

@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Incident;
 use App\Models\Notice;
+use App\Models\ParkingSession;
 use App\Support\Lot;
 use Illuminate\Support\Collection;
 
@@ -42,7 +43,7 @@ class GuardAlerts
                 'time' => Lot::stamp($n->created_at),
                 'url' => match ($n->subject_type) {
                     'incident' => route('guard.incidents.show', $n->subject_id),
-                    'session' => route('guard.gate', ['tab' => 'search', 'q' => \App\Models\ParkingSession::query()->whereKey($n->subject_id)->value('ticket_number')]),
+                    'session' => route('guard.gate', ['tab' => 'search', 'q' => ParkingSession::query()->whereKey($n->subject_id)->value('ticket_number')]),
                     default => route('guard.gate'),
                 },
                 'unread' => $n->isUnread(),

@@ -6,7 +6,9 @@ use App\Mail\ResetPasswordMail;
 use App\Models\PasswordHistory;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Routing\Middleware\ThrottleRequests;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Password;
 use Tests\TestCase;
@@ -21,7 +23,7 @@ class ForgotPasswordTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->withoutMiddleware(\Illuminate\Routing\Middleware\ThrottleRequests::class);
+        $this->withoutMiddleware(ThrottleRequests::class);
         Mail::fake();
     }
 
@@ -203,9 +205,9 @@ class ForgotPasswordTest extends TestCase
     public function test_signing_in_with_google_sends_no_mail(): void
     {
         config(['services.google.client_id' => 'id', 'services.google.client_secret' => 's']);
-        \Illuminate\Support\Facades\Http::fake([
-            'oauth2.googleapis.com/*' => \Illuminate\Support\Facades\Http::response(['access_token' => 'tok'], 200),
-            'openidconnect.googleapis.com/*' => \Illuminate\Support\Facades\Http::response(['sub' => 'g-9', 'email' => 'ana.reyes@gmail.com', 'email_verified' => true, 'name' => 'Ana Reyes'], 200),
+        Http::fake([
+            'oauth2.googleapis.com/*' => Http::response(['access_token' => 'tok'], 200),
+            'openidconnect.googleapis.com/*' => Http::response(['sub' => 'g-9', 'email' => 'ana.reyes@gmail.com', 'email_verified' => true, 'name' => 'Ana Reyes'], 200),
         ]);
         $this->driver(['email' => 'ana.reyes@gmail.com', 'email_verified_at' => null]);
 

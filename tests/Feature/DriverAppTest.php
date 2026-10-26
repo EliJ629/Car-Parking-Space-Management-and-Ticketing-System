@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Mail\ConfirmRegistrationMail;
+use App\Mail\VerifyEmailMail;
 use App\Models\Notice;
 use App\Models\ParkingPayment;
 use App\Models\ParkingReservation;
@@ -13,6 +15,8 @@ use App\Support\Lot;
 use Database\Seeders\ManagerDefaultsSeeder;
 use Database\Seeders\ParkingSlotSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
 class DriverAppTest extends TestCase
@@ -243,9 +247,9 @@ class DriverAppTest extends TestCase
         $this->post(route('driver.register'), $base)->assertSessionHasErrors('make_model');
         $this->assertSame(0, User::where('email', 'pedro.cruz@gmail.com')->count());
 
-        \Illuminate\Support\Facades\Mail::fake();
+        Mail::fake();
         $this->post(route('driver.register'), $base + ['make_model' => 'Toyota Vios'])->assertRedirect(route('driver.register.sent'));
-        \Illuminate\Support\Facades\Mail::assertSent(\App\Mail\ConfirmRegistrationMail::class, fn ($mail) => $this->get($mail->link)->assertRedirect(route('driver.login')) !== null);
+        Mail::assertSent(ConfirmRegistrationMail::class, fn ($mail) => $this->get($mail->link)->assertRedirect(route('driver.login')) !== null);
         $this->assertSame('Toyota Vios', Vehicle::where('plate_number', 'KLM4455')->value('make_model'));
     }
 
@@ -419,7 +423,7 @@ class DriverAppTest extends TestCase
         $driver = $this->driver();
 
         // The name is saved at once. A new phone number waits for the code that is emailed.
-        \Illuminate\Support\Facades\Mail::fake();
+        Mail::fake();
         $this->actingAs($driver)->put(route('driver.account.profile.update'), ['name' => 'Maria S. Santos', 'email' => 'maria@example.com', 'phone' => '09175550199'])
             ->assertRedirect(route('driver.account.confirm'));
         $this->assertSame('Maria S. Santos', $driver->fresh()->name);
@@ -427,7 +431,7 @@ class DriverAppTest extends TestCase
         $this->assertSame('09175550199', $driver->fresh()->pending_phone);
 
         $code = null;
-        \Illuminate\Support\Facades\Mail::assertSent(\App\Mail\VerifyEmailMail::class, function ($mail) use (&$code, $driver) {
+        Mail::assertSent(VerifyEmailMail::class, function ($mail) use (&$code, $driver) {
             $code = $mail->code;
 
             return $mail->hasTo($driver->email) && $mail->purpose === 'change';
@@ -443,7 +447,7 @@ class DriverAppTest extends TestCase
             ->assertSessionHasErrors('password');
         $this->actingAs($driver)->put(route('driver.account.password.update'), ['current_password' => 'Driver123_', 'password' => 'Newpass123!', 'password_confirmation' => 'Newpass123!'])
             ->assertRedirect(route('driver.account'));
-        $this->assertTrue(\Illuminate\Support\Facades\Hash::check('Newpass123!', $driver->fresh()->password));
+        $this->assertTrue(Hash::check('Newpass123!', $driver->fresh()->password));
     }
 
     public function test_a_suspended_driver_only_sees_the_suspended_page(): void
