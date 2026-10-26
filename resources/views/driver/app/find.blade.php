@@ -25,6 +25,7 @@
   </div>
 @endif
 
+@include('driver.app.partials.floor-tabs', ['floors' => $floors, 'selectedFloor' => $selectedFloor, 'route' => 'driver.find'])
 @include('partials.slot-layout', ['zones' => $zones, 'zonePositions' => $zonePositions, 'item' => 'driver.app.partials.slot-item-view', 'label' => 'Parking lot map, tap a slot'])
 @include('driver.app.partials.legend')
 

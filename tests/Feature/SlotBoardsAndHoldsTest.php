@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\ParkingLayoutZone;
 use App\Models\ParkingPayment;
 use App\Models\ParkingReservation;
 use App\Models\ParkingSession;
@@ -9,6 +10,7 @@ use App\Models\ParkingSlot;
 use App\Models\User;
 use App\Services\ReservationService;
 use App\Support\Lot;
+use Carbon\CarbonInterface;
 use Database\Seeders\ManagerDefaultsSeeder;
 use Database\Seeders\ParkingSlotSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -30,7 +32,7 @@ class SlotBoardsAndHoldsTest extends TestCase
         Storage::fake('local');
     }
 
-    private function user(string $role, string $email = null): User
+    private function user(string $role, ?string $email = null): User
     {
         $email ??= $role.'@example.com';
 
@@ -46,7 +48,7 @@ class SlotBoardsAndHoldsTest extends TestCase
         return $d;
     }
 
-    private function reserve(User $driver, string $slotCode, \Carbon\CarbonInterface $at, bool $photo = false)
+    private function reserve(User $driver, string $slotCode, CarbonInterface $at, bool $photo = false)
     {
         return $this->actingAs($driver)->post(route('driver.reserve.store'), [
             'date' => $at->format('Y-m-d'), 'time' => $at->format('H:i'), 'understand' => '1',
@@ -152,6 +154,32 @@ class SlotBoardsAndHoldsTest extends TestCase
         }
 
         $this->assertStringContainsString('slot-layout-slot occ', $pages['guard']);
+    }
+
+    public function test_driver_reservation_shows_one_manager_layout_floor_at_a_time(): void
+    {
+        $this->lot();
+        $driver = $this->driver();
+
+        ParkingLayoutZone::create(['zone' => 'Zone E', 'vehicle_type' => ParkingLayoutZone::VEHICLE_CAR]);
+        ParkingSlot::create([
+            'code' => 'E-01',
+            'zone' => 'Zone E',
+            'type' => ParkingSlot::TYPE_STANDARD,
+            'vehicle_class' => ParkingSlot::CLASS_CAR,
+            'status' => ParkingSlot::STATUS_AVAILABLE,
+        ]);
+
+        $time = Lot::now()->addHour()->format('H:i');
+        $floorOne = $this->actingAs($driver)->get(route('driver.reserve', ['step' => 2, 'time' => $time]))->assertOk()->getContent();
+        $floorTwo = $this->actingAs($driver)->get(route('driver.reserve', ['step' => 2, 'time' => $time, 'floor' => 2]))->assertOk()->getContent();
+
+        $this->assertStringContainsString('Showing Floor 1 only.', $floorOne);
+        $this->assertStringContainsString('data-slot-id="'.ParkingSlot::where('code', 'A-01')->value('id').'"', $floorOne);
+        $this->assertStringNotContainsString('data-slot-id="'.ParkingSlot::where('code', 'E-01')->value('id').'"', $floorOne);
+        $this->assertStringContainsString('Showing Floor 2 only.', $floorTwo);
+        $this->assertStringContainsString('data-slot-id="'.ParkingSlot::where('code', 'E-01')->value('id').'"', $floorTwo);
+        $this->assertStringNotContainsString('data-slot-id="'.ParkingSlot::where('code', 'A-01')->value('id').'"', $floorTwo);
     }
 
     public function test_the_reserve_board_labels_pwd_slots_and_cannot_pick_waiting_ones(): void

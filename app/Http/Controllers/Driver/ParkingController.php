@@ -15,6 +15,7 @@ use App\Services\ReservationException;
 use App\Services\ReservationService;
 use App\Support\Lot;
 use App\Support\PwdPhoto;
+use App\Support\SlotLayout;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -25,11 +26,7 @@ class ParkingController extends Controller
     public function find(Request $request, DriverData $data, GateService $gate): View
     {
         $lot = $data->lot();
-        $slots = \App\Support\SlotLayout::decorate(ParkingSlot::query()->orderBy('zone')->orderBy('code')->get());
-        $zonePositions = ParkingLayoutZone::query()
-            ->whereIn('zone', $slots->pluck('zone')->unique())
-            ->get()
-            ->keyBy('zone');
+        $map = $data->liveMap($request->integer('floor'));
         $rate = ParkingRateSet::effectiveAt();
 
         $release = null;
@@ -44,8 +41,10 @@ class ParkingController extends Controller
 
         return view('driver.app.find', [
             'lot' => $lot,
-            'zones' => $slots->groupBy('zone'),
-            'zonePositions' => $zonePositions,
+            'floors' => $map['floors'],
+            'selectedFloor' => $map['selectedFloor'],
+            'zones' => $map['zones'],
+            'zonePositions' => $map['zonePositions'],
             'rate' => $rate,
             'release' => $release,
             'rateText' => $rate
@@ -77,6 +76,7 @@ class ParkingController extends Controller
             'date' => $date,
             'time' => $time,
             'slotId' => $slotId,
+            'floor' => null,
             'windowHours' => ReservationService::WINDOW_HOURS,
             'today' => $today,
             'tomorrow' => $today->copy()->addDay(),
@@ -102,7 +102,13 @@ class ParkingController extends Controller
 
         $at = Lot::parse($date, $time);
         // The booking time on a reserved square is the one around the chosen time (set by boardAt); only the parked time is added here.
-        $board = \App\Support\SlotLayout::decorate($reservations->boardAt($at), false);
+        $board = SlotLayout::decorate($reservations->boardAt($at), false);
+        $activeZones = $board->pluck('zone')->unique()->values();
+        $floors = Lot::occupiedFloors($activeZones);
+        $selectedFloor = $this->selectedReservationFloor($request, $floors);
+        $zonesOnFloor = Lot::activeZonesOnFloor($selectedFloor, $activeZones);
+        $board = $board->filter(fn (ParkingSlot $slot): bool => in_array($slot->zone, $zonesOnFloor, true))->values();
+        $base['floor'] = $selectedFloor;
         // No vehicle is chosen until the driver picks one: the vehicle decides which zones can be used.
         $vehicleId = (int) $request->query('vehicle', 0);
 
@@ -119,6 +125,8 @@ class ParkingController extends Controller
                 'vehicles' => $vehicles,
                 'vehicleId' => $vehicleId,
                 'noVehicle' => $vehicles->isEmpty(),
+                'floors' => $floors,
+                'selectedFloor' => $selectedFloor,
             ]);
         }
 
@@ -157,6 +165,8 @@ class ParkingController extends Controller
             'photoLimitBytes' => PwdPhoto::limitBytes(),
             'photoLimitLabel' => PwdPhoto::limitLabel(),
             'photoTooLarge' => $request->query('photo') === 'too_large',
+            'floors' => $floors,
+            'selectedFloor' => $selectedFloor,
             'policies' => [
                 'Reservation is free. You pay the parking fee in cash at the booth when you leave.',
                 $slot->type === ParkingSlot::TYPE_PWD
@@ -178,6 +188,7 @@ class ParkingController extends Controller
             'time' => ['required', 'string', 'date_format:H:i'],
             'slot' => ['required', 'integer'],
             'vehicle' => ['required', 'integer'],
+            'floor' => ['sometimes', 'integer', 'min:1', 'max:'.Lot::maxFloor()],
             'understand' => ['accepted'],
         ]), array_merge(array_fill_keys(array_map(fn (string $f) => "{$f}.prohibited", self::RANGE_FIELDS), $oneDay), [
             'date.date_format' => 'Choose a valid date.',
@@ -187,6 +198,9 @@ class ParkingController extends Controller
 
         $problem = $this->checkWhen($data['date'], $data['time']);
         $back = ['date' => $data['date'], 'time' => $data['time'], 'slot' => $data['slot'], 'vehicle' => $data['vehicle']];
+        if (isset($data['floor'])) {
+            $back['floor'] = $data['floor'];
+        }
         $slot = ParkingSlot::query()->find($data['slot']);
         $idPhoto = null;
 
@@ -224,6 +238,10 @@ class ParkingController extends Controller
 
         if (! $slot) {
             return redirect()->route('driver.reserve', ['step' => 2] + $back)->withErrors(['slot' => 'Choose a free slot.']);
+        }
+
+        if ($request->filled('floor') && Lot::floorForZone($slot->zone) !== (int) $data['floor']) {
+            return redirect()->route('driver.reserve', ['step' => 2] + $back)->withErrors(['slot' => 'Choose a slot on the selected floor.']);
         }
 
         try {
@@ -354,5 +372,16 @@ class ParkingController extends Controller
             'primary' => ['label' => 'Add a vehicle', 'url' => route('driver.vehicles.create')],
             'secondary' => ['label' => 'Not now', 'close' => true],
         ];
+    }
+
+    /**
+     * @param  array<int, int>  $floors
+     */
+    private function selectedReservationFloor(Request $request, array $floors): int
+    {
+        $default = $floors[0] ?? 1;
+        $requested = $request->integer('floor');
+
+        return in_array($requested, $floors, true) ? $requested : $default;
     }
 }

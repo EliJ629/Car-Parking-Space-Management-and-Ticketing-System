@@ -79,5 +79,18 @@
     </div>
     <div class="links"><a class="lnk" href="{{ route('driver.find') }}">Find parking</a>@if ($session)<a class="lnk" href="{{ route('driver.session.locate') }}">Locate my car</a>@endif</div>
   </section>
+
+  <section class="dcard driver-map-preview" aria-labelledby="home-map-title">
+    <div class="driver-map-heading">
+      <div>
+        <p class="lab">Live parking map</p>
+        <h3 id="home-map-title">Floor {{ $map['selectedFloor'] }}</h3>
+      </div>
+      <a class="lnk" href="{{ route('driver.find', ['floor' => $map['selectedFloor']]) }}">Open map</a>
+    </div>
+    @include('driver.app.partials.floor-tabs', ['floors' => $map['floors'], 'selectedFloor' => $map['selectedFloor'], 'route' => 'driver.home'])
+    @include('partials.slot-layout', ['zones' => $map['zones'], 'zonePositions' => $map['zonePositions'], 'item' => 'driver.app.partials.slot-item-view', 'label' => 'Live parking map preview'])
+    @include('driver.app.partials.legend')
+  </section>
 </div>
 @endsection

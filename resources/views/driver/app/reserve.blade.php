@@ -67,10 +67,22 @@
   @if ($errors->has('slot') || $errors->has('vehicle'))
     <div class="err-box" role="alert"><b>One more thing</b>{{ $errors->first() }}</div>
   @endif
+  @if ($floors !== [])
+    <nav class="driver-floor-tabs" aria-label="Parking floors">
+      @foreach ($floors as $floorOption)
+        <a href="{{ route('driver.reserve', ['step' => 2, 'date' => $date, 'time' => $time, 'vehicle' => $vehicleId ?: null, 'floor' => $floorOption]) }}"
+           class="{{ (int) $selectedFloor === (int) $floorOption ? 'active' : '' }}"
+           @if ((int) $selectedFloor === (int) $floorOption) aria-current="page" @endif>
+          Floor {{ $floorOption }}
+        </a>
+      @endforeach
+    </nav>
+  @endif
   <form method="GET" action="{{ route('driver.reserve') }}" novalidate data-slot-pick>
     <input type="hidden" name="step" value="3">
     <input type="hidden" name="date" value="{{ $date }}">
     <input type="hidden" name="time" value="{{ $time }}">
+    <input type="hidden" name="floor" value="{{ $selectedFloor }}">
 
     <fieldset class="fld" style="border:0;padding:0;margin:0 0 20px">
       <legend class="f" style="font-size:15px;font-weight:700;margin-bottom:4px">1. Pick the vehicle you will use</legend>
@@ -88,6 +100,7 @@
 
     <h2 class="f" style="font-size:15px;margin:4px 0 8px">2. Pick a slot <small style="font-weight:400;color:var(--muted)" data-free-count data-total="{{ $zones->sum(fn ($group) => $group->where('state', 'available')->count()) }}">({{ $zones->sum(fn ($group) => $group->where('state', 'available')->count()) }} free at this time)</small></h2>
     <p class="fine" data-pick-note style="margin:0 0 10px">Choose a vehicle above to see the slots it can use. The map is the same one the Parking Manager arranged. A slot marked <b>PWD</b> needs a photo of your PWD ID. It is not reserved until the booth attendant approves it, and shows as awaiting approval until then.</p>
+    <p class="fine driver-map-floor-label">Showing Floor {{ $selectedFloor }} only.</p>
     @include('partials.slot-layout', ['zones' => $zones, 'item' => 'driver.app.partials.slot-item-pick', 'label' => 'Choose a slot'])
     @include('driver.app.partials.legend', ['awaiting' => true])
     <p class="fine" style="margin-top:12px">The next screen asks you to confirm that you will arrive on time.</p>
@@ -136,6 +149,7 @@
       @csrf
       <input type="hidden" name="date" value="{{ $date }}">
       <input type="hidden" name="time" value="{{ $time }}">
+      <input type="hidden" name="floor" value="{{ $selectedFloor }}">
       <input type="hidden" name="slot" value="{{ $slot->id }}">
       <input type="hidden" name="vehicle" value="{{ $vehicle->id }}">
       <h2 id="cr-t">Reserve slot {{ $slot->code }}?</h2>

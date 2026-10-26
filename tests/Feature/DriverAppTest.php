@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Mail\ConfirmRegistrationMail;
 use App\Mail\VerifyEmailMail;
 use App\Models\Notice;
+use App\Models\ParkingLayoutZone;
 use App\Models\ParkingPayment;
 use App\Models\ParkingReservation;
 use App\Models\ParkingSession;
@@ -94,6 +95,32 @@ class DriverAppTest extends TestCase
 
         $this->actingAs($driver)->get(route('driver.home'))->assertOk()->assertSee('Add your vehicle');
         $this->actingAs($driver)->get(route('driver.vehicles'))->assertOk()->assertSee('Add your first vehicle');
+    }
+
+    public function test_home_and_find_show_one_floor_of_the_shared_live_map(): void
+    {
+        $this->lot();
+        $driver = $this->driver();
+
+        ParkingLayoutZone::create(['zone' => 'Zone E', 'vehicle_type' => ParkingLayoutZone::VEHICLE_CAR]);
+        ParkingSlot::create([
+            'code' => 'E-01',
+            'zone' => 'Zone E',
+            'type' => ParkingSlot::TYPE_STANDARD,
+            'vehicle_class' => ParkingSlot::CLASS_CAR,
+            'status' => ParkingSlot::STATUS_AVAILABLE,
+        ]);
+
+        $floorOne = $this->actingAs($driver)->get(route('driver.home'))->assertOk()->getContent();
+        $floorTwo = $this->actingAs($driver)->get(route('driver.find', ['floor' => 2]))->assertOk()->getContent();
+
+        $this->assertStringContainsString('Live parking map', $floorOne);
+        $this->assertStringContainsString('Floor 1', $floorOne);
+        $this->assertStringContainsString('data-slot-id="'.ParkingSlot::where('code', 'A-01')->value('id').'"', $floorOne);
+        $this->assertStringNotContainsString('data-slot-id="'.ParkingSlot::where('code', 'E-01')->value('id').'"', $floorOne);
+        $this->assertStringContainsString('Floor 2', $floorTwo);
+        $this->assertStringContainsString('data-slot-id="'.ParkingSlot::where('code', 'E-01')->value('id').'"', $floorTwo);
+        $this->assertStringNotContainsString('data-slot-id="'.ParkingSlot::where('code', 'A-01')->value('id').'"', $floorTwo);
     }
 
     public function test_guests_and_other_roles_cannot_open_the_driver_app(): void

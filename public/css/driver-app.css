@@ -12,7 +12,7 @@
 .dapp-bell{display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:0 12px;border:1.5px solid var(--line);border-radius:99px;background:var(--surface);color:var(--ink);font:600 13px var(--f-b);text-decoration:none}
 .dapp-badge{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;border-radius:99px;background:var(--stop);color:#fff;font-size:11px;font-weight:700;padding:0 5px}
 .dapp-badge[hidden]{display:none}
-.dapp-main{flex:1;padding:18px max(16px,env(safe-area-inset-right,0px)) 104px max(16px,env(safe-area-inset-left,0px))}
+.dapp-main{flex:1;min-width:0;padding:18px max(16px,env(safe-area-inset-right,0px)) 104px max(16px,env(safe-area-inset-left,0px))}
 .dapp-main h2{font-size:34px;margin-bottom:6px}
 .dapp-tabs{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:520px;z-index:30;display:grid;grid-template-columns:repeat(5,1fr);background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px)}
 .dapp-tabs a{display:block;text-align:center;padding:8px 2px 12px;min-height:58px;font-size:12px;font-weight:600;color:var(--muted);text-decoration:none}
@@ -213,3 +213,9 @@ dialog.dsheet.notices .in{max-height:min(80vh,640px);overflow:auto}
 .dapp .slot-layout.scale-wide .slot-layout-slot{width:88px;height:86px}
 .dapp .slot-layout .slot-layout-slot b{font-size:18px}
 .dapp .slot-layout{padding:10px;-webkit-overflow-scrolling:touch}
+.driver-map-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.driver-map-heading h3{margin-top:2px}
+.driver-floor-tabs{display:flex;gap:8px;overflow-x:auto;margin:0 0 14px;padding-bottom:2px}
+.driver-floor-tabs a{flex:none;padding:8px 14px;border:1px solid var(--line);border-radius:999px;color:var(--muted);font-size:13px;font-weight:700;text-decoration:none;background:var(--surface)}
+.driver-floor-tabs a.active{border-color:var(--ink);background:var(--ink);color:var(--surface)}
+.driver-map-floor-label{margin:0 0 8px}

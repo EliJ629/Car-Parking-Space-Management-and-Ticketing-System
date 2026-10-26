@@ -32,6 +32,7 @@ class DashboardController extends Controller
             'estimate' => $session && $session->status === 'active' ? $fees->estimate($session) : null,
             'reservation' => $data->upcomingReservation($user),
             'lot' => $data->lot(),
+            'map' => $data->liveMap($request->integer('floor')),
         ]);
     }
 }

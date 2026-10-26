@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Notice;
+use App\Models\ParkingLayoutZone;
 use App\Models\ParkingPayment;
 use App\Models\ParkingReservation;
 use App\Models\ParkingSession;
@@ -10,6 +11,7 @@ use App\Models\ParkingSlot;
 use App\Models\User;
 use App\Models\Vehicle;
 use App\Support\Lot;
+use App\Support\SlotLayout;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
@@ -88,6 +90,35 @@ class DriverData
             'available' => (int) ($counts[ParkingSlot::STATUS_AVAILABLE] ?? 0),
             'total' => (int) $counts->sum(),
             'updated' => Lot::time(now()),
+        ];
+    }
+
+    /**
+     * The fixed Manager-arranged map, scoped to one floor for driver read-only screens.
+     *
+     * @return array{floors:array<int, int>,selectedFloor:int,zones:Collection,zonePositions:Collection}
+     */
+    public function liveMap(?int $requestedFloor = null): array
+    {
+        $slots = SlotLayout::decorate(
+            ParkingSlot::query()->orderBy('zone')->orderBy('code')->get(),
+        );
+        $activeZones = $slots->pluck('zone')->unique()->values();
+        $floors = Lot::occupiedFloors($activeZones);
+        $selectedFloor = in_array($requestedFloor, $floors, true) ? $requestedFloor : ($floors[0] ?? 1);
+        $zonesOnFloor = Lot::activeZonesOnFloor($selectedFloor, $activeZones);
+        $floorSlots = $slots
+            ->filter(fn (ParkingSlot $slot): bool => in_array($slot->zone, $zonesOnFloor, true))
+            ->values();
+
+        return [
+            'floors' => $floors,
+            'selectedFloor' => $selectedFloor,
+            'zones' => $floorSlots->groupBy('zone'),
+            'zonePositions' => ParkingLayoutZone::query()
+                ->whereIn('zone', $floorSlots->pluck('zone')->unique())
+                ->get()
+                ->keyBy('zone'),
         ];
     }
 
