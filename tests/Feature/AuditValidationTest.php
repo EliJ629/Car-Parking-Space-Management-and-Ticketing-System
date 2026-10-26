@@ -2,12 +2,14 @@
 
 namespace Tests\Feature;
 
+use App\Mail\ConfirmRegistrationMail;
 use App\Models\Incident;
 use App\Models\ParkingPayment;
 use App\Models\ParkingRateSet;
 use App\Models\ParkingReservation;
 use App\Models\ParkingSession;
 use App\Models\ParkingSlot;
+use App\Models\PendingRegistration;
 use App\Models\SystemSetting;
 use App\Models\User;
 use App\Models\Vehicle;
@@ -107,19 +109,19 @@ class AuditValidationTest extends TestCase
         }
 
         // Each valid sign up waits for its link; nothing is saved as an account yet.
-        $this->assertSame(6, \App\Models\PendingRegistration::count());
+        $this->assertSame(6, PendingRegistration::count());
         $this->assertSame(0, Vehicle::count());
     }
 
     public function test_sign_up_stores_a_clean_record_and_refuses_a_plate_that_is_already_registered(): void
     {
-        \Illuminate\Support\Facades\Mail::fake();
+        Mail::fake();
         $this->post(route('driver.register'), $this->signUp(['name' => '  Pedro   Cruz ', 'email' => ' Pedro.Cruz@GMAIL.com ']))
             ->assertRedirect(route('driver.register.sent'));
         $this->assertNull(User::where('email', 'pedro.cruz@gmail.com')->first(), 'Nothing is saved before the link is clicked.');
 
         $link = null;
-        \Illuminate\Support\Facades\Mail::assertSent(\App\Mail\ConfirmRegistrationMail::class, function ($mail) use (&$link) {
+        Mail::assertSent(ConfirmRegistrationMail::class, function ($mail) use (&$link) {
             $link = $mail->link;
 
             return $mail->hasTo('pedro.cruz@gmail.com');
@@ -162,7 +164,7 @@ class AuditValidationTest extends TestCase
         $this->put(route('driver.account.profile.update'), ['name' => 'Maria Santos', 'email' => 'nope', 'phone' => '09175550142'])->assertSessionHasErrors('email');
         $this->put(route('driver.account.profile.update'), ['name' => 'Maria Santos', 'email' => 'maria@yahoo.com', 'phone' => '09175550142'])->assertSessionHasErrors('email');
         $this->put(route('driver.account.profile.update'), ['name' => 'Maria Santos', 'email' => 'maria@example.com', 'phone' => '555'])->assertSessionHasErrors('phone');
-        \Illuminate\Support\Facades\Mail::fake();
+        Mail::fake();
         $this->put(route('driver.account.profile.update'), ['name' => 'Maria Santos', 'email' => 'maria@example.com', 'phone' => '+639175550199'])
             ->assertSessionHasNoErrors();
         $this->assertSame('09175550199', $driver->fresh()->pending_phone, 'The number is held until the emailed code is entered.');
@@ -229,7 +231,9 @@ class AuditValidationTest extends TestCase
         }
 
         $send(['idle_timeout_minutes' => 5, 'idle_warning_seconds' => 300])->assertSessionHasErrors();
+        $send(['idle_timeout_minutes' => 5.5])->assertSessionHasErrors('settings.idle_timeout_minutes');
         $send(['lot_name' => ' '])->assertSessionHasErrors('settings.lot_name');
+        $send(['lot_name' => str_repeat('A', 121)])->assertSessionHasErrors('settings.lot_name');
     }
 
     public function test_a_rate_change_checks_its_amounts_and_reads_its_start_in_lot_time(): void
@@ -380,7 +384,7 @@ class AuditValidationTest extends TestCase
         $this->seed(ParkingSlotSeeder::class);
         $this->actingAs($this->manager());
 
-        foreach (['manager.dashboard', 'manager.slots.index', 'manager.slots.create', 'manager.accounts.index', 'manager.accounts.create',
+        foreach (['manager.dashboard', 'manager.map', 'manager.slots.index', 'manager.slots.create', 'manager.accounts.index', 'manager.accounts.create',
             'manager.records.index', 'manager.incidents.index', 'manager.incidents.create', 'manager.settings.index', 'manager.sales.index',
             'manager.reports.index', 'manager.rates.index', 'manager.my-account'] as $name) {
             $this->get(route($name))->assertOk();

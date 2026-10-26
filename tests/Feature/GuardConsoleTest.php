@@ -12,10 +12,13 @@ use App\Models\ParkingSlot;
 use App\Models\SystemSetting;
 use App\Models\User;
 use App\Services\LongParkingService;
+use App\Support\Lot;
+use Database\Seeders\DatabaseSeeder;
 use Database\Seeders\ManagerDefaultsSeeder;
 use Database\Seeders\ParkingSlotSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
@@ -124,9 +127,9 @@ class GuardConsoleTest extends TestCase
         $guard = $this->guard();
         $session = $this->parked('PK-0019', 'BNM6629', 'A-08', 'paid', 60);
         $slot = ParkingSlot::where('code', 'A-08')->first();
-        \App\Models\ParkingReservation::create([
+        ParkingReservation::create([
             'code' => 'RSV-9100', 'slot_id' => $slot->id, 'slot_code' => 'A-08', 'plate_number' => 'QRS3317',
-            'scheduled_at' => \App\Support\Lot::dayEnd()->subMinutes(2), 'status' => 'booked',
+            'scheduled_at' => Lot::dayEnd()->subMinutes(2), 'status' => 'booked',
         ]);
 
         $this->actingAs($guard)->post(route('guard.gate.approve', $session), ['checks' => ['plate' => 1, 'details' => 1, 'ticket' => 1]])
@@ -301,7 +304,7 @@ class GuardConsoleTest extends TestCase
     {
         $this->lot();
         $guard = $this->guard();
-        \Illuminate\Support\Facades\Cache::put('bayline:sweep:long-parking', 1, 600);
+        Cache::put('bayline:sweep:long-parking', 1, 600);
         $driver = $this->user(User::ROLE_DRIVER, 'Maria', 'maria@example.com');
         $this->parked('PK-0012', 'QRS3317', 'B-01', 'active', 60 * 14, $driver);
 
@@ -393,7 +396,7 @@ class GuardConsoleTest extends TestCase
 
     public function test_demo_command_creates_and_clears_its_own_rows_only(): void
     {
-        $this->seed(\Database\Seeders\DatabaseSeeder::class);
+        $this->seed(DatabaseSeeder::class);
         $real = $this->parked('PK-0100', 'REAL123', 'C-01', 'active', 30);
 
         $this->artisan('bayline:demo')->assertSuccessful();

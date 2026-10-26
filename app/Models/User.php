@@ -3,6 +3,7 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Mail\ResetPasswordMail;
 use App\Support\Rules;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -11,11 +12,10 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 
-#[Fillable(['name', 'username', 'email', 'phone', 'password', 'role', 'status', 'last_login_at', 'must_change_password'])]
-#[Hidden(['password', 'remember_token', 'manager_pin_hash', 'verification_code_hash'])]
+#[Fillable(['name', 'first_name', 'last_name', 'username', 'email', 'phone', 'password', 'role', 'status', 'last_login_at', 'must_change_password'])]
+#[Hidden(['password', 'remember_token', 'verification_code_hash'])]
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
@@ -77,7 +77,7 @@ class User extends Authenticatable
     /** The reset email is Bayline's own message, with a link to the new password form. */
     public function sendPasswordResetNotification($token): void
     {
-        Mail::to($this->email)->send(new \App\Mail\ResetPasswordMail(
+        Mail::to($this->email)->send(new ResetPasswordMail(
             $this->name,
             route($this->isDriver() ? 'password.reset' : 'staff.password.reset', ['token' => $token, 'email' => $this->email]),
             (int) config('auth.passwords.'.config('auth.defaults.passwords').'.expire', 60),
@@ -102,18 +102,6 @@ class User extends Authenticatable
     public function isDriver(): bool
     {
         return $this->role === self::ROLE_DRIVER;
-    }
-
-    public function hasManagerPin(): bool
-    {
-        return $this->role === self::ROLE_MANAGER
-            && is_string($this->manager_pin_hash)
-            && $this->manager_pin_hash !== '';
-    }
-
-    public function managerPinMatches(string $pin): bool
-    {
-        return $this->hasManagerPin() && Hash::check($pin, $this->manager_pin_hash);
     }
 
     public function isActive(): bool

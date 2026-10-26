@@ -6,7 +6,6 @@ use App\Models\ActivityLog;
 use App\Models\ParkingDiscount;
 use App\Models\ParkingRateSet;
 use App\Models\SystemSetting;
-use App\Models\User;
 use App\Support\Lot;
 use App\Support\Rules;
 use Illuminate\Contracts\View\View;
@@ -14,7 +13,6 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 
 class RatePolicyController extends ManagerController
@@ -34,7 +32,6 @@ class RatePolicyController extends ManagerController
                 ->orderBy('effective_at')
                 ->get(),
             'discounts' => ParkingDiscount::query()->orderBy('name')->get(),
-            'managerPinIsSet' => $request->user()->hasManagerPin(),
             'history' => ActivityLog::query()->with('user')
                 ->whereIn('action', ['rate_set_created', 'rate_set_canceled'])
                 ->latest('created_at')
@@ -42,52 +39,6 @@ class RatePolicyController extends ManagerController
                 ->get(),
             'settings' => SystemSetting::values(),
         ]));
-    }
-
-    public function saveManagerPin(Request $request): RedirectResponse
-    {
-        $manager = $request->user();
-        abort_unless($manager->role === User::ROLE_MANAGER, 404);
-
-        $data = $request->validate([
-            'manager_pin' => [
-                'required',
-                'string',
-                'regex:/^[0-9]{6}$/',
-                'confirmed',
-                function (string $attribute, mixed $value, \Closure $fail): void {
-                    $pin = (string) $value;
-                    $ascending = ['012345', '123456', '234567', '345678', '456789'];
-                    $descending = ['987654', '876543', '765432', '654321', '543210'];
-
-                    if (preg_match('/^([0-9])\\1{5}$/', $pin) === 1
-                        || in_array($pin, [...$ascending, ...$descending], true)) {
-                        $fail('Choose a less predictable six-digit PIN.');
-                    }
-                },
-            ],
-            'current_password' => ['required', 'string', 'max:255', 'current_password'],
-        ], [
-            'manager_pin.required' => 'Enter a six-digit manager PIN.',
-            'manager_pin.regex' => 'The manager PIN must contain exactly six digits.',
-            'manager_pin.confirmed' => 'The PIN entries do not match.',
-            'current_password.required' => 'Enter your current password to confirm this change.',
-            'current_password.current_password' => 'Your current password is incorrect.',
-        ]);
-
-        $wasSet = $manager->hasManagerPin();
-        $manager->forceFill(['manager_pin_hash' => Hash::make($data['manager_pin'])])->save();
-
-        ActivityLog::record(
-            $wasSet ? 'manager_pin_updated' : 'manager_pin_created',
-            $manager,
-            $request,
-            $manager->username ?? $manager->email,
-            'manager',
-        );
-
-        return redirect()->route('manager.rates.index')
-            ->with('status', $wasSet ? 'Your manager PIN was updated.' : 'Your manager PIN was created.');
     }
 
     public function storeRate(Request $request): RedirectResponse
@@ -215,15 +166,11 @@ class RatePolicyController extends ManagerController
             'name' => ['required', 'string', 'min:2', 'max:80', 'unique:parking_discounts,name'],
             'percent' => ['required', 'integer', 'between:0,100'],
             'proof_label' => ['required', 'string', 'min:2', 'max:80'],
-            'requires_manager_pin' => ['sometimes', 'boolean'],
         ], $this->discountMessages());
-        $discount = ParkingDiscount::create($data + [
-            'requires_manager_pin' => $request->boolean('requires_manager_pin'),
-            'created_by' => $request->user()->id,
-        ]);
+        $discount = ParkingDiscount::create($data + ['created_by' => $request->user()->id]);
 
         ActivityLog::record('discount_created', $request->user(), $request, $discount->name, 'manager', [
-            'after' => $discount->only(['name', 'percent', 'proof_label', 'requires_manager_pin']),
+            'after' => $discount->only(['name', 'percent', 'proof_label']),
         ]);
 
         return redirect()->route('manager.rates.index')->with('status', "{$discount->name} discount was added.");
@@ -236,12 +183,10 @@ class RatePolicyController extends ManagerController
             'name' => ['required', 'string', 'min:2', 'max:80', Rule::unique('parking_discounts', 'name')->ignore($discount->id)],
             'percent' => ['required', 'integer', 'between:0,100'],
             'proof_label' => ['required', 'string', 'min:2', 'max:80'],
-            'requires_manager_pin' => ['sometimes', 'boolean'],
             'active' => ['sometimes', 'boolean'],
         ], $this->discountMessages());
-        $before = $discount->only(['name', 'percent', 'proof_label', 'requires_manager_pin', 'active']);
+        $before = $discount->only(['name', 'percent', 'proof_label', 'active']);
         $discount->update($data + [
-            'requires_manager_pin' => $request->boolean('requires_manager_pin'),
             'active' => $request->boolean('active', true),
         ]);
 
@@ -255,7 +200,7 @@ class RatePolicyController extends ManagerController
 
     public function destroyDiscount(Request $request, ParkingDiscount $discount): RedirectResponse
     {
-        $before = $discount->only(['name', 'percent', 'proof_label', 'requires_manager_pin', 'active']);
+        $before = $discount->only(['name', 'percent', 'proof_label', 'active']);
         $discount->delete();
 
         ActivityLog::record('discount_deleted', $request->user(), $request, $before['name'], 'manager', [

@@ -4,8 +4,8 @@ namespace App\Http\Controllers\Driver;
 
 use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
-use App\Models\Vehicle;
 use App\Models\User;
+use App\Models\Vehicle;
 use App\Services\EmailVerification;
 use App\Services\SignInService;
 use App\Services\VerificationMailFailed;

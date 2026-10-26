@@ -1,8 +1,8 @@
 @extends('layouts.app')
 
 @push('head')
-<link rel="stylesheet" href="{{ asset('css/bayline.css') }}?v={{ filemtime(public_path('css/bayline.css')) }}">
-<link rel="stylesheet" href="{{ asset('css/attendant.css') }}?v={{ filemtime(public_path('css/attendant.css')) }}">
+<link rel="stylesheet" href="/css/bayline.css?v={{ filemtime(public_path('css/bayline.css')) }}">
+<link rel="stylesheet" href="/css/attendant.css?v={{ filemtime(public_path('css/attendant.css')) }}">
 @endpush
 
 @section('body')

@@ -5,7 +5,10 @@
       <h1>Parking slots</h1>
       <p class="manager-page-lede">Create, change, take out of service, or remove slots. Only a manager can change the lot layout.</p>
     </div>
-    <a class="btn sm" href="{{ route('manager.slots.create') }}">Add slot</a>
+    <div class="manager-heading-actions">
+      <a class="btn ghost sm" href="{{ route('manager.slots.categories') }}">Zone category</a>
+      <a class="btn sm" href="{{ route('manager.slots.create') }}">Add slot</a>
+    </div>
   </div>
 </section>
 
@@ -16,6 +19,15 @@
       <option value="">All statuses</option>
       @foreach ($statuses as $value => $label)
         <option value="{{ $value }}" @selected(($filters['status'] ?? '') === $value)>{{ $label }}</option>
+      @endforeach
+    </select>
+  </div>
+  <div class="manager-filter-field">
+    <label class="f" for="filter-floor">Floor</label>
+    <select id="filter-floor" name="floor">
+      <option value="">All floors</option>
+      @foreach ($floors as $floor)
+        <option value="{{ $floor }}" @selected((string) ($filters['floor'] ?? '') === (string) $floor)>Floor {{ $floor }}</option>
       @endforeach
     </select>
   </div>
@@ -40,12 +52,13 @@
 <div class="manager-table-wrap">
   <table class="manager-table">
     <thead>
-      <tr><th scope="col">Slot</th><th scope="col">Zone</th><th scope="col">Type</th><th scope="col">Status</th><th scope="col">Notes</th><th scope="col">Actions</th></tr>
+      <tr><th scope="col">Slot</th><th scope="col">Floor</th><th scope="col">Zone</th><th scope="col">Type</th><th scope="col">Status</th><th scope="col">Notes</th><th scope="col">Actions</th></tr>
     </thead>
     <tbody>
       @forelse ($slots as $slot)
         <tr>
           <th scope="row"><a class="manager-slot-code" href="{{ route('manager.slots.edit', $slot) }}">{{ $slot->code }}</a></th>
+          <td>{{ $slot->floorNumber() ? 'Floor '.$slot->floorNumber() : '—' }}</td>
           <td>{{ $slot->zone }}</td>
           <td>{{ $slot->type }}</td>
           <td>
@@ -57,7 +70,11 @@
           <td>{{ $slot->notes ?: '—' }}</td>
           <td>
             <div class="manager-row-actions">
-              <a href="{{ route('manager.slots.edit', $slot) }}">Edit</a>
+              @if (in_array($slot->status, [\App\Models\ParkingSlot::STATUS_OCCUPIED, \App\Models\ParkingSlot::STATUS_RESERVED], true))
+                <span class="manager-action-disabled" title="Occupied and reserved slots cannot be edited">Edit unavailable</span>
+              @else
+                <a href="{{ route('manager.slots.edit', $slot) }}">Edit</a>
+              @endif
               @if ($slot->canBeTakenOutOfService())
                 <a href="{{ route('manager.slots.service.edit', $slot) }}">Out of service</a>
               @elseif ($slot->status === \App\Models\ParkingSlot::STATUS_OUT_OF_SERVICE)
@@ -82,7 +99,7 @@
           </td>
         </tr>
       @empty
-        <tr><td class="manager-table-empty" colspan="6">No slots match these filters.</td></tr>
+        <tr><td class="manager-table-empty" colspan="7">No slots match these filters.</td></tr>
       @endforelse
     </tbody>
   </table>

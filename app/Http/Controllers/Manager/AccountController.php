@@ -224,6 +224,19 @@ class AccountController extends ManagerController
      */
     private function validatedAccount(Request $request, ?User $ignore, bool $withRole): array
     {
+        if ($withRole) {
+            if (! $request->filled('first_name') && ! $request->filled('last_name') && $request->filled('name')) {
+                $legacyName = preg_split('/\s+/', Rules::squish((string) $request->input('name')), 2);
+                $request->merge([
+                    'first_name' => $legacyName[0] ?? '',
+                    'last_name' => $legacyName[1] ?? '',
+                ]);
+            }
+            $request->merge([
+                'first_name' => Rules::squish((string) $request->input('first_name')),
+                'last_name' => Rules::squish((string) $request->input('last_name')),
+            ]);
+        }
         Rules::tidy($request, 'name');
         $request->merge([
             'username' => trim((string) $request->input('username')),
@@ -245,17 +258,20 @@ class AccountController extends ManagerController
         };
 
         $rules = [
-            'name' => Rules::personName(),
             'username' => ['required', 'string', 'min:4', 'max:40', 'regex:/^[A-Za-z0-9]+$/', $unique('username')],
             'email' => [...Rules::staffEmail(), $unique('email'), 'required_without:phone'],
             'phone' => [...Rules::mobile(false), 'required_without:email'],
         ];
 
         if ($withRole) {
+            $rules['first_name'] = ['required', 'string', 'min:2', 'max:60', 'regex:'.Rules::NAME_PATTERN];
+            $rules['last_name'] = ['required', 'string', 'min:2', 'max:60', 'regex:'.Rules::NAME_PATTERN];
             $rules['role'] = ['required', Rule::in([User::ROLE_MANAGER, User::ROLE_ATTENDANT, User::ROLE_GUARD])];
+        } else {
+            $rules['name'] = Rules::personName();
         }
 
-        return $request->validate($rules, Rules::personNameMessages() + [
+        $validated = $request->validate($rules, Rules::personNameMessages() + [
             'username.required' => 'Enter a username.',
             'username.min' => 'The username needs at least 4 letters or numbers.',
             'username.max' => 'The username can have up to 40 characters.',
@@ -268,7 +284,20 @@ class AccountController extends ManagerController
             'phone.required_without' => 'Enter a mobile number or an email.',
             'role.required' => 'Choose a role.',
             'role.in' => 'Choose a role from the list.',
+            'first_name.required' => 'Enter a first name.',
+            'first_name.min' => 'The first name needs at least 2 characters.',
+            'first_name.max' => 'The first name can have up to 60 characters.',
+            'first_name.regex' => 'Use letters only in the first name.',
+            'last_name.required' => 'Enter a last name.',
+            'last_name.min' => 'The last name needs at least 2 characters.',
+            'last_name.max' => 'The last name can have up to 60 characters.',
+            'last_name.regex' => 'Use letters only in the last name.',
         ]);
+        if ($withRole) {
+            $validated['name'] = $validated['first_name'].' '.$validated['last_name'];
+        }
+
+        return $validated;
     }
 
     /**

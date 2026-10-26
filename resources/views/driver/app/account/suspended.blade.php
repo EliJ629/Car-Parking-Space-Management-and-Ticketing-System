@@ -27,5 +27,5 @@
 @endsection
 
 @push('head')
-<link rel="stylesheet" href="{{ asset('css/driver-app.css') }}?v={{ filemtime(public_path('css/driver-app.css')) }}">
+<link rel="stylesheet" href="/css/driver-app.css?v={{ filemtime(public_path('css/driver-app.css')) }}">
 @endpush

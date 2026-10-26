@@ -11,7 +11,6 @@ use App\Support\Rules;
 use App\Support\VehicleCatalog;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class VehicleController extends Controller

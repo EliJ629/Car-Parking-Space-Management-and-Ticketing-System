@@ -9,16 +9,13 @@ use App\Models\ParkingPayment;
 use App\Models\ParkingRateSet;
 use App\Models\ParkingSession;
 use App\Models\ParkingSlot;
-use App\Models\User;
 use App\Models\Vehicle;
 use App\Services\FeeCalculator;
 use App\Services\NoticeService;
 use App\Support\Lot;
-use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\View\View;
 
 class ExitController extends Controller
@@ -156,101 +153,14 @@ class ExitController extends Controller
         $estimate['overstay_penalty'] = 0.0;
         $estimate['total'] = max(0.0, round($estimate['parking_charge'] - ($estimate['already_paid'] ?? 0.0), 2));
 
-        $discounts = ParkingDiscount::query()
-            ->where('active', true)
-            ->where('name', 'not like', '%tenant%')
-            ->get();
-        $managers = User::query()->where('role', User::ROLE_MANAGER)->where('status', User::STATUS_ACTIVE)->get();
+        $discounts = ParkingDiscount::query()->where('active', true)->get();
 
         return view('staff.attendant.exit.show', [
             'session' => $session,
             'estimate' => $estimate,
             'discounts' => $discounts,
-            'managers' => $managers,
             'isReserved' => $session->reservation !== null,
             'currentRate' => ParkingRateSet::current(),
-        ]);
-    }
-
-    /** BA-40 & BA-41: Verify manager password */
-    public function verifyPin(Request $request, ParkingSession $session): JsonResponse
-    {
-        $validated = $request->validate([
-            'manager_id' => ['required', 'exists:users,id'],
-            'password' => ['nullable', 'string'],
-            'pin' => ['nullable', 'string'],
-        ]);
-
-        $password = (string) ($validated['password'] ?? $validated['pin'] ?? '');
-        if ($password === '') {
-            return response()->json(['ok' => false, 'message' => 'Please enter the manager password.'], 422);
-        }
-
-        $manager = User::query()
-            ->whereKey($validated['manager_id'])
-            ->where('role', User::ROLE_MANAGER)
-            ->first();
-
-        if (! $manager) {
-            return response()->json(['ok' => false, 'message' => 'Manager not found.'], 404);
-        }
-
-        $sessionKey = "mgr_pin_fails_{$session->id}_{$manager->id}";
-        $fails = (int) session()->get($sessionKey, 0);
-
-        if ($fails >= 3) {
-            return response()->json([
-                'ok' => false,
-                'blocked' => true,
-                'attempts_left' => 0,
-                'message' => 'Approval blocked. 3 wrong password attempts entered. Request written to activity log.',
-            ]);
-        }
-
-        $valid = Hash::check($password, $manager->password)
-            || (method_exists($manager, 'managerPinMatches') && $manager->managerPinMatches($password))
-            || ($password === 'Manager123_' || $password === '123456' || $password === '741963' || $password === '12345');
-
-        if (! $valid) {
-            $fails++;
-            session()->put($sessionKey, $fails);
-            $attemptsLeft = max(0, 3 - $fails);
-
-            if ($attemptsLeft <= 0) {
-                ActivityLog::record(
-                    action: 'manager_password_failed',
-                    user: $manager,
-                    request: $request,
-                    subject: "Ticket {$session->ticket_number}",
-                    area: 'attendant',
-                    details: [
-                        'ticket' => $session->ticket_number,
-                        'approving_manager' => $manager->name,
-                        'reason' => 'Three wrong password attempts. Approval blocked.',
-                    ],
-                );
-
-                return response()->json([
-                    'ok' => false,
-                    'blocked' => true,
-                    'attempts_left' => 0,
-                    'message' => 'Approval blocked. 3 wrong password attempts entered. Request written to activity log.',
-                ]);
-            }
-
-            return response()->json([
-                'ok' => false,
-                'blocked' => false,
-                'attempts_left' => $attemptsLeft,
-                'message' => "Wrong password. {$attemptsLeft} attempt".($attemptsLeft === 1 ? '' : 's').' left.',
-            ]);
-        }
-
-        session()->forget($sessionKey);
-
-        return response()->json([
-            'ok' => true,
-            'manager_name' => $manager->name,
         ]);
     }
 
@@ -262,7 +172,6 @@ class ExitController extends Controller
             'discount_id' => ['nullable', 'exists:parking_discounts,id'],
             'discount_proof' => ['nullable', 'string', 'max:80'],
             'discount_note' => ['nullable', 'string', 'max:255'],
-            'approving_manager' => ['nullable', 'string', 'max:120'],
             'lost_ticket' => ['nullable', 'boolean'],
             'overstay' => ['nullable', 'boolean'],
         ], [
@@ -369,7 +278,6 @@ class ExitController extends Controller
                     'discount_name' => $discountName,
                     'discount_amount' => $discountAmount,
                     'discount_proof' => $validated['discount_proof'] ?? null,
-                    'approving_manager' => $validated['approving_manager'] ?? null,
                     'penalties' => $penalties,
                     'cash_received' => $cashReceived,
                     'change_given' => $changeGiven,

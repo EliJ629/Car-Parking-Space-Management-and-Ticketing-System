@@ -154,7 +154,7 @@
       <!-- State 1: No discount (BA-37) -->
       <div id="disc-unapplied-box">
         <p style="color:var(--muted);font-size:14px;margin-bottom:16px;">
-          No discount applied. Senior and PWD discounts require a valid ID number.
+          No discount applied. Select a discount and provide the required proof.
         </p>
         <button class="btn ghost sm" type="button" data-open="#apply-discount-dlg">Apply discount</button>
       </div>
@@ -191,15 +191,11 @@
     <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:18px;">
       @foreach ($discounts as $d)
         <label style="display:flex;align-items:center;gap:10px;padding:12px;border:1px solid var(--line);border-radius:6px;cursor:pointer;">
-          <input type="radio" name="modal_discount_id" value="{{ $d->id }}" data-name="{{ $d->name }}" data-percent="{{ $d->percent }}" data-pin="{{ $d->requires_manager_pin ? '1' : '0' }}" data-proof-label="{{ $d->proof_label ?? 'ID number' }}" style="width:18px;height:18px;" @checked($loop->first)>
+          <input type="radio" name="modal_discount_id" value="{{ $d->id }}" data-name="{{ $d->name }}" data-percent="{{ $d->percent }}" data-proof-label="{{ $d->proof_label ?? 'ID number' }}" style="width:18px;height:18px;" @checked($loop->first)>
           <div>
             <b>{{ $d->name }}, {{ $d->percent }}%</b>
             <small style="color:var(--muted);display:block;">
-              @if ($d->requires_manager_pin)
-                Needs manager password approval
-              @else
-                Needs an ID number
-              @endif
+              Needs an ID number
             </small>
           </div>
         </label>
@@ -228,36 +224,6 @@
     <div class="actions">
       <button class="btn ghost" type="button" data-close>Cancel</button>
       <button class="btn primary" type="button" id="btn-submit-discount">Apply discount</button>
-    </div>
-  </div>
-</dialog>
-
-<!-- POP-UP BA-40 & BA-41: Manager Approval Password Modal -->
-<dialog class="badlg" id="manager-pin-dlg">
-  <div class="in">
-    <button class="x" type="button" data-close aria-label="Close">&times;</button>
-    <h2>Manager approval needed</h2>
-    <p>Manager password authorization is required to approve this request.</p>
-
-    <div class="ba-form-group">
-      <label class="ba-label" for="approving-mgr-select">Approving manager</label>
-      <select class="ba-input" id="approving-mgr-select">
-        @foreach ($managers as $m)
-          <option value="{{ $m->id }}">{{ $m->name }}</option>
-        @endforeach
-      </select>
-    </div>
-
-    <div class="ba-form-group">
-      <label class="ba-label" for="manager-pin-input">Manager password</label>
-      <input class="ba-input" id="manager-pin-input" type="password" placeholder="Enter manager password" autocomplete="current-password" style="font-size:16px;">
-      <p style="font-size:12px;color:var(--muted);margin-top:4px;">Enter the manager's account password. The attendant does not see it.</p>
-      <div class="ba-err-msg" id="pin-err-msg" hidden>Wrong password. 2 attempts left.</div>
-    </div>
-
-    <div class="actions">
-      <button class="btn ghost" type="button" data-close>Cancel</button>
-      <button class="btn primary" type="button" id="btn-submit-pin">Approve</button>
     </div>
   </div>
 </dialog>
@@ -302,7 +268,6 @@
     <input type="hidden" name="discount_id" id="pay-hidden-disc-id" value="">
     <input type="hidden" name="discount_proof" id="pay-hidden-disc-proof" value="">
     <input type="hidden" name="discount_note" id="pay-hidden-disc-note" value="">
-    <input type="hidden" name="approving_manager" id="pay-hidden-mgr" value="">
     <input type="hidden" name="lost_ticket" id="pay-hidden-lost" value="0">
     <input type="hidden" name="overstay" id="pay-hidden-overstay" value="0">
 
@@ -354,8 +319,6 @@ const baseCharge = {{ $estimate['parking_charge'] }};
 let currentPenalty = {{ (float) ($estimate['penalties'] ?? 0.0) }};
 let penaltyType = null;
 let currentDiscount = null;
-const verifyPinUrl = "{{ route('attendant.exit.verify-pin', $session) }}";
-const exitCsrf = "{{ csrf_token() }}";
 
 function recalculateFinal() {
   const subtotal = baseCharge + currentPenalty;
@@ -436,10 +399,6 @@ function updateDiscountModalPreview() {
       if (proofLabelEl) proofLabelEl.textContent = 'PWD ID number';
       proofInputEl.placeholder = 'e.g. PWD-2024-00142 or 11-2402-001-0001234';
       proofHintEl.textContent = 'NCDA standard or LGU-issued PWD ID card number';
-    } else if (selectedRadio.dataset.pin === '1') {
-      if (proofLabelEl) proofLabelEl.textContent = 'Stamp code / Tenant ID';
-      proofInputEl.placeholder = 'e.g. STAMP-9214 or Tenant Name';
-      proofHintEl.textContent = 'Tenant validation code, stamp, or store name';
     } else {
       if (proofLabelEl) proofLabelEl.textContent = selectedRadio.dataset.proofLabel || 'ID number';
       proofInputEl.placeholder = 'e.g. ID-0012345';
@@ -533,7 +492,6 @@ document.getElementById('btn-submit-discount').addEventListener('click', () => {
 
   if (proofErrEl) proofErrEl.hidden = true;
 
-  const needsPin = selectedRadio.dataset.pin === '1';
   const disc = {
     id: selectedRadio.value,
     name: selectedRadio.dataset.name,
@@ -542,26 +500,10 @@ document.getElementById('btn-submit-discount').addEventListener('click', () => {
     note: document.getElementById('disc-note-input').value.trim(),
   };
 
-  if (needsPin) {
-    // Open Manager PIN Dialog
-    document.getElementById('apply-discount-dlg').close();
-    const pinDlg = document.getElementById('manager-pin-dlg');
-    const pinInput = document.getElementById('manager-pin-input');
-    const submitBtn = document.getElementById('btn-submit-pin');
-    pinInput.disabled = false;
-    submitBtn.disabled = false;
-    pinInput.value = '';
-    document.getElementById('pin-err-msg').hidden = true;
-    pinDlg.showModal();
-    setTimeout(() => pinInput.focus(), 60);
-    window.pendingDiscount = disc;
-    return;
-  }
-
   applyDiscountDirectly(disc);
 });
 
-function applyDiscountDirectly(disc, managerName = null) {
+function applyDiscountDirectly(disc) {
   currentDiscount = disc;
   document.getElementById('apply-discount-dlg').close();
 
@@ -579,10 +521,6 @@ function applyDiscountDirectly(disc, managerName = null) {
   document.getElementById('pay-hidden-disc-id').value = disc.id;
   document.getElementById('pay-hidden-disc-proof').value = disc.proof;
   document.getElementById('pay-hidden-disc-note').value = disc.note;
-  if (managerName) {
-    document.getElementById('pay-hidden-mgr').value = managerName;
-  }
-
   recalculateFinal();
 }
 
@@ -595,66 +533,6 @@ document.getElementById('btn-remove-discount').addEventListener('click', () => {
   document.getElementById('pay-hidden-disc-id').value = '';
   document.getElementById('pay-hidden-disc-proof').value = '';
   recalculateFinal();
-});
-
-// Manager password input handling
-const mgrPinInput = document.getElementById('manager-pin-input');
-if (mgrPinInput) {
-  mgrPinInput.addEventListener('input', function() {
-    document.getElementById('pin-err-msg').hidden = true;
-  });
-
-  mgrPinInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      document.getElementById('btn-submit-pin').click();
-    }
-  });
-}
-
-// Submit Manager Password (BA-40 & BA-41)
-document.getElementById('btn-submit-pin').addEventListener('click', async () => {
-  const managerId = document.getElementById('approving-mgr-select').value;
-  const pinInput = document.getElementById('manager-pin-input');
-  const password = pinInput.value;
-  const pinErr = document.getElementById('pin-err-msg');
-  pinErr.hidden = true;
-
-  if (!password) {
-    pinErr.textContent = 'Please enter the manager password.';
-    pinErr.hidden = false;
-    pinInput.focus();
-    return;
-  }
-
-  try {
-    const res = await fetch(verifyPinUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': exitCsrf, 'Accept': 'application/json' },
-      body: JSON.stringify({ manager_id: managerId, password: password, pin: password })
-    });
-    const data = await res.json();
-
-    if (!data.ok) {
-      pinErr.textContent = data.message || 'Wrong password.';
-      pinErr.hidden = false;
-      if (data.blocked) {
-        pinInput.disabled = true;
-        document.getElementById('btn-submit-pin').disabled = true;
-      } else {
-        pinInput.focus();
-        pinInput.select();
-      }
-      return;
-    }
-
-    document.getElementById('manager-pin-dlg').close();
-    applyDiscountDirectly(window.pendingDiscount, data.manager_name);
-  } catch (e) {
-    console.error(e);
-    pinErr.textContent = 'Could not verify manager password. Please try again.';
-    pinErr.hidden = false;
-  }
 });
 
 // Reset/sync penalty modal when opening

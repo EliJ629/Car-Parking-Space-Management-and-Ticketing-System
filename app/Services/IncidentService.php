@@ -10,10 +10,12 @@ use App\Models\ParkingSession;
 use App\Models\User;
 use App\Models\Vehicle;
 use App\Support\Lot;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * Incident reports written by the Security Guard (process document 6.9 and 6.10)
@@ -45,7 +47,7 @@ class IncidentService
         for ($attempt = 0; $attempt < 5; $attempt++) {
             try {
                 return DB::transaction(fn () => Incident::create($attributes + ['code' => $this->nextCode()]));
-            } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
+            } catch (UniqueConstraintViolationException $e) {
                 if ($attempt === 4) {
                     throw $e;
                 }
@@ -224,7 +226,7 @@ class IncidentService
         }
     }
 
-    public function photoResponse(IncidentPhoto $photo): \Symfony\Component\HttpFoundation\StreamedResponse
+    public function photoResponse(IncidentPhoto $photo): StreamedResponse
     {
         abort_unless(Storage::disk('local')->exists($photo->path), 404);
 

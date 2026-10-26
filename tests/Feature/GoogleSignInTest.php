@@ -5,7 +5,9 @@ namespace Tests\Feature;
 use App\Models\User;
 use App\Models\Vehicle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Routing\Middleware\ThrottleRequests;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
 /** Continue to Google Sign-in: the button, the redirect, the callback for old and new drivers, and the refusals. */
@@ -16,7 +18,7 @@ class GoogleSignInTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->withoutMiddleware(\Illuminate\Routing\Middleware\ThrottleRequests::class);
+        $this->withoutMiddleware(ThrottleRequests::class);
         config(['services.google.client_id' => 'id-123', 'services.google.client_secret' => 'secret-456', 'services.google.redirect' => null]);
     }
 
@@ -40,7 +42,7 @@ class GoogleSignInTest extends TestCase
         return $q['state'];
     }
 
-    private function comeBack(string $state, array $query = []): \Illuminate\Testing\TestResponse
+    private function comeBack(string $state, array $query = []): TestResponse
     {
         return $this->get(route('driver.google.callback', $query + ['state' => $state, 'code' => 'abc']));
     }

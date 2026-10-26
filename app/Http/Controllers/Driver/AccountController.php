@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Driver;
 use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
 use App\Models\PasswordHistory;
-use App\Models\User;
 use App\Services\DriverData;
 use App\Services\EmailVerification;
 use App\Services\VerificationMailFailed;

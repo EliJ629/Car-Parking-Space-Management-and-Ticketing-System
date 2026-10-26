@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['code', 'zone', 'type', 'status', 'notes', 'out_of_service_reason'])]
+#[Fillable(['code', 'zone', 'type', 'status', 'notes', 'out_of_service_reason', 'layout_x', 'layout_y'])]
 class ParkingSlot extends Model
 {
     public const STATUS_AVAILABLE = 'available';
@@ -38,9 +38,22 @@ class ParkingSlot extends Model
         ];
     }
 
+    protected function casts(): array
+    {
+        return [
+            'layout_x' => 'float',
+            'layout_y' => 'float',
+        ];
+    }
+
     public function statusLabel(): string
     {
         return self::statuses()[$this->status] ?? 'Unknown';
+    }
+
+    public function floorNumber(): ?int
+    {
+        return Lot::floorForZone($this->zone);
     }
 
     public function reservations(): HasMany

@@ -7,7 +7,10 @@ use App\Models\User;
 use App\Services\ReservationReminders;
 use App\Services\TextBee;
 use App\Services\TextBeeFailed;
+use App\Support\Lot;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\Factory;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -29,7 +32,7 @@ class SmsReminderTest extends TestCase
     private function fakeTextBee(int $status = 200): void
     {
         // A fresh client each time, so a second fake replaces the first one.
-        Http::swap(new \Illuminate\Http\Client\Factory);
+        Http::swap(new Factory);
         Http::fake(['api.textbee.dev/*' => Http::response(
             $status === 200 ? ['data' => ['success' => true, 'message' => 'SMS added to queue for processing', 'smsBatchId' => 'batch-1', 'recipientCount' => 1]] : ['error' => 'x'],
             $status,
@@ -121,7 +124,7 @@ class SmsReminderTest extends TestCase
 
         $this->assertStringContainsString('A-06', $message);
         $this->assertStringContainsString($reservation->code, $message);
-        $this->assertStringContainsString(\App\Support\Lot::local($reservation->scheduled_at)->format('g:i A'), $message);
+        $this->assertStringContainsString(Lot::local($reservation->scheduled_at)->format('g:i A'), $message);
         $this->assertLessThanOrEqual(160, strlen($message));
         $this->assertSame(strlen($message), mb_strlen($message), 'plain characters only');
     }
@@ -202,7 +205,7 @@ class SmsReminderTest extends TestCase
 
     public function test_the_scheduler_runs_the_reminders_every_minute(): void
     {
-        $events = collect(app(\Illuminate\Console\Scheduling\Schedule::class)->events())
+        $events = collect(app(Schedule::class)->events())
             ->filter(fn ($event) => str_contains($event->command, 'bayline:reservation-reminders'));
 
         $this->assertCount(1, $events);

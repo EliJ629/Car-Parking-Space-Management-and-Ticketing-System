@@ -144,8 +144,6 @@
       </div>
     </div>
 
-    <p style="font-size:12px;color:var(--muted);">The penalty can be waived with manager password approval at checkout.</p>
-
     <div class="actions">
       <button class="btn ghost" type="button" data-close>Close</button>
       <form method="POST" action="{{ route('attendant.exit.pay', $session) }}">
