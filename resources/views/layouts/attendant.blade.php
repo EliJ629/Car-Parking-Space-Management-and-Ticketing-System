@@ -45,25 +45,39 @@
         <span><b>Bayline</b><small>Booth attendant console</small></span>
       </a>
       <span class="sp"></span>
-      <time class="ba-clock" id="clock" datetime="{{ now()->toIso8601String() }}">
-        {{ \App\Support\Lot::now()->format('D, M j, Y') }} <b>{{ \App\Support\Lot::now()->format('g:i A') }}</b>
-      </time>
-      <span class="ba-chip">{{ $me->name }} <small>Booth attendant</small></span>
-      <button class="tt" id="theme" type="button" aria-label="Switch to dark mode" title="Switch to dark mode"><svg class="ico" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/><circle cx="16.6" cy="7.4" r="1.5"/><path d="M19.5 7.4L20.5 7.4M18.7 9.5L19.4 10.2M16.6 10.3L16.6 11.3M14.5 9.5L13.8 10.2M13.7 7.4L12.7 7.4M14.5 5.3L13.8 4.6M16.6 4.5L16.6 3.5M18.7 5.3L19.4 4.6"/></svg></button>
-      <button class="ba-alertbtn" type="button" id="alert-btn" data-open="#alerts-dlg" aria-haspopup="dialog">
-        Alerts <span class="ba-badge" id="alert-count" @if ($alertCount < 1) hidden @endif>{{ $alertCount }}</span>
-      </button>
-      <button class="btn ghost sm" type="button" data-open="#logout-dlg">Log out</button>
+      <div class="ba-head-tools">
+        <time class="ba-clock" id="clock" datetime="{{ now()->toIso8601String() }}">
+          {{ \App\Support\Lot::now()->format('D, M j, Y') }} <b>{{ \App\Support\Lot::now()->format('g:i A') }}</b>
+        </time>
+        <span class="ba-chip">{{ $me->name }} <small>Booth attendant</small></span>
+        <button class="tt" id="theme" type="button" aria-label="Switch to dark mode" title="Switch to dark mode"><svg class="ico" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/><circle cx="16.6" cy="7.4" r="1.5"/><path d="M19.5 7.4L20.5 7.4M18.7 9.5L19.4 10.2M16.6 10.3L16.6 11.3M14.5 9.5L13.8 10.2M13.7 7.4L12.7 7.4M14.5 5.3L13.8 4.6M16.6 4.5L16.6 3.5M18.7 5.3L19.4 4.6"/></svg></button>
+        <button class="ba-alertbtn" type="button" id="alert-btn" data-open="#alerts-dlg" aria-haspopup="dialog">
+          Alerts <span class="ba-badge" id="alert-count" @if ($alertCount < 1) hidden @endif>{{ $alertCount }}</span>
+        </button>
+        <button class="btn ghost sm ba-logout-btn" type="button" data-open="#logout-dlg">Log out</button>
+      </div>
     </div>
   </header>
 
   <!-- Navigation Tabs -->
   <div class="ba-w">
-    <nav class="ba-tabs" aria-label="Booth attendant console">
-      @foreach ($tabs as $key => [$label, $url])
-        <a href="{{ $url }}" @if ($tab === $key) aria-current="page" @endif>{{ $label }}@if ($key === 'reservations' && $pendingApprovals > 0) <span class="ba-badge" title="Waiting for approval">{{ $pendingApprovals }}</span>@endif</a>
-      @endforeach
-    </nav>
+    <div class="ba-tabs-scroll">
+      <nav class="ba-tabs" aria-label="Booth attendant console">
+        @foreach ($tabs as $key => [$label, $url])
+          <a href="{{ $url }}" @if ($tab === $key) aria-current="page" @endif>{{ $label }}@if ($key === 'reservations' && $pendingApprovals > 0) <span class="ba-badge" title="Waiting for approval">{{ $pendingApprovals }}</span>@endif</a>
+        @endforeach
+      </nav>
+      <script>
+        (function(){
+          try {
+            var activeTab = document.querySelector('.ba-tabs a[aria-current="page"]');
+            if (activeTab && activeTab.scrollIntoView) {
+              activeTab.scrollIntoView({ inline: 'center', block: 'nearest' });
+            }
+          } catch(e){}
+        })();
+      </script>
+    </div>
 
     <main id="main" tabindex="-1">
       @yield('content')

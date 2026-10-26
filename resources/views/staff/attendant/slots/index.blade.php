@@ -54,15 +54,26 @@
 
     <!-- Visual Map View (Matching Manager Layout Canvas) -->
     <div class="ba-layout-wrap" id="ba-layout-view">
+      <div class="ba-map-controls">
+        <span style="color:var(--muted);display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+          <span class="ba-pan-hint">Pan around lot</span>
+        </span>
+        <div style="display:inline-flex;gap:3px;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:2px;">
+          <button type="button" id="btn-map-fit" onclick="toggleMapFit(true)" style="border:none;background:none;font:600 11.5px var(--f-b);color:var(--muted);padding:4px 9px;border-radius:4px;cursor:pointer;">Fit to screen</button>
+          <button type="button" id="btn-map-100" class="active" onclick="toggleMapFit(false)" style="border:none;background:var(--ink);color:var(--bg);font:600 11.5px var(--f-b);padding:4px 9px;border-radius:4px;cursor:pointer;">100% Zoom</button>
+        </div>
+      </div>
       <div class="ba-layout-canvas" data-layout-canvas>
         @foreach ($floorSlots->groupBy('zone') as $zone => $zoneSlots)
           @php
             $zonePosition = $zonePositions[$zone] ?? null;
             $vehicleType = $zonePosition?->vehicle_type ?? 'Car';
+            $displayZoneName = str_starts_with($zone, 'Zone') ? $zone : 'Zone ' . $zone;
           @endphp
           <span data-layout-zone-label data-zone="{{ $zone }}"
                 data-x="{{ $zonePosition?->label_x ?? '' }}" data-y="{{ $zonePosition?->label_y ?? '' }}">
-            {{ $zone }} <small>({{ $vehicleType }})</small>
+            {{ $displayZoneName }} <small>({{ $vehicleType }})</small>
           </span>
         @endforeach
         @foreach ($floorSlots as $slot)
@@ -114,30 +125,36 @@
     <!-- Grouped Slots Grid View -->
     <div id="ba-grid-view" style="display:none;">
       <!-- Zone Filter Tabs & Available Count -->
-      <div style="display:flex;align-items:center;justify-content:space-between;margin:12px 0 16px;flex-wrap:wrap;gap:10px;">
-        <div style="display:flex;gap:6px;flex-wrap:wrap;" id="zone-filter-tabs">
-          <button type="button" class="btn sm primary zone-tab-btn" data-zone="all" style="padding:5px 12px;font-size:13px;">All Zones ({{ $slots->count() }})</button>
+      <div style="margin:12px 0 16px;">
+        <div style="display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:4px;flex-wrap:nowrap;" id="zone-filter-tabs">
+          <button type="button" class="btn sm primary zone-tab-btn" data-zone="all" style="padding:6px 14px;font-size:12.5px;white-space:nowrap;flex-shrink:0;border-radius:99px;">All Zones ({{ $slots->count() }})</button>
           @foreach ($slots->groupBy('zone') as $zoneName => $zoneSlots)
-            <button type="button" class="btn sm ghost zone-tab-btn" data-zone="{{ $zoneName }}" style="padding:5px 12px;font-size:13px;">Zone {{ $zoneName }} ({{ $zoneSlots->count() }})</button>
+            @php
+              $cleanZoneLabel = str_starts_with($zoneName, 'Zone') ? $zoneName : 'Zone ' . $zoneName;
+            @endphp
+            <button type="button" class="btn sm ghost zone-tab-btn" data-zone="{{ $zoneName }}" style="padding:6px 14px;font-size:12.5px;white-space:nowrap;flex-shrink:0;border-radius:99px;">{{ $cleanZoneLabel }} ({{ $zoneSlots->count() }})</button>
           @endforeach
         </div>
       </div>
 
       <!-- Grouped Slots by Zone -->
       @foreach ($slots->groupBy('zone') as $zoneName => $zoneSlots)
+        @php
+          $cleanZoneTitle = str_starts_with($zoneName, 'Zone') ? $zoneName : 'Zone ' . $zoneName;
+        @endphp
         <div class="ba-zone-section" data-zone="{{ $zoneName }}" style="margin-bottom:22px;">
           <div style="display:flex;align-items:center;justify-content:space-between;margin:0 0 10px;padding-bottom:6px;border-bottom:1.5px solid var(--line);">
-            <b style="font-size:15px;color:var(--ink);">Zone {{ $zoneName }}</b>
+            <b style="font-size:15px;color:var(--ink);">{{ $cleanZoneTitle }}</b>
             <span style="font-size:12px;color:var(--muted);font-weight:600;">{{ $zoneSlots->where('status', 'available')->count() }} of {{ $zoneSlots->count() }} available</span>
           </div>
-          <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;">
+          <div class="ba-zone-slots-grid">
             @foreach ($zoneSlots as $slot)
               @php
                   $curr = $slot->currentSession();
                   $booking = $slot->nextOpenBooking();
               @endphp
               <div class="ba-slot {{ $slot->status }}"
-                   style="min-height:100px;padding:12px 8px;cursor:pointer;"
+                   style="cursor:pointer;"
                    onclick="openSlotDetail({{ json_encode([
                        'id' => $slot->id,
                        'code' => $slot->code,
@@ -447,6 +464,42 @@ window.switchSlotView = function(mode) {
     btnMap.classList.remove('active');
   }
 };
+
+window.toggleMapFit = function(fit) {
+  const wrap = document.getElementById('ba-layout-view');
+  if (!wrap) return;
+  const canvas = wrap.querySelector('[data-layout-canvas]');
+  const btnFit = document.getElementById('btn-map-fit');
+  const btn100 = document.getElementById('btn-map-100');
+  
+  if (fit && canvas) {
+    const wrapWidth = wrap.clientWidth - 26;
+    const naturalWidth = 760;
+    const scale = Math.min(1, Math.max(0.35, wrapWidth / naturalWidth));
+    canvas.style.transform = `scale(${scale})`;
+    canvas.style.transformOrigin = 'top left';
+    const naturalHeight = canvas.offsetHeight || 540;
+    canvas.style.marginBottom = `-${naturalHeight * (1 - scale)}px`;
+    canvas.style.marginRight = `-${naturalWidth * (1 - scale)}px`;
+    wrap.style.overflowX = 'hidden';
+    if (btnFit) { btnFit.classList.add('active'); }
+    if (btn100) { btn100.classList.remove('active'); }
+  } else if (canvas) {
+    canvas.style.transform = 'none';
+    canvas.style.marginBottom = '0';
+    canvas.style.marginRight = '0';
+    wrap.style.overflowX = 'auto';
+    if (btn100) { btn100.classList.add('active'); }
+    if (btnFit) { btnFit.classList.remove('active'); }
+  }
+};
+
+window.addEventListener('resize', () => {
+  const btnFit = document.getElementById('btn-map-fit');
+  if (btnFit && btnFit.classList.contains('active')) {
+    toggleMapFit(true);
+  }
+});
 </script>
 @endpush
 @endsection
