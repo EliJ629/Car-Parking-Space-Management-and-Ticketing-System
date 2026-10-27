@@ -8,6 +8,7 @@ use App\Models\ActivityLog;
 use App\Models\PendingRegistration;
 use App\Models\User;
 use App\Models\Vehicle;
+use App\Services\BanService;
 use App\Services\EmailVerification;
 use App\Services\SignInService;
 use App\Support\Lot;
@@ -28,6 +29,8 @@ use Throwable;
 class RegisterController extends Controller
 {
     public const SESSION_KEY = 'pending_registration_id';
+
+    public const SESSION_EMAIL_KEY = 'pending_registration_email';
 
     public function create(): View
     {
@@ -86,6 +89,11 @@ class RegisterController extends Controller
             $data = $validate();
         }
 
+        // A banned driver's plate, name or mobile number cannot start a new account.
+        if ($problem = app(BanService::class)->signUpProblem($data['name'], $entry->plate, $data['phone'])) {
+            throw ValidationException::withMessages([$problem[0] => $problem[1]]);
+        }
+
         $data['plate_number'] = $entry->plate;
         $data['plate_is_temporary'] = $entry->temporary;
         unset($data['details_confirmed']);
@@ -109,6 +117,7 @@ class RegisterController extends Controller
         }
 
         $request->session()->put(self::SESSION_KEY, $pending->id);
+        $request->session()->put(self::SESSION_EMAIL_KEY, $pending->email);
 
         return redirect()->route('driver.register.sent')->with('status', 'We sent a link to '.EmailVerification::mask($pending->email).'.');
     }
@@ -128,6 +137,29 @@ class RegisterController extends Controller
             'hours' => PendingRegistration::HOURS,
             'logHint' => config('mail.default') === 'log' && ! app()->isProduction(),
         ]);
+    }
+
+    /**
+     * Polled by the "check your email" page. When the link was opened on another device (a phone, say) the account exists
+     * and this page sends the person on to the sign-in page by itself.
+     */
+    public function status(Request $request): JsonResponse
+    {
+        if ($this->current($request)) {
+            return response()->json(['done' => false]);
+        }
+
+        $email = (string) $request->session()->get(self::SESSION_EMAIL_KEY, '');
+        $confirmed = $email !== '' && User::query()->where('role', User::ROLE_DRIVER)->whereRaw('lower(email) = ?', [mb_strtolower($email)])->whereNotNull('email_verified_at')->exists();
+
+        if (! $confirmed) {
+            return response()->json(['done' => false]);
+        }
+
+        $request->session()->forget([self::SESSION_KEY, self::SESSION_EMAIL_KEY]);
+        $request->session()->flash('status', 'Email confirmed. Your account is ready. Sign in to continue.');
+
+        return response()->json(['done' => true, 'url' => route('driver.login')]);
     }
 
     public function resend(Request $request): RedirectResponse
@@ -192,6 +224,8 @@ class RegisterController extends Controller
                 $problem = ['email', 'This Gmail account is already registered. Sign in instead.'];
             } elseif (Rules::driverNameTaken($pending->name)) {
                 $problem = ['name', 'An account with this name already exists. If it is yours, sign in instead.'];
+            } elseif ($ban = app(BanService::class)->signUpProblem($pending->name, $pending->plate_number, $pending->phone)) {
+                $problem = $ban;
             } elseif ($pending->plate_number !== null && Vehicle::withTrashed()->where('plate_number', $pending->plate_number)->lockForUpdate()->exists()) {
                 $problem = ['plate_number', Lot::plate($pending->plate_number).' is already registered to an account. A plate can belong to one account only.'];
             }
@@ -239,7 +273,7 @@ class RegisterController extends Controller
             return redirect()->route('driver.register')->withInput($input)->withErrors([$problem[0] => $problem[1]]);
         }
 
-        $request->session()->forget(self::SESSION_KEY);
+        $request->session()->forget([self::SESSION_KEY, self::SESSION_EMAIL_KEY]);
         ActivityLog::record('driver_registered', $user, $request, null, SignInService::AREA_DRIVER);
         ActivityLog::record('driver_email_verified', $user, $request, null, SignInService::AREA_DRIVER);
 

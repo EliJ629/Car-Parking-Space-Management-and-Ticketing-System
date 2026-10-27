@@ -14,6 +14,7 @@ use App\Models\VehiclePreviousPlate;
 use App\Support\Lot;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Creates the driver notifications (N-01 to N-13) and the staff alerts (S-01 to S-06).
@@ -121,14 +122,14 @@ class NoticeService
 
     public function parkingStarted(ParkingSession $s): ?Notice
     {
-        return $this->toDriver($this->driverForSession($s), 'N-05', 'parking_started', 'Parking started',
+        return $this->toOwner($s, 'N-05', 'parking_started', 'Parking started',
             "Parking started. Your slot is {$this->slotCode($s)}. Ticket {$s->ticket_number}. Entry ".Lot::time($s->entered_at).'.',
             $s);
     }
 
     public function paymentReceived(ParkingSession $s, ParkingPayment $p): ?Notice
     {
-        return $this->toDriver($this->driverForSession($s), 'N-06', 'payment_received', 'Payment received',
+        return $this->toOwner($s, 'N-06', 'payment_received', 'Payment received',
             'Payment of '.Lot::peso($p->total)." received for ticket {$s->ticket_number}. Receipt {$p->receipt_number} is in your parking history. "
             .'Drive to the exit gate within '.Lot::exitWindowMinutes().' minutes.',
             $s);
@@ -136,7 +137,7 @@ class NoticeService
 
     public function outstandingBalance(ParkingSession $s, float $amount): ?Notice
     {
-        return $this->toDriver($this->driverForSession($s), 'N-07', 'outstanding_balance', 'Outstanding balance',
+        return $this->toOwner($s, 'N-07', 'outstanding_balance', 'Outstanding balance',
             "Ticket {$s->ticket_number} has an unpaid balance of ".Lot::peso($amount).'. Pay at the booth before you leave.',
             $s, [], "balance-{$s->id}-".now()->format('YmdHi'));
     }
@@ -159,14 +160,14 @@ class NoticeService
 
     public function parkingCompleted(ParkingSession $s): ?Notice
     {
-        return $this->toDriver($this->driverForSession($s), 'N-09', 'parking_completed', 'Parking completed',
+        return $this->toOwner($s, 'N-09', 'parking_completed', 'Parking completed',
             "Parking complete. Ticket {$s->ticket_number} closed at ".Lot::time($s->exited_at).'. Thank you for parking at Bayline.',
             $s);
     }
 
     public function longParkedAuto(ParkingSession $s, Incident $incident): ?Notice
     {
-        return $this->toDriver($this->driverForSession($s), 'N-10', 'long_parking', 'Long parking notice',
+        return $this->toOwner($s, 'N-10', 'long_parking', 'Long parking notice',
             'Your vehicle '.Lot::plate($s->plate_number)." in slot {$this->slotCode($s)} has been parked for more than "
             .Lot::longParkingHours().' hours, since '.Lot::stamp($s->entered_at).'. Please collect it or contact the booth.',
             $s, ['incident' => $incident->code, 'automatic' => true], "long-parking-{$s->id}");
@@ -176,7 +177,8 @@ class NoticeService
     {
         return $this->toDriver($driver, 'N-12', 'incident_report', 'Security report about your vehicle',
             "Security report {$incident->code} mentions your vehicle ".Lot::plate($incident->plate_number).': '
-            .strtolower(Incident::guardLabel($incident->category)).'. Please contact the booth.',
+            .strtolower(Incident::guardLabel($incident->category)).'. Please contact the booth.'
+            .$this->incidentFacts($incident),
             $incident, ['incident' => $incident->code]);
     }
 
@@ -192,6 +194,16 @@ class NoticeService
     public function deliverToVehicle(?string $plate, string $code, string $kind, string $title, string $body, ?Model $subject = null, ?string $groupKey = null, ?ParkingSession $session = null): array
     {
         $session ??= $plate ? $this->latestSessionFor($plate) : null;
+
+        // A report about a vehicle always says when it came in, how long it has been parked and where.
+        if ($subject instanceof Incident && $session === null && $subject->session_id) {
+            $session = ParkingSession::query()->with('slot')->find($subject->session_id);
+        }
+
+        if ($subject instanceof Incident) {
+            $body .= $this->sessionFacts($session);
+        }
+
         $driver = $session ? $this->driverForSession($session) : $this->driverForPlate($plate);
 
         if ($driver) {
@@ -219,7 +231,7 @@ class NoticeService
         }
 
         try {
-            $batch = $this->textBee->send($phone, mb_substr($title.'. '.$body, 0, 300));
+            $batch = $this->textBee->send($phone, mb_substr($title.'. '.$body, 0, 450));
         } catch (TextBeeFailed $e) {
             return ['ok' => false, 'channel' => 'sms', 'result' => 'The text was not sent. '.$e->getMessage(), 'at' => null];
         }
@@ -304,7 +316,7 @@ class NoticeService
             return null;
         }
 
-        return Notice::create([
+        $notice = Notice::create([
             'user_id' => $driver->id,
             'audience_role' => null,
             'code' => $code,
@@ -316,6 +328,66 @@ class NoticeService
             'data' => $data ?: null,
             'group_key' => $groupKey,
         ]);
+
+        // The same notice goes to the driver's mobile number, so a driver who is not in the app still hears.
+        $this->text($driver->phone, $title, $body);
+
+        return $notice;
+    }
+
+    /**
+     * A notice for whoever owns a parking session: the driver's account when there is one, otherwise a text to the
+     * mobile number the walk-in gave at the booth.
+     */
+    public function toOwner(ParkingSession $s, string $code, string $kind, string $title, string $body, ?Model $subject = null, array $data = [], ?string $groupKey = null): ?Notice
+    {
+        $driver = $this->driverForSession($s);
+
+        if ($driver) {
+            return $this->toDriver($driver, $code, $kind, $title, $body, $subject, $data, $groupKey);
+        }
+
+        if ($this->enabled($kind)) {
+            $this->text($s->driver_phone, $title, $body);
+        }
+
+        return null;
+    }
+
+    /** Sends one text when TextBee is switched on and the number is a Philippine mobile number. Never throws. */
+    public function text(?string $phone, string $title, string $body): bool
+    {
+        if (! config('textbee.enabled') || ! $this->textBee->configured() || TextBee::international($phone) === null) {
+            return false;
+        }
+
+        try {
+            $this->textBee->send((string) $phone, mb_substr('Bayline: '.$title.'. '.$body, 0, 450));
+
+            return true;
+        } catch (TextBeeFailed $e) {
+            Log::warning('SMS notice failed', ['title' => $title, 'reason' => $e->getMessage()]);
+
+            return false;
+        }
+    }
+
+    /** " Entry Oct 27, 2026 9:15 AM. Parked 2 h 14 min. Slot A-06." for a report about a parked vehicle. */
+    public function sessionFacts(?ParkingSession $s): string
+    {
+        if (! $s || ! $s->entered_at) {
+            return '';
+        }
+
+        $end = in_array($s->status, ParkingSession::OPEN_STATUSES, true) || ! $s->exited_at ? null : $s->exited_at;
+        $minutes = $end ? Lot::minutesBetween($s->entered_at, $end) : $s->parkedMinutes();
+
+        return ' Entry '.Lot::stamp($s->entered_at).'. Parked '.Lot::duration($minutes).'. Slot '.$this->slotCode($s).'.';
+    }
+
+    private function incidentFacts(Incident $incident): string
+    {
+        return $incident->session_id ? $this->sessionFacts(ParkingSession::query()->with('slot')->find($incident->session_id)) : '';
     }
 
     /**

@@ -86,20 +86,27 @@ class NoShowSuspensionTest extends TestCase
         $this->assertNotNull(app(NoShowService::class)->activeSuspension($driver));
     }
 
-    public function test_the_pause_grows_with_every_further_three(): void
+    public function test_a_used_reservation_breaks_the_run_and_a_block_starts_the_count_again(): void
     {
-        $service = app(NoShowService::class);
-        $this->assertSame([7, 14, 21, 28], array_map(fn ($t) => $service->daysForTier($t), [1, 2, 3, 4]));
-
         $driver = $this->driver();
-        foreach (range(1, 6) as $_) {
-            $this->late($driver);
-        }
+        $this->late($driver);
+        $this->late($driver);
         $this->expire();
+        $this->assertSame(2, app(NoShowService::class)->noShows($driver));
 
-        $this->assertSame([3, 6], ReservationSuspension::orderBy('no_show_count')->pluck('no_show_count')->all());
-        $second = ReservationSuspension::where('tier', 2)->firstOrFail();
-        $this->assertEqualsWithDelta(14 * 86400, $second->starts_at->diffInSeconds($second->ends_at), 5);
+        // The driver then uses a reservation: two misses are not "three in a row" any more.
+        $this->late($driver, ParkingReservation::APPROVAL_APPROVED, ParkingReservation::STATUS_COMPLETED);
+        $this->late($driver);
+        $this->expire();
+        $this->assertSame(1, app(NoShowService::class)->noShows($driver));
+        $this->assertSame(0, ReservationSuspension::count());
+
+        $this->late($driver);
+        $this->late($driver);
+        $this->expire();
+        $this->assertSame(1, ReservationSuspension::count());
+        $this->assertSame(0, app(NoShowService::class)->noShows($driver), 'after a block the count starts again');
+        $this->assertSame(7, app(NoShowService::class)->daysForTier(2));
     }
 
     public function test_cancelled_and_unanswered_reservations_do_not_count(): void
@@ -127,7 +134,7 @@ class NoShowSuspensionTest extends TestCase
         $vehicle = $driver->vehicles()->first();
 
         $this->actingAs($driver)->post(route('driver.reserve.store'), ['understand' => '1', 'slot' => $slot->id, 'vehicle' => $vehicle->id, 'date' => $at->format('Y-m-d'), 'time' => $at->format('H:i')])
-            ->assertSessionHas('modal', fn ($m) => $m['title'] === 'Reservations are paused' && str_contains($m['body'], 'You missed 3 reservations'));
+            ->assertSessionHas('modal', fn ($m) => $m['title'] === 'Reservations are paused' && str_contains($m['body'], 'You missed 3 reservations in a row'));
         $this->assertSame(3, ParkingReservation::count());
 
         $this->actingAs($driver)->get(route('driver.reserve'))->assertOk()->assertSee('Reservations are paused')->assertSee('You can still park without a reservation');

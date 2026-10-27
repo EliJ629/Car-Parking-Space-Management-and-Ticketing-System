@@ -161,7 +161,7 @@ class ExitAuthorizationTest extends TestCase
 
         $gate->expireWindows();
         $gate->expireWindows();
-        Http::assertSentCount(1);
+        $this->assertSame(1, Http::recorded(fn ($request) => str_contains((string) $request['message'], 'exit window'))->count());
         $auth = ExitAuthorization::sole();
         $this->assertSame('sms', $auth->notify_channel);
         $this->assertNotNull($auth->notified_at);
@@ -181,7 +181,7 @@ class ExitAuthorizationTest extends TestCase
 
         $this->assertSame(1, $gate->expireWindows());
         $this->assertSame(0, $gate->expireWindows());
-        Http::assertSentCount(1);
+        $this->assertSame(1, Http::recorded(fn ($request) => str_contains((string) $request['message'], 'exit window'))->count());
         $auth = ExitAuthorization::sole();
         $this->assertNull($auth->notified_at);
         $this->assertStringContainsString('not sent', $auth->notify_result);

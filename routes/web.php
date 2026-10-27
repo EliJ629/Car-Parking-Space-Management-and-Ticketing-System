@@ -148,6 +148,7 @@ Route::prefix('driver')->name('driver.')->group(function () {
 
         // After the form: the "check your email" page. The account is saved only when the link in the email is clicked.
         Route::get('register/check-your-email', [RegisterController::class, 'sent'])->name('register.sent');
+        Route::get('register/status', [RegisterController::class, 'status'])->middleware('throttle:60,1')->name('register.status');
         Route::post('register/resend', [RegisterController::class, 'resend'])->middleware('throttle:5,1')->name('register.resend');
         Route::post('register/restart', [RegisterController::class, 'restart'])->middleware('throttle:5,1')->name('register.restart');
 

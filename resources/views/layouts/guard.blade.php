@@ -16,6 +16,7 @@
         'incidents' => ['Incident reporting', route('guard.incidents')],
         'records' => ['Records', route('guard.records')],
         'slots' => ['Slots view', route('guard.slots')],
+        'bans' => ['Banned list', route('guard.bans')],
     ];
     $idleMinutes = (int) \App\Models\SystemSetting::value('idle_timeout_minutes', 15);
     $flashModal = session('modal');

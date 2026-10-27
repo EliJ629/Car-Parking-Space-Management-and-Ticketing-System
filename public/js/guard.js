@@ -20,7 +20,7 @@
   document.querySelectorAll('select[data-autosubmit]').forEach(function (s) { s.addEventListener('change', function () { s.form.submit(); }); });
   document.querySelectorAll('input[data-search-safe]').forEach(function (input) {
     input.addEventListener('input', function () {
-      input.value = input.value.replace(/[^\p{L}\p{N} -]/gu, '').slice(0, 20);
+      input.value = input.value.replace(/[^A-Za-z0-9 -]/g, '').slice(0, 20);
     });
   });
 
@@ -68,10 +68,13 @@
       });
     };
 
+    var lastRead = 0;
     var poll = function () {
       if (document.hidden) return;
+      var started = Date.now();
       pollFetch(shell.getAttribute('data-alerts-url')).then(function (d) {
-        if (!d) return;
+        /* A poll that began before "Mark all as read" must not bring the unread marks back. */
+        if (!d || started < lastRead) return;
         badge.textContent = d.count; badge.hidden = d.count < 1;
         render(d.items);
         d.items.forEach(function (a) {
@@ -89,10 +92,21 @@
       }).catch(function () { /* try again next time */ });
     };
     setInterval(poll, 20000);
+    /* Coming back to a tab or a cached page shows the saved state, not what the page looked like when it was left. */
+    window.addEventListener('pageshow', function (e) { if (e.persisted) poll(); });
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) poll(); });
 
     document.getElementById('alerts-read').addEventListener('click', function () {
+      /* Only clear the badge once the server confirms the notices are saved as read; otherwise they would come back unread on the next page. */
       fetch(shell.getAttribute('data-alerts-read'), { method: 'POST', headers: { 'X-CSRF-TOKEN': shell.getAttribute('data-csrf'), 'Accept': 'application/json', 'X-Bayline-Poll': '1' }, credentials: 'same-origin' })
-        .then(function () { badge.hidden = true; list.querySelectorAll('li.unread').forEach(function (li) { li.classList.remove('unread'); }); });
+        .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error('not saved')); })
+        .then(function (d) {
+          if (!d || d.ok !== true) { return Promise.reject(new Error('not saved')); }
+          lastRead = Date.now();
+          badge.hidden = true;
+          list.querySelectorAll('li.unread').forEach(function (li) { li.classList.remove('unread'); });
+        })
+        .catch(function () { /* leave them unread so nothing is lost; the guard can press the button again */ });
     });
 
     /* Idle warning one minute before the server signs the guard out. */

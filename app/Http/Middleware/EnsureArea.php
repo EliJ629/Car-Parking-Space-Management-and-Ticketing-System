@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Models\SystemSetting;
+use App\Services\BanService;
 use App\Services\SignInService;
 use Closure;
 use Illuminate\Http\Request;
@@ -44,6 +45,13 @@ class EnsureArea
 
             return redirect()->route($loginRoute)
                 ->with('status', 'This account cannot sign in right now. Please ask your supervisor.');
+        }
+
+        // A driver who is banned while signed in is signed out on the next page.
+        if ($area === SignInService::AREA_DRIVER && app(BanService::class)->banForUser($user)) {
+            $this->signIn->signOut($request, $area);
+
+            return redirect()->route($loginRoute)->with('status', BanService::LOGIN_MESSAGE);
         }
 
         if ($area === SignInService::AREA_STAFF) {

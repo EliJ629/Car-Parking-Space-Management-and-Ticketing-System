@@ -56,6 +56,21 @@
 
 @push('scripts')
 <script>
+/* The link may be opened on another device. Once the account exists, this page goes to the sign-in page by itself. */
+(function () {
+  var url = @json(route('driver.register.status'));
+  var stop = false;
+  function check() {
+    if (stop || document.hidden) return;
+    fetch(url, { headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin', cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) { if (d && d.done && d.url) { stop = true; window.location.href = d.url; } })
+      .catch(function () {});
+  }
+  setInterval(check, 4000);
+  document.addEventListener('visibilitychange', check);
+  window.addEventListener('focus', check);
+})();
 (function () {
   var b = document.getElementById('resend');
   if (!b) return;

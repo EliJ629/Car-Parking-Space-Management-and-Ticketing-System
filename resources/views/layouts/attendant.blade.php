@@ -21,6 +21,7 @@
         'slots' => ['Parking slots', route('attendant.slots.index')],
         'records' => ['Parking records', route('attendant.records.index')],
         'shift' => ['Shift sale summary', route('attendant.shift.index')],
+        'bans' => ['Banned list', route('attendant.bans')],
     ];
     $idleMinutes = (int) \App\Models\SystemSetting::value('idle_timeout_minutes', 15);
     $flashModal = session('modal');

@@ -64,6 +64,12 @@ class SignInService
             $this->fail('This account cannot sign in right now. Please ask your supervisor.');
         }
 
+        // A banned driver cannot sign in. The check comes after the password so it tells nobody else anything.
+        if ($area === self::AREA_DRIVER && app(BanService::class)->banForUser($user)) {
+            ActivityLog::record('sign_in_failed', $user, $request, 'banned', $area);
+            $this->fail(BanService::LOGIN_MESSAGE);
+        }
+
         // A driver signs in only after the email was confirmed with the code.
         if ($area === self::AREA_DRIVER && ! $user->hasVerifiedEmail()) {
             $user->clearFailedLogins();
@@ -98,6 +104,11 @@ class SignInService
         if (! $user->isDriver() || (! $user->isActive() && ! $suspendedDriver)) {
             ActivityLog::record('sign_in_failed', $user, $request, $via, self::AREA_DRIVER);
             $this->fail('This account cannot sign in right now. Please ask your supervisor.');
+        }
+
+        if (app(BanService::class)->banForUser($user)) {
+            ActivityLog::record('sign_in_failed', $user, $request, 'banned', self::AREA_DRIVER);
+            $this->fail(BanService::LOGIN_MESSAGE);
         }
 
         $user->clearFailedLogins();

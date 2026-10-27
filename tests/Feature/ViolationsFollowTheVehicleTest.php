@@ -132,7 +132,7 @@ class ViolationsFollowTheVehicleTest extends TestCase
         $at = \App\Support\Lot::now()->addHours(3);
         $slot = \App\Models\ParkingSlot::where('code', 'A-03')->firstOrFail();
         $this->actingAs($driver)->post(route('driver.reserve.store'), ['understand' => '1', 'slot' => $slot->id, 'vehicle' => $vehicle->id, 'date' => $at->format('Y-m-d'), 'time' => $at->format('H:i')])
-            ->assertSessionHas('modal');
+            ->assertRedirect(route('driver.login'));
         $this->assertSame(0, \App\Models\ParkingReservation::count());
     }
 

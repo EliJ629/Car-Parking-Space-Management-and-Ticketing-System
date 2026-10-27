@@ -58,14 +58,80 @@ class BanService
             ->where(fn ($q) => $q->where('p.plate_number', $key)->orWhere('v.plate_number', $key))
             ->get(['p.plate_number as previous', 'v.plate_number as current']);
 
-        if ($rows->isEmpty()) {
-            return ['all' => [$key], 'current' => $key];
-        }
-
-        $current = (string) ($rows->first()->current ?: $key);
+        $current = $rows->isEmpty() ? $key : (string) ($rows->first()->current ?: $key);
         $all = array_values(array_unique(array_filter(array_merge([$key, $current], $rows->pluck('previous')->all()))));
 
+        // The mobile number ties plates together too: a walk-in on a temporary plate and the same person's account
+        // with the permanent plate gave the same number, so their violations are one record.
+        $all = array_values(array_unique(array_merge($all, $this->platesSharingPhone($all))));
+
         return ['all' => $all, 'current' => $current];
+    }
+
+    /** The last ten digits of a Philippine mobile number, or '' when there is no usable number. */
+    public static function phoneTail(?string $phone): string
+    {
+        $digits = preg_replace('/\D+/', '', (string) $phone) ?? '';
+
+        return strlen($digits) >= 10 ? substr($digits, -10) : '';
+    }
+
+    public static function nameKey(?string $name): string
+    {
+        return mb_strtolower(trim(preg_replace('/\s+/u', ' ', (string) $name) ?? ''));
+    }
+
+    /**
+     * Plates tied to a registered driver by mobile number, for the walk-in who later signs up:
+     *  - a plate with no account (a walk-in, usually on a temporary plate) is tied to the driver whose account has the
+     *    mobile number it was parked with, and to that driver's vehicles;
+     *  - a driver's vehicle is tied to walk-in plates with no account that were parked with the driver's number.
+     * Two vehicles that both belong to accounts are never joined this way, and a number typed at the booth for two
+     * unrelated walk-ins joins nobody unless a registered driver has that number.
+     *
+     * @param  list<string>  $plates
+     * @return list<string>
+     */
+    private function platesSharingPhone(array $plates): array
+    {
+        $isOwned = fn (string $plate): bool => DB::table('vehicles')->where('plate_number', $plate)->exists()
+            || DB::table('vehicle_previous_plates')->where('plate_number', $plate)->exists();
+
+        $found = [];
+
+        // Walk-in plates in this record: find the account that has their mobile number.
+        $walkIns = array_values(array_filter($plates, fn (string $p) => ! $isOwned($p)));
+        $tails = collect($walkIns === [] ? [] : DB::table('parking_sessions')->whereIn('plate_number', $walkIns)->whereNotNull('driver_phone')->distinct()->pluck('driver_phone'))
+            ->map(fn ($p) => self::phoneTail($p))->filter()->unique();
+
+        foreach ($tails as $tail) {
+            $like = '%'.$tail;
+            $owners = DB::table('users')->where('role', User::ROLE_DRIVER)->where('phone', 'like', $like)->pluck('id');
+
+            if ($owners->isEmpty()) {
+                continue;
+            }
+
+            $found = array_merge(
+                $found,
+                DB::table('vehicles')->whereIn('user_id', $owners)->whereNotNull('plate_number')->pluck('plate_number')->all(),
+                DB::table('vehicle_previous_plates as p')->join('vehicles as v', 'v.id', '=', 'p.vehicle_id')->whereIn('v.user_id', $owners)->pluck('p.plate_number')->all(),
+            );
+        }
+
+        // A vehicle in this record: find walk-in plates parked with its owner's number.
+        $ownerPhones = DB::table('vehicles as v')->join('users as u', 'u.id', '=', 'v.user_id')->whereIn('v.plate_number', $plates)->whereNotNull('u.phone')->distinct()->pluck('u.phone')
+            ->map(fn ($p) => self::phoneTail($p))->filter()->unique();
+
+        foreach ($ownerPhones as $tail) {
+            foreach (DB::table('parking_sessions')->where('driver_phone', 'like', '%'.$tail)->distinct()->pluck('plate_number') as $plate) {
+                if (! $isOwned((string) $plate)) {
+                    $found[] = (string) $plate;
+                }
+            }
+        }
+
+        return array_values(array_unique(array_filter($found)));
     }
 
     /** The active ban on a plate or on any earlier plate of the same vehicle, or null. */
@@ -82,12 +148,74 @@ class BanService
     }
 
     /** @throws VehicleBanned */
-    public function assertAllowed(?string $plate): void
+    public function assertAllowed(?string $plate, ?string $phone = null): void
     {
-        if ($this->isBanned($plate)) {
+        if ($this->isBanned($plate) || $this->phoneBanned($phone)) {
             throw new VehicleBanned;
         }
     }
+
+    /** The active ban held by a driver of this name, or null. */
+    public function nameBanned(?string $name): ?BannedPlate
+    {
+        $key = self::nameKey($name);
+
+        return $key === '' ? null : BannedPlate::query()->active()->whereNotNull('driver_name')->whereRaw('lower(driver_name) = ?', [$key])->first();
+    }
+
+    /** The active ban held by a driver with this mobile number, or null. */
+    public function phoneBanned(?string $phone): ?BannedPlate
+    {
+        $tail = self::phoneTail($phone);
+
+        return $tail === '' ? null : BannedPlate::query()->active()->whereNotNull('driver_phone')->where('driver_phone', 'like', '%'.$tail)->first();
+    }
+
+    /**
+     * The active ban that applies to a driver account: the ban is linked to the account, or one of the account's
+     * vehicles (or the plates they carried before) is banned, or the name or the mobile number is on the banned list.
+     */
+    public function banForUser(User $user): ?BannedPlate
+    {
+        $linked = BannedPlate::query()->active()->where('user_id', $user->id)->first();
+
+        if ($linked) {
+            return $linked;
+        }
+
+        foreach ($user->vehicles()->withTrashed()->pluck('plate_number')->filter() as $plate) {
+            if ($ban = $this->activeBan($plate)) {
+                return $ban;
+            }
+        }
+
+        return $this->nameBanned($user->name) ?? $this->phoneBanned($user->phone);
+    }
+
+    /**
+     * Why a new account may not be made with these details, or null. The message is shown on the sign-up form.
+     *
+     * @return array{0:string,1:string}|null the form field and the message
+     */
+    public function signUpProblem(?string $name, ?string $plate, ?string $phone): ?array
+    {
+        if ($plate && $this->isBanned($plate)) {
+            return ['plate_number', Lot::plate($plate).' is on the banned list, so it cannot be used to sign up.'];
+        }
+
+        if ($this->nameBanned($name)) {
+            return ['first_name', 'This name is on the banned list, so it cannot be used to sign up.'];
+        }
+
+        if ($this->phoneBanned($phone)) {
+            return ['phone', 'This mobile number belongs to a banned driver, so it cannot be used to sign up.'];
+        }
+
+        return null;
+    }
+
+    /** Message shown to a banned driver who tries to sign in. */
+    public const LOGIN_MESSAGE = 'This account is banned because of repeated incident reports. Please contact the Parking Manager.';
 
     /** The confirmed incidents that count for a plate right now. */
     public function counted(?string $plate): Collection
@@ -230,6 +358,8 @@ class BanService
         // The ban goes on the vehicle's current plate, even when the incident was reported under an earlier temporary plate.
         $plate = $this->lineage($plate)['current'] ?: $plate;
         $owner = $this->notices->driverForPlate($plate);
+        $phone = $owner?->phone ?: DB::table('parking_sessions')->whereIn('plate_number', $this->lineage($plate)['all'])->whereNotNull('driver_phone')->orderByDesc('id')->value('driver_phone');
+        $owner ??= self::phoneTail($phone) !== '' ? User::query()->where('role', User::ROLE_DRIVER)->where('phone', 'like', '%'.self::phoneTail($phone))->first() : null;
         $reason = "{$count} confirmed incidents. The last one is {$trigger->code}.";
 
         $ban = BannedPlate::query()->lockForUpdate()->where('plate_number', $plate)->first();
@@ -250,6 +380,8 @@ class BanService
             'incident_count' => $count,
             // Only an account that saved this exact plate as its own vehicle is linked. That link is the evidence.
             'user_id' => $owner?->id,
+            'driver_name' => $owner?->name,
+            'driver_phone' => $phone ?: $owner?->phone,
             'banned_at' => now(),
             'banned_by' => $by?->id,
             'lifted_at' => null,

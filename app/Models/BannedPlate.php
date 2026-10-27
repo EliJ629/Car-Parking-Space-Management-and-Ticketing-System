@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * and is switched on again by the next ban of the same plate.
  */
 #[Fillable([
-    'plate_number', 'reason', 'incident_count', 'user_id', 'banned_at', 'banned_by', 'lifted_at', 'lifted_by', 'lift_note',
+    'plate_number', 'driver_name', 'driver_phone', 'reason', 'incident_count', 'user_id', 'banned_at', 'banned_by', 'lifted_at', 'lifted_by', 'lift_note',
 ])]
 class BannedPlate extends Model
 {

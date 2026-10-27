@@ -199,11 +199,19 @@ class IncidentBanTest extends TestCase
         }
         $this->assertTrue(app(BanService::class)->isBanned('ABC1234'));
 
-        // 1. A new reservation is refused with the standard message.
+        // 1. The banned driver is signed out at the next page, so no new reservation can be made.
         $reservation->update(['status' => ParkingReservation::STATUS_CANCELED]);
-        $this->actingAs($driver)->post(route('driver.reserve.store'), $reservationForm)->assertSessionHas('modal');
-        $this->assertSame(VehicleBanned::MESSAGE, session('modal')['body'] ?? null);
+        $this->actingAs($driver)->post(route('driver.reserve.store'), $reservationForm)->assertRedirect(route('driver.login'));
+        $this->assertGuest();
         $this->assertSame(1, ParkingReservation::count());
+
+        // The reservation rule itself still refuses the banned plate.
+        try {
+            app(\App\Services\ReservationService::class)->create($driver, $driver->vehicles()->first(), $slot, $at);
+            $this->fail('A banned vehicle must not reserve.');
+        } catch (\App\Services\ReservationException $e) {
+            $this->assertSame('vehicle_banned', $e->reason);
+        }
 
         // 2. A walk-in at the booth, the lookup first and then the entry itself.
         $this->actingAs($attendant)->postJson(route('attendant.entry.walk-in.lookup'), ['plate' => 'abc 1234'])->assertStatus(422)->assertJson(['status' => 'banned']);

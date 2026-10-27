@@ -196,6 +196,11 @@ class EntryController extends Controller
         $normPlate = Vehicle::normalizePlate($validated['plate']);
         $attendant = $request->user();
 
+        // A banned driver cannot walk in under another plate: the mobile number is on the banned list too.
+        if (app(BanService::class)->phoneBanned($validated['phone'] ?? null)) {
+            throw ValidationException::withMessages(['phone' => VehicleBanned::MESSAGE]);
+        }
+
         // Start transaction with row lock
         $session = DB::transaction(function () use ($validated, $normPlate, $attendant, $notices, $request) {
             // Check plate not already in lot

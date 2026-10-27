@@ -5,6 +5,7 @@ use App\Http\Controllers\Guard\GateController;
 use App\Http\Controllers\Guard\IncidentController;
 use App\Http\Controllers\Guard\RecordsController;
 use App\Http\Controllers\Guard\SlotsController;
+use App\Http\Controllers\Staff\BannedListController;
 use App\Http\Controllers\Staff\IncidentPhotoController;
 use Illuminate\Support\Facades\Route;
 
@@ -36,6 +37,7 @@ Route::prefix('staff/guard')->name('guard.')->middleware(['area:staff', 'role:gu
 
     Route::get('records', [RecordsController::class, 'index'])->name('records');
     Route::get('slots', [SlotsController::class, 'index'])->name('slots');
+    Route::get('banned', [BannedListController::class, 'guard'])->name('bans');
 
     Route::get('alerts', [AlertController::class, 'index'])->name('alerts')->withoutMiddleware('sweep');
     Route::post('alerts/read', [AlertController::class, 'readAll'])->name('alerts.read')->withoutMiddleware('sweep');

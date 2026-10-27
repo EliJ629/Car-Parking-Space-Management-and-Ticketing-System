@@ -117,16 +117,16 @@ class SmsReminderTest extends TestCase
         $this->assertDatabaseHas('activity_logs', ['action' => 'reservation_reminder_sent', 'subject' => $reservation->code]);
     }
 
-    public function test_the_message_names_the_bay_the_time_and_stays_in_one_text(): void
+    public function test_the_message_greets_the_driver_names_the_time_and_the_early_minutes(): void
     {
-        $reservation = $this->reservation($this->driver(), ['scheduled_at' => now()->addMinutes(25)]);
+        $driver = $this->driver();
+        $reservation = $this->reservation($driver, ['scheduled_at' => now()->addMinutes(25)]);
         $message = app(ReservationReminders::class)->message($reservation->fresh(['slot', 'driver']));
 
-        $this->assertStringContainsString('A-06', $message);
-        $this->assertStringContainsString($reservation->code, $message);
+        $this->assertStringStartsWith('Hi '.$driver->name.', you have a reservation scheduled for ', $message);
         $this->assertStringContainsString(Lot::local($reservation->scheduled_at)->format('g:i A'), $message);
-        $this->assertLessThanOrEqual(160, strlen($message));
-        $this->assertSame(strlen($message), mb_strlen($message), 'plain characters only');
+        $this->assertStringContainsString('Please arrive '.Lot::earlyMinutes().' minutes before your reserved time', $message);
+        $this->assertStringContainsString('Missing three consecutive reservations will result in the loss of the reservation feature for one week.', $message);
     }
 
     public function test_only_open_approved_upcoming_reservations_inside_the_window_are_reminded(): void

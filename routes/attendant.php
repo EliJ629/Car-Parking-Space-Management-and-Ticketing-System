@@ -8,6 +8,7 @@ use App\Http\Controllers\Attendant\RecordsController;
 use App\Http\Controllers\Attendant\ReservationController;
 use App\Http\Controllers\Attendant\ShiftController;
 use App\Http\Controllers\Attendant\SlotController;
+use App\Http\Controllers\Staff\BannedListController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -21,6 +22,7 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('staff/attendant')->name('attendant.')->middleware(['area:staff', 'role:attendant', 'sweep'])->group(function () {
     Route::redirect('/', '/staff/attendant/home');
     Route::get('home', [HomeController::class, 'index'])->name('home');
+    Route::get('banned', [BannedListController::class, 'attendant'])->name('bans');
 
     // New Entry (Walk-in & Reserved)
     Route::get('entry', [EntryController::class, 'index'])->name('entry.index');

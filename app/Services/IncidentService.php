@@ -160,7 +160,7 @@ class IncidentService
         $isWrongSlot = $category === 'Wrong slot';
 
         // A wrong-slot report always tells the driver at once. It counts as one warning, so the driver must know about it.
-        if ($plate !== '' && ($isWrongSlot || ($data['notify_driver'] ?? true))) {
+        if ($plate !== '') {
             $delivery = $this->notices->deliverToVehicle(
                 $plate, 'N-12', $isWrongSlot ? 'incident_wrong_slot' : ($isDamage ? 'incident_damage' : 'incident_report'),
                 $isWrongSlot ? 'Your vehicle is parked in the wrong slot' : ($isDamage ? 'Your vehicle was damaged' : 'Security report about your vehicle'),

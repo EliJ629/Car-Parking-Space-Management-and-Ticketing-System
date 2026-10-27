@@ -71,20 +71,17 @@ class ReservationReminders
         return $result;
     }
 
-    /** Plain letters only, so the message stays in one 160 character text. */
+    /** The wording the manager's brief asks for. The early minutes come from the manager's settings. */
     public function message(ParkingReservation $reservation): string
     {
         $at = Lot::local($reservation->scheduled_at);
-        $minutes = max(1, (int) ceil(now()->diffInSeconds($reservation->scheduled_at, true) / 60));
-        $slot = $reservation->slot?->code ?? $reservation->slot_code;
+        $name = trim((string) ($reservation->driver?->name ?? '')) ?: 'driver';
 
         return sprintf(
-            'Bayline: bay %s is reserved for you at %s (in about %d min). Show your QR code at the booth. Ref %s. The bay is released %d min after your time.',
-            $slot,
-            $at->format('g:i A'),
-            $minutes,
-            $reservation->code,
-            Lot::graceMinutes(),
+            'Hi %s, you have a reservation scheduled for %s. Please arrive %d minutes before your reserved time to prevent the reservation from expiring and to avoid receiving a warning. Note: Missing three consecutive reservations will result in the loss of the reservation feature for one week.',
+            $name,
+            $at->format('M j, g:i A'),
+            Lot::earlyMinutes(),
         );
     }
 }
