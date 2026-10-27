@@ -18,6 +18,11 @@
   document.querySelectorAll('dialog[data-autoopen]').forEach(openDialog);
   document.querySelectorAll('[data-print]').forEach(function (b) { b.addEventListener('click', function () { window.print(); }); });
   document.querySelectorAll('select[data-autosubmit]').forEach(function (s) { s.addEventListener('change', function () { s.form.submit(); }); });
+  document.querySelectorAll('input[data-search-safe]').forEach(function (input) {
+    input.addEventListener('input', function () {
+      input.value = input.value.replace(/[^\p{L}\p{N} -]/gu, '').slice(0, 20);
+    });
+  });
 
   /* The clock follows the lot's time zone. */
   var clock = document.getElementById('clock');

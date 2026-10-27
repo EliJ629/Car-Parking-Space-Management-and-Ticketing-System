@@ -12,13 +12,12 @@ use App\Models\ParkingSlot;
 use App\Models\SystemSetting;
 use App\Models\User;
 use App\Services\LongParkingService;
-use App\Support\Lot;
 use Database\Seeders\DatabaseSeeder;
 use Database\Seeders\ManagerDefaultsSeeder;
 use Database\Seeders\ParkingSlotSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
@@ -308,7 +307,7 @@ class GuardConsoleTest extends TestCase
         $this->parked('PK-0012', 'QRS3317', 'B-01', 'active', 60 * 14);
 
         // The manual report page and its button are gone.
-        $this->assertFalse(\Illuminate\Support\Facades\Route::has('guard.incidents.long-parked'));
+        $this->assertFalse(Route::has('guard.incidents.long-parked'));
         $this->actingAs($guard)->get(route('guard.incidents'))->assertOk()->assertDontSee('Report long-parked vehicle');
         $this->actingAs($guard)->get('/staff/guard/incidents/long-parked')->assertNotFound();
 
@@ -339,6 +338,56 @@ class GuardConsoleTest extends TestCase
         $this->actingAs($guard)->get(route('guard.gate'))->assertSee('Long-parked vehicle: B-01')->assertSee($incident->code);
         $this->actingAs($guard)->getJson(route('guard.alerts'))->assertJsonPath('count', 1);
         $this->actingAs($guard)->get(route('guard.incidents.show', $incident))->assertOk()->assertSee('Detected by Bayline');
+    }
+
+    public function test_guard_alert_read_state_survives_navigation_and_new_alerts_are_unread(): void
+    {
+        $this->lot();
+        $guard = $this->guard();
+        $notice = Notice::create([
+            'audience_role' => User::ROLE_GUARD,
+            'code' => 'S-05',
+            'kind' => 'test_alert',
+            'title' => 'Test alert',
+            'body' => 'Test alert body.',
+        ]);
+
+        $this->actingAs($guard)->getJson(route('guard.alerts'))->assertJsonPath('count', 1);
+        $this->actingAs($guard)->postJson(route('guard.alerts.read'))->assertOk();
+        $this->assertNotNull($notice->fresh()->read_at);
+        $this->actingAs($guard)->get(route('guard.records'))->assertOk();
+        $this->actingAs($guard)->getJson(route('guard.alerts'))->assertJsonPath('count', 0);
+
+        Notice::create([
+            'audience_role' => User::ROLE_GUARD,
+            'code' => 'S-06',
+            'kind' => 'test_alert',
+            'title' => 'New test alert',
+            'body' => 'New test alert body.',
+        ]);
+
+        $this->actingAs($guard)->getJson(route('guard.alerts'))->assertJsonPath('count', 1);
+    }
+
+    public function test_guard_record_search_strips_unnecessary_special_characters_but_keeps_hyphens(): void
+    {
+        $this->lot();
+        $guard = $this->guard();
+        $this->parked('PK-0018', 'BNM6628', 'A-07', 'paid');
+        $incident = Incident::create([
+            'code' => 'INC-0001',
+            'category' => 'Other',
+            'source' => 'manual',
+            'status' => 'open',
+            'description' => 'Something odd happened.',
+            'reported_by' => $guard->id,
+            'reported_at' => now(),
+        ]);
+
+        $this->actingAs($guard)->get(route('guard.records', ['q' => 'bnm@-6628']))
+            ->assertOk()->assertSee('PK-0018');
+        $this->actingAs($guard)->get(route('guard.records', ['tab' => 'incidents', 'q' => 'inc@-0001']))
+            ->assertOk()->assertSee($incident->code);
     }
 
     public function test_records_filter_and_detail(): void

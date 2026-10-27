@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\ExitAuthorization;
 use App\Models\Incident;
 use App\Models\Notice;
 use App\Models\ParkingPayment;
@@ -12,6 +13,7 @@ use App\Models\Vehicle;
 use App\Models\VehiclePreviousPlate;
 use App\Support\Lot;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Carbon;
 
 /**
  * Creates the driver notifications (N-01 to N-13) and the staff alerts (S-01 to S-06).
@@ -143,9 +145,9 @@ class NoticeService
      * The exit permission ended. A registered driver gets an in-app notice, a walk-in gets a text message.
      * One delivery per authorization: the group key makes a repeat harmless.
      *
-     * @return array{ok:bool,channel:?string,result:string,at:?\Illuminate\Support\Carbon}
+     * @return array{ok:bool,channel:?string,result:string,at:?Carbon}
      */
-    public function exitWindowEnded(ParkingSession $s, ?\App\Models\ExitAuthorization $authorization = null): array
+    public function exitWindowEnded(ParkingSession $s, ?ExitAuthorization $authorization = null): array
     {
         $minutes = $authorization ? max(1, (int) round($authorization->issued_at->diffInMinutes($authorization->expires_at))) : Lot::exitWindowMinutes();
 
@@ -185,7 +187,7 @@ class NoticeService
      * "ok" means the notice was created in the app, or TextBee accepted the text. A text accepted by TextBee has not
      * necessarily reached the phone, and the result says so; this method never reports a text as delivered.
      *
-     * @return array{ok:bool,channel:?string,result:string,at:?\Illuminate\Support\Carbon}
+     * @return array{ok:bool,channel:?string,result:string,at:?Carbon}
      */
     public function deliverToVehicle(?string $plate, string $code, string $kind, string $title, string $body, ?Model $subject = null, ?string $groupKey = null, ?ParkingSession $session = null): array
     {
@@ -241,10 +243,10 @@ class NoticeService
     // Staff alerts
     // ------------------------------------------------------------------
 
-    /** S-01. The Guard panel reads open long-parking incidents live, so only the Manager row is stored. */
+    /** S-01. Store the alert for both staff roles so each panel can persist read state. */
     public function staffLongParking(ParkingSession $s, Incident $incident): void
     {
-        $this->toRoles([User::ROLE_MANAGER], 'S-01', 'long_parking', 'Long-parked vehicle',
+        $this->toRoles([User::ROLE_MANAGER, User::ROLE_GUARD], 'S-01', 'long_parking', 'Long-parked vehicle',
             Lot::plate($s->plate_number)." in {$this->slotCode($s)} passed ".Lot::longParkingHours()." h. {$incident->code} is open.",
             $incident, [], "s01-{$incident->id}");
     }

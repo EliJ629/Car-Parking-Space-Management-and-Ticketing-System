@@ -29,7 +29,7 @@
   <div class="fld sm" data-custom @if ($f['range'] !== 'custom') hidden @endif><label class="f" for="to">To</label><input id="to" name="to" type="date" data-range-end max="{{ \App\Support\Lot::now()->format('Y-m-d') }}" value="{{ $f['to'] }}"></div>
   <div class="fld">
     <label class="f" for="q">Search</label>
-    <input id="q" name="q" type="search" maxlength="20" value="{{ $f['q'] }}" placeholder="{{ $tab === 'parking' ? 'Plate or ticket number' : 'Plate or incident code' }}" autocomplete="off">
+    <input id="q" name="q" type="search" maxlength="20" value="{{ $f['q'] }}" data-search-safe placeholder="{{ $tab === 'parking' ? 'Plate or ticket number' : 'Plate or incident code' }}" autocomplete="off">
   </div>
   @if ($tab === 'parking')
     <div class="fld sm">

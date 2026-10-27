@@ -7,6 +7,7 @@ use App\Models\Incident;
 use App\Models\ParkingSession;
 use App\Models\Vehicle;
 use App\Support\Lot;
+use App\Support\SearchTerm;
 use App\Support\TicketNumber;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -20,7 +21,7 @@ class RecordsController extends Controller
     {
         $tab = $request->query('tab') === 'incidents' ? 'incidents' : 'parking';
         [$from, $to, $range] = $this->range($request);
-        $q = mb_substr(trim((string) $request->query('q', '')), 0, 20);
+        $q = SearchTerm::normalize($request->query('q'));
 
         $filters = ['range' => $range, 'from' => Lot::local($from)->format('Y-m-d'), 'to' => Lot::local($to)->format('Y-m-d'), 'q' => $q];
         $data = ['tab' => $tab, 'f' => $filters, 'rangeText' => $this->rangeText($from, $to, $range), 'detail' => null];

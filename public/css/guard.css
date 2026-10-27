@@ -20,6 +20,13 @@
 .g-tabs a[aria-current=page]{background:var(--paint);border-color:var(--paint-deep);color:var(--paint-ink);font-weight:700}
 main#main{padding-bottom:56px;outline:0}
 .g-title{font-size:52px;margin-top:6px}
+.guard-layout .manager-lot{overflow:hidden}
+.guard-layout .manager-layout-canvas{min-width:0;width:100%}
+.guard-layout .slot-layout-slot{position:absolute;width:76px;height:62px;min-height:0;padding:12px 3px 4px;box-sizing:border-box}
+.guard-layout .slot-layout-slot b{font-size:18px}
+.guard-layout .slot-layout-slot.long{background:var(--stop);border-color:var(--stop);color:#fff}
+.guard-layout .slot-layout-slot.long span,.guard-layout .slot-layout-slot.long small{color:#fff}
+.guard-legend-long{background:var(--stop)!important;border-color:var(--stop)!important}
 .g-sub{color:var(--muted);font-size:15px;margin-top:8px;max-width:46em}
 .g-sub2{display:flex;gap:22px;border-bottom:1px solid var(--line);margin:18px 0 18px}
 .g-sub2 a{padding:10px 0;font-size:14px;font-weight:600;color:var(--muted);text-decoration:none;border-bottom:3px solid transparent;margin-bottom:-1px;min-height:44px;display:inline-flex;align-items:center}
