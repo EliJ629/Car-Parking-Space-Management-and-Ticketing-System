@@ -89,10 +89,10 @@ class EntryController extends Controller
         $rawPlate = trim((string) $request->input('plate', ''));
         $normPlate = Vehicle::normalizePlate($rawPlate);
 
-        if (! PlateNumber::isValid($normPlate)) {
+        if (! preg_match(Vehicle::PLATE_PATTERN, $normPlate)) {
             return response()->json([
                 'ok' => false,
-                'error' => PlateNumber::problem($rawPlate),
+                'error' => 'Enter a valid Philippine plate (e.g. ABC 1234, AB 12345, or 1).',
             ], 422);
         }
 
@@ -171,17 +171,21 @@ class EntryController extends Controller
         $rawPhone = $request->input('phone');
         $cleanPhone = is_string($rawPhone) ? preg_replace('/[\s-]+/', '', $rawPhone) : $rawPhone;
 
+        $rawPlate = Vehicle::normalizePlate($request->input('plate'));
+        if (app(BanService::class)->isBanned($rawPlate)) {
+            throw ValidationException::withMessages(['plate' => VehicleBanned::MESSAGE]);
+        }
+
         $request->merge([
-            'plate' => Vehicle::normalizePlate($request->input('plate')),
+            'plate' => $rawPlate,
             'phone' => Lot::normalizePhone($cleanPhone),
         ]);
 
         $validated = $request->validate([
-            'plate' => Rules::parkablePlate(true),
+            'plate' => ['required', 'string', 'regex:'.Vehicle::PLATE_PATTERN],
             'phone' => Rules::mobile(false),
             'color' => ['required', 'string', 'max:30', 'regex:/^[A-Za-z\s-]+$/'],
             'type' => ['required', 'string', Rule::in(Vehicle::DRIVER_TYPES), function (string $attribute, mixed $value, \Closure $fail) use ($request): void {
-                // The plate must be a shape this kind of vehicle may carry (a car plate on a motorcycle is a mistake at the booth).
                 if (! \App\Support\PlateNumber::isValid((string) $request->input('plate'), (string) $value)) {
                     $fail(\App\Support\PlateNumber::problem((string) $request->input('plate'), (string) $value) ?? 'The plate does not match the vehicle type.');
                 }
@@ -189,6 +193,7 @@ class EntryController extends Controller
             'slot_code' => ['required', 'string', 'exists:parking_slots,code'],
             'driver_id' => ['nullable', 'exists:users,id'],
         ], [
+            'plate.regex' => 'Enter a valid Philippine plate (e.g. ABC 1234, AB 12345, or 1).',
             'type.in' => 'Please select an allowed vehicle type (Car, SUV, Van, Pickup, or Motorcycle).',
             'color.regex' => 'Vehicle color must contain letters only.',
         ]);

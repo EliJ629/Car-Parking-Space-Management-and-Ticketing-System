@@ -43,10 +43,11 @@
         
         <div class="ba-form-group">
           <label class="ba-label" for="plate-input">Plate number</label>
-          <input class="ba-input" id="plate-input" name="plate" type="text" data-plate
+          <input class="ba-input" id="plate-input" name="plate" type="text"
                  value="{{ request('plate', '') }}"
-                 placeholder="e.g. ABC 1234, A 123 BC, or 1" style="font-size:24px;font-weight:800;letter-spacing:1px;text-transform:uppercase;"
-                 autocomplete="off" autofocus>
+                 placeholder="e.g. ABC 1234, AB 12345, or 1" style="font-size:24px;font-weight:800;letter-spacing:1px;text-transform:uppercase;"
+                 autocomplete="off" autofocus maxlength="16"
+                 oninput="this.value = this.value.toUpperCase().replace(/[^A-Z0-9\s-]/g, '').slice(0, 16);">
           <p style="font-size:12px;color:var(--muted);margin-top:4px;">Standard, motorcycle, legacy, vintage, temporary, diplomatic, or government plates (1 to 17).</p>
           <div class="ba-err-msg" id="plate-err" hidden></div>
         </div>
@@ -467,7 +468,13 @@ async function doLookup() {
     }
 
     if (!res.ok) {
-      plateErr.textContent = data.error || 'Invalid plate.';
+      if (res.status === 419) {
+        plateErr.textContent = 'Session expired. Please refresh the page.';
+      } else if (res.status >= 500) {
+        plateErr.textContent = 'Server error during lookup. Please try again.';
+      } else {
+        plateErr.textContent = (data && (data.error || data.message)) || 'Enter a valid Philippine plate (e.g. ABC 1234, AB 12345, or 1).';
+      }
       plateErr.hidden = false;
       return;
     }
@@ -505,6 +512,8 @@ async function doLookup() {
     }
   } catch (e) {
     console.error(e);
+    plateErr.textContent = 'Connection or server error during lookup. Please try again.';
+    plateErr.hidden = false;
   }
 }
 

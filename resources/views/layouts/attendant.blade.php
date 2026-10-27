@@ -181,6 +181,5 @@
 <script src="{{ asset('js/qr.min.js') }}"></script>
 <script src="{{ asset('js/html5-qrcode.min.js') }}"></script>
 <script src="{{ asset('js/attendant.js') }}?v={{ filemtime(public_path('js/attendant.js')) }}"></script>
-<script src="{{ asset('js/plate.js') }}?v={{ filemtime(public_path('js/plate.js')) }}"></script>
 <script src="{{ asset('js/table-pager.js') }}?v={{ filemtime(public_path('js/table-pager.js')) }}"></script>
 @endpush
