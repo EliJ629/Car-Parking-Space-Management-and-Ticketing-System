@@ -3,38 +3,38 @@
 @section('title', 'Change password - Bayline')
 
 @section('body')
-@include('partials.workspace-bar', ['home' => route('staff.home'), 'logout' => 'staff.logout'])
-
-<main class="page">
-  <div class="w">
-    <section class="manager-form-panel" style="max-width:520px;margin:24px auto">
-      <p class="eyebrow">Account security</p>
-      <h1 style="font-size:42px;margin-top:8px">Choose a new password</h1>
-      <p class="manager-page-lede">Your temporary password must be replaced before you can continue.</p>
-      @if ($errors->any())
-        <div class="manager-feedback manager-feedback-error" role="alert">
-          <ul>@foreach ($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul>
-        </div>
-      @endif
-      <form method="POST" action="{{ route('staff.password.change.update') }}">
-        @csrf
-        @method('PUT')
-        <div class="manager-form-grid">
-          <div class="manager-field manager-field-wide">
-            <label class="f" for="password">New password</label>
-            <input id="password" name="password" type="password" minlength="12" maxlength="64" autocomplete="new-password" required @error('password') aria-invalid="true" @enderror>
-            @error('password')<p class="err">{{ $message }}</p>@else<p class="hint">At least 12 characters with a letter and a number.</p>@enderror
-          </div>
-          <div class="manager-field manager-field-wide">
-            <label class="f" for="password_confirmation">Confirm new password</label>
-            <input id="password_confirmation" name="password_confirmation" type="password" minlength="12" maxlength="64" autocomplete="new-password" required>
-          </div>
-        </div>
-        <div class="manager-form-actions">
-          <button class="btn sm" type="submit">Save password</button>
-        </div>
-      </form>
-    </section>
+<div class="appcard">
+  <div class="apphero">
+    <a class="brand" href="{{ route('staff.landing') }}">
+      <span class="logo">@include('partials.logo')</span>
+      <span><b>Bayline</b><small>Every bay, every ticket.</small></span>
+    </a>
   </div>
-</main>
+  <div class="stripe" aria-hidden="true"></div>
+  <div class="appbody">
+    <a class="tt backico" href="{{ route('staff.login') }}" aria-label="Back to sign in" title="Back to sign in"><svg class="ico" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M19 12H5"/><path d="M11 6l-6 6 6 6"/></svg></a>
+    <h1>New password</h1>
+    <p class="lede">Your temporary password must be replaced before you can continue.</p>
+    @if ($errors->any())
+      <div class="alert stop" role="alert"><ul>@foreach ($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>
+    @endif
+    <form method="POST" action="{{ route('staff.password.change.update') }}" data-busy data-busy-label="Saving" novalidate style="margin-top:16px">
+      @csrf
+      @method('PUT')
+      <div class="fld">
+        <label class="f" for="password">New password</label>
+        <input id="password" name="password" type="password" maxlength="64" autocomplete="new-password" data-pwcheck="#pwrules" data-pwconfirm="#password_confirmation" data-pwmatch="#pw-match" required @error('password') aria-invalid="true" @enderror>
+        @error('password')<p class="err">{{ $message }}</p>@else<p class="hint">Use a password you have not used before.</p>@enderror
+        @include('partials.password-rules')
+      </div>
+      <div class="fld">
+        <label class="f" for="password_confirmation">Confirm new password</label>
+        <input id="password_confirmation" name="password_confirmation" type="password" maxlength="64" autocomplete="new-password" required>
+        <p class="hint" id="pw-match" aria-live="polite"></p>
+      </div>
+      <button class="btn block" type="submit">Save new password</button>
+    </form>
+  </div>
+  <div class="cardfoot">@include('partials.theme-toggle')</div>
+</div>
 @endsection

@@ -215,28 +215,17 @@ class Rules
         ];
     }
 
-    /**
-     * Staff password: 12 characters or more, with a letter and a number. This is stricter than the
-     * driver rule because staff accounts can change rates and records.
-     *
-     * @return array<int, string>
-     */
+    /** @return array<int, string> */
     public static function staffPassword(): array
     {
-        return ['required', 'string', 'min:12', 'max:'.self::PASSWORD_MAX, 'regex:/\\p{L}/u', 'regex:/[0-9]/', 'confirmed'];
+        return self::driverPassword();
     }
 
     /** @return array<string, string> */
     public static function staffPasswordMessages(): array
     {
-        $rule = 'Use at least 12 characters with a letter and a number.';
-
-        return [
+        return self::driverPasswordMessages() + [
             'password.required' => 'Choose a new password.',
-            'password.min' => $rule,
-            'password.regex' => $rule,
-            'password.max' => 'The password can have up to '.self::PASSWORD_MAX.' characters.',
-            'password.confirmed' => 'Passwords do not match.',
             'password.different' => 'Choose a password that is different from the current one.',
         ];
     }

@@ -19,7 +19,7 @@ class AccountController extends ManagerController
     {
         $filters = $request->validate([
             'role' => ['nullable', Rule::in(User::STAFF_ROLES)],
-            'status' => ['nullable', Rule::in(['active', 'inactive', 'suspended'])],
+            'status' => ['nullable', Rule::in(['active', 'inactive'])],
             'q' => ['nullable', 'string', 'max:100'],
         ]);
         $role = $filters['role'] ?? null;
@@ -49,7 +49,7 @@ class AccountController extends ManagerController
     public function drivers(Request $request): View
     {
         $filters = $request->validate([
-            'status' => ['nullable', Rule::in(['active', 'suspended', 'inactive'])],
+            'status' => ['nullable', Rule::in(['active', 'suspended'])],
             'q' => ['nullable', 'string', 'max:100'],
         ]);
         $drivers = User::query()->where('role', User::ROLE_DRIVER)
@@ -144,7 +144,7 @@ class AccountController extends ManagerController
 
     public function edit(User $account): View
     {
-        abort_unless($account->isStaff(), 404);
+        abort_unless($account->isStaff() && $account->status !== 'inactive', 404);
 
         return $this->managerPage("Edit {$account->name}", 'accounts', view('staff.manager.accounts.form', [
             'account' => $account,
@@ -154,7 +154,7 @@ class AccountController extends ManagerController
 
     public function update(Request $request, User $account): RedirectResponse
     {
-        abort_unless($account->isStaff(), 404);
+        abort_unless($account->isStaff() && $account->status !== 'inactive', 404);
 
         $data = $this->validatedAccount($request, $account, true);
 
@@ -172,12 +172,59 @@ class AccountController extends ManagerController
         return redirect()->route('manager.accounts.index')->with('status', "{$account->name}'s account was updated.");
     }
 
+    public function confirmEdit(Request $request, User $account): RedirectResponse
+    {
+        abort_unless($account->isStaff() && $account->status !== 'inactive', 404);
+
+        if (! $this->managerPasswordMatches($request)) {
+            return back()->withInput()->withErrors([
+                'manager_password' => 'The manager password is incorrect.',
+            ])->with('openAccountModal', "edit-{$account->id}");
+        }
+
+        return redirect()->route('manager.accounts.edit', $account);
+    }
+
+    public function destroy(Request $request, User $account): RedirectResponse
+    {
+        abort_unless($account->isStaff(), 404);
+
+        if ($account->is($request->user())) {
+            return back()->withErrors(['account' => 'You cannot delete your own account.']);
+        }
+
+        if ($account->role === User::ROLE_MANAGER && $account->status === User::STATUS_ACTIVE
+            && User::query()->where('role', User::ROLE_MANAGER)->where('status', User::STATUS_ACTIVE)->count() <= 1) {
+            return back()->withErrors(['account' => 'At least one active manager account must remain.']);
+        }
+
+        if (! $this->managerPasswordMatches($request)) {
+            return back()->withInput()->withErrors([
+                'manager_password' => 'The manager password is incorrect.',
+            ])->with('openAccountModal', "delete-{$account->id}");
+        }
+
+        $username = $account->username;
+        $name = $account->name;
+        ActivityLog::record('staff_account_deleted', $request->user(), $request, $username, 'manager');
+        $account->delete();
+
+        return back()->with('status', "{$name}'s account was deleted.");
+    }
+
     public function toggleStatus(Request $request, User $account): RedirectResponse
     {
         abort_unless($account->isStaff() || $account->isDriver(), 404);
 
         if ($account->is($request->user())) {
             return back()->withErrors(['account' => 'You cannot deactivate your own account.']);
+        }
+
+        if (($account->isStaff() || $account->isDriver())
+            && ! $this->managerPasswordMatches($request)) {
+            return back()->withInput()->withErrors([
+                'manager_password' => 'The manager password is incorrect.',
+            ])->with('openAccountModal', "status-{$account->id}");
         }
 
         $newStatus = $account->status === User::STATUS_ACTIVE
@@ -202,6 +249,13 @@ class AccountController extends ManagerController
     public function resetPassword(Request $request, User $account): RedirectResponse
     {
         abort_unless($account->isStaff(), 404);
+
+        if (! $this->managerPasswordMatches($request)) {
+            return back()->withInput()->withErrors([
+                'manager_password' => 'The manager password is incorrect.',
+            ])->with('openAccountModal', "reset-{$account->id}");
+        }
+
         $temporaryPassword = Str::password(16);
         $account->forceFill([
             'password' => Hash::make($temporaryPassword),
@@ -310,5 +364,13 @@ class AccountController extends ManagerController
             User::ROLE_ATTENDANT => 'Booth attendant',
             User::ROLE_GUARD => 'Security guard',
         ];
+    }
+
+    private function managerPasswordMatches(Request $request): bool
+    {
+        $manager = User::query()->find($request->user()->getAuthIdentifier());
+
+        return $manager !== null
+            && Hash::check((string) $request->input('manager_password'), (string) $manager->getRawOriginal('password'));
     }
 }

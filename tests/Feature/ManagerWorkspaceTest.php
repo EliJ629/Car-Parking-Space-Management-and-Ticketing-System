@@ -175,14 +175,18 @@ class ManagerWorkspaceTest extends TestCase
         ])->assertRedirect(route('manager.accounts.index'));
         $this->assertSame(User::ROLE_GUARD, $account->fresh()->role);
 
-        $this->post(route('manager.accounts.reset-password', $account))
+        $this->post(route('manager.accounts.reset-password', $account), [
+            'manager_password' => 'password',
+        ])
             ->assertRedirect()
             ->assertSessionHas('temporaryPassword');
         $account->refresh();
         $this->assertTrue($account->must_change_password);
         $this->assertNull($account->locked_until);
 
-        $this->patch(route('manager.accounts.status', $account))->assertRedirect();
+        $this->patch(route('manager.accounts.status', $account), [
+            'manager_password' => 'password',
+        ])->assertRedirect();
         $this->assertSame('inactive', $account->fresh()->status);
     }
 

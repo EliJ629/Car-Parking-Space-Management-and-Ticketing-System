@@ -104,12 +104,18 @@
 .manager-filter-field label.f{margin-bottom:4px}
 .manager-filter-field input,.manager-filter-field select{height:40px;font-size:13px}
 .manager-search-field{width:min(250px,100%)}
-.manager-table-wrap{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:6px}
-.manager-table{width:100%;border-collapse:collapse;font-size:12px}
-.manager-table th,.manager-table td{padding:9px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle;overflow-wrap:anywhere}
-.manager-table thead th{background:var(--out-bg);color:var(--muted);font-size:10px;font-weight:700}
+.manager-table-wrap{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:8px;box-shadow:0 4px 16px rgba(15,23,42,.06)}
+.manager-table{width:100%;border-collapse:separate;border-spacing:0;font-size:12px}
+.manager-table th,.manager-table td{padding:12px 13px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle;overflow-wrap:anywhere}
+.manager-table thead th{background:var(--out-bg);color:var(--muted);font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;white-space:nowrap}
+.manager-table thead th:first-child{border-radius:7px 0 0 0}
+.manager-table thead th:last-child{border-radius:0 7px 0 0}
+.manager-table tbody th{font-weight:700}
 .manager-table tbody tr:last-child th,.manager-table tbody tr:last-child td{border-bottom:0}
 .manager-table tbody tr:hover{background:color-mix(in srgb,var(--surface),var(--out-bg) 34%)}
+.manager-table th:nth-child(1){min-width:150px}
+.manager-table th:nth-child(2){min-width:110px}
+.manager-table th:nth-child(6){min-width:235px}
 .manager-table-empty{text-align:center!important;color:var(--muted);padding:24px!important}
 .manager-slot-code{font-family:var(--f-d);font-size:18px;font-weight:800;text-decoration:none}
 .manager-slot-code:hover{text-decoration:underline;text-decoration-color:var(--paint-deep)}
@@ -120,7 +126,9 @@
 .manager-status-out-of-service{color:var(--muted);background:var(--out-bg);border-color:var(--field)}
 .manager-status-note{display:block;margin-top:4px;color:var(--muted);font-size:10px}
 .manager-row-actions{display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap;white-space:nowrap}
-.manager-row-actions a,.manager-row-actions form button,.manager-text-button{padding:0;border:0;border-bottom:2px solid var(--paint-deep);background:none;color:var(--ink);font:600 11px var(--f-b);text-decoration:none;cursor:pointer}
+.manager-row-actions a,.manager-row-actions button,.manager-row-actions form button,.manager-text-button{padding:3px 0;border:0;border-bottom:2px solid var(--paint-deep);background:none;color:var(--ink);font:600 11px var(--f-b);text-decoration:none;cursor:pointer}
+.manager-row-actions a:hover,.manager-row-actions button:hover{color:var(--paint-deep)}
+.manager-row-actions form{margin:0}
 .manager-action-disabled{color:var(--muted);font-size:11px}
 .manager-table-footer{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:10px;color:var(--muted);font-size:11px}
 .manager-pagination{display:flex;align-items:center;gap:5px}
@@ -189,13 +197,18 @@
 .manager-layout-occupied-gate input{height:42px;padding:0 10px;border:1.5px solid var(--field);border-radius:5px;background:var(--surface);color:var(--ink)}
 .manager-layout-occupied-gate .manager-dialog-actions{margin-top:5px}
 .manager-dialog::backdrop{background:rgba(10,14,18,.62)}
-.manager-dialog-inner{padding:22px;border-top:5px solid var(--paint);border-radius:9px;overflow:auto}
-.manager-dialog-inner h2{margin:4px 48px 8px 0;font-family:var(--f-d);font-size:30px}
-.manager-dialog-inner>.manager-muted{margin-bottom:16px;line-height:1.5}
+.manager-dialog-inner{display:grid;gap:0;padding:28px;border-top:5px solid var(--paint);border-radius:9px;overflow:auto}
+.manager-dialog-inner h2{margin:0 48px 12px 0;font-family:var(--f-d);font-size:30px}
+.manager-dialog-inner>.manager-muted{margin:0 0 22px;line-height:1.55}
+.manager-dialog-field{display:grid;gap:7px;margin-top:2px}
+.manager-dialog-inner label.f{display:block;margin:0;font-size:12px;font-weight:700}
+.manager-dialog-inner input{display:block;width:100%;height:46px;padding:0 12px;border:1.5px solid var(--field);border-radius:5px;background:var(--surface);color:var(--ink);font:500 14px var(--f-b)}
+.manager-dialog-inner input:focus{border-color:var(--paint-deep);outline:2px solid color-mix(in srgb,var(--paint),transparent 70%);outline-offset:1px}
+.manager-dialog-inner .err{margin:8px 0 0}
 .manager-dialog-close{float:right;width:40px;height:40px;border:1.5px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);font:700 14px var(--f-b);cursor:pointer}
 .manager-dialog-fields{display:grid;gap:13px}
 .manager-dialog-fields input{width:100%;height:43px;padding:0 10px;border:1.5px solid var(--field);border-radius:5px;background:var(--surface);color:var(--ink);font:500 14px var(--f-b)}
-.manager-dialog-actions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-top:18px;padding-top:14px;border-top:1px solid var(--line)}
+.manager-dialog-actions{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;margin-top:26px;padding-top:16px;border-top:1px solid var(--line)}
 .manager-dialog-actions .btn{min-height:42px}
 .manager-hint-panel{margin-top:14px;padding:12px;background:var(--warn-bg);border-left:4px solid var(--paint-deep);font-size:12px}
 .manager-chart{display:flex;align-items:flex-end;gap:12px;min-height:205px;overflow-x:auto;padding:20px 4px 0}
