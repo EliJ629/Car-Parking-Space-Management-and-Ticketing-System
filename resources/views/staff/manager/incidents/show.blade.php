@@ -29,7 +29,7 @@
   @if ($blockers)
     <div class="manager-feedback manager-feedback-error" role="status"><strong>This report cannot be resolved yet</strong><ul>@foreach ($blockers as $b)<li>{{ $b }}</li>@endforeach</ul></div>
   @endif
-  @if ($incident->status !== 'resolved')
+  @if ($incident->status !== 'resolved' && $incident->category !== \App\Services\IncidentService::LONG_PARKED)
     <h2 class="manager-subheading">Update incident status</h2>
     <form method="POST" action="{{ route('manager.incidents.update', $incident) }}">@csrf @method('PATCH')
       <div class="manager-form-grid">

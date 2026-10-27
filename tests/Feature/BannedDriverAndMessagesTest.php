@@ -126,8 +126,9 @@ class BannedDriverAndMessagesTest extends TestCase
             'vehicle_type' => 'Car', 'make_model' => 'Toyota Vios', 'color' => 'Black', 'password' => 'Driver123x!', 'password_confirmation' => 'Driver123x!', 'details_confirmed' => '1',
         ];
 
-        $this->post(route('driver.register'), $form(['plate_number' => 'ABC 1234']))->assertSessionHasErrors('plate_number');
-        $this->post(route('driver.register'), $form(['first_name' => 'Pedro', 'last_name' => 'Cruz']))->assertSessionHasErrors();
+        $this->post(route('driver.register'), $form(['plate_number' => 'ABC 1234']))->assertSessionHasErrors(['plate_number' => \App\Services\VehicleBanned::MESSAGE]);
+        $this->assertStringContainsString('numerous incident reports', \App\Services\VehicleBanned::MESSAGE);
+        $this->post(route('driver.register'), $form(['first_name' => 'Pedro', 'last_name' => 'Cruz']))->assertSessionHasErrors(['name' => BanService::NAME_MESSAGE]);
         $this->post(route('driver.register'), $form(['phone' => '09175550142']))->assertSessionHasErrors('phone');
         $this->assertSame(0, PendingRegistration::count());
 
@@ -240,5 +241,89 @@ class BannedDriverAndMessagesTest extends TestCase
     {
         $this->assertSame('AB-12 3script', SearchTerm::normalize("AB-12 3<script>%_'\";é"));
         $this->assertSame('PK-0018', SearchTerm::normalize('PK-0018!!'));
+    }
+
+    public function test_the_banned_list_puts_every_report_in_its_own_box_with_its_details(): void
+    {
+        $this->ban($this->driver());
+
+        $this->actingAs($this->staff(User::ROLE_GUARD, 'Gate Guard'))->get(route('guard.bans'))
+            ->assertOk()->assertSee('Banned because of numerous incident reports')->assertSee('INC-0001')->assertSee('INC-0002')->assertSee('INC-0003')
+            ->assertSee('Unauthorized parking')->assertSee('Reported by')->assertSee('Confirmed')->assertSee('Driver told')->assertSee('What happened:');
+    }
+
+    public function test_an_incident_unresolved_for_a_day_alerts_guard_and_manager_and_repeats_every_day(): void
+    {
+        $manager = $this->staff(User::ROLE_MANAGER, 'Elena Cruz');
+        $incident = Incident::create(['code' => 'INC-0100', 'category' => 'Suspicious vehicle', 'source' => 'manual', 'status' => 'open', 'plate_number' => 'ABC1234', 'location' => 'A-02',
+            'description' => 'Someone is looking into cars.', 'reported_by' => $manager->id, 'reported_at' => now()->subHours(25), 'confirmation' => Incident::PENDING]);
+        $reminders = app(\App\Services\IncidentReminders::class);
+
+        $reminders->send();
+        $reminders->send();
+        $this->assertSame(1, \App\Models\Notice::where('kind', 'incident_unresolved')->where('audience_role', 'guard')->count());
+        $this->assertSame(1, \App\Models\Notice::where('kind', 'incident_unresolved')->where('audience_role', 'manager')->count());
+
+        $this->travel(24)->hours();
+        $reminders->send();
+        $this->assertSame(2, \App\Models\Notice::where('kind', 'incident_unresolved')->where('audience_role', 'guard')->count());
+
+        $incident->update(['status' => 'resolved']);
+        $this->travel(24)->hours();
+        $reminders->send();
+        $this->assertSame(2, \App\Models\Notice::where('kind', 'incident_unresolved')->where('audience_role', 'guard')->count(), 'a resolved incident stops the reminders');
+    }
+
+    public function test_a_young_incident_is_not_reminded_yet(): void
+    {
+        $manager = $this->staff(User::ROLE_MANAGER, 'Elena Cruz');
+        Incident::create(['code' => 'INC-0101', 'category' => 'Violation', 'source' => 'manual', 'status' => 'open', 'description' => 'Something happened here.', 'reported_by' => $manager->id, 'reported_at' => now()->subHours(23), 'confirmation' => Incident::PENDING]);
+
+        app(\App\Services\IncidentReminders::class)->send();
+        $this->assertSame(0, \App\Models\Notice::where('kind', 'incident_unresolved')->count());
+    }
+
+    public function test_the_same_vehicle_cannot_be_reported_twice_under_one_category_but_can_under_another(): void
+    {
+        $guard = $this->staff(User::ROLE_GUARD, 'Ben Aquino');
+        $this->park('ABC1234', 'A-06');
+        $payload = ['category' => 'Suspicious vehicle', 'plate_number' => 'ABC 1234', 'location' => 'A-06', 'description' => 'Circling the lot for an hour.'];
+
+        $this->actingAs($guard)->post(route('guard.incidents.store'), $payload)->assertSessionHasNoErrors();
+        $this->post(route('guard.incidents.store'), $payload)->assertSessionHasErrors('plate_number');
+        $this->assertSame(1, Incident::count());
+
+        $this->post(route('guard.incidents.store'), ['category' => 'Violation'] + $payload)->assertSessionHasNoErrors();
+        $this->assertSame(2, Incident::count());
+
+        $this->get(route('guard.incidents.create'))->assertOk()->assertSee('data-taken', false);
+    }
+
+    public function test_a_new_report_offers_to_resolve_it_at_once(): void
+    {
+        $guard = $this->staff(User::ROLE_GUARD, 'Ben Aquino');
+        $this->park('ABC1234', 'A-06');
+
+        $this->actingAs($guard)->post(route('guard.incidents.store'), ['category' => 'Suspicious vehicle', 'plate_number' => 'ABC1234', 'location' => 'A-06', 'description' => 'Circling the lot for an hour.'])
+            ->assertSessionHas('offer_resolution');
+        $incident = Incident::sole();
+
+        $this->get(route('guard.incidents.show', $incident))->assertOk()->assertSee('Already dealt with?')->assertSee('Mark as resolved');
+
+        $this->post(route('guard.incidents.status', $incident), ['status' => 'resolved', 'note' => 'Driver was spoken to and left.'])->assertSessionHasNoErrors();
+        $this->assertSame('resolved', $incident->fresh()->status);
+        $this->assertSame('Driver was spoken to and left.', $incident->fresh()->resolution_note);
+    }
+
+    public function test_a_long_parking_incident_has_no_update_status_and_refuses_a_hand_set_status(): void
+    {
+        $guard = $this->staff(User::ROLE_GUARD, 'Ben Aquino');
+        $session = $this->park('ABC1234', 'A-06', null, null, 60 * 30);
+        $incident = Incident::create(['code' => 'INC-0200', 'category' => 'Long-parked vehicle', 'source' => 'auto', 'status' => 'open', 'session_id' => $session->id, 'plate_number' => 'ABC1234',
+            'location' => 'A-06', 'description' => 'Parked too long.', 'reported_at' => now(), 'confirmation' => Incident::CONFIRMED]);
+
+        $this->actingAs($guard)->get(route('guard.incidents.show', $incident))->assertOk()->assertSee('Notify driver')->assertDontSee('Update status');
+        $this->post(route('guard.incidents.status', $incident), ['status' => 'under_review'])->assertSessionHas('modal');
+        $this->assertSame('open', $incident->fresh()->status);
     }
 }

@@ -44,6 +44,7 @@ class IncidentController extends Controller
             'categories' => Incident::MANUAL_CATEGORIES,
             'requirements' => Incident::REQUIREMENTS,
             'occupied' => $incidents->occupiedSlots(),
+            'taken' => $incidents->takenSlots(),
             'prefill' => [
                 'category' => in_array($category, Incident::MANUAL_CATEGORIES, true) ? $category : '',
                 'plate_number' => (string) $request->query('plate', ''),
@@ -85,13 +86,16 @@ class IncidentController extends Controller
             ]);
         }
 
-        return redirect()->route('guard.incidents.show', $incident)->with('modal', [
+        $redirect = redirect()->route('guard.incidents.show', $incident)->with('modal', [
             'title' => 'Incident submitted',
             'body' => "{$incident->code} was sent to the Parking Manager.",
             'note' => $incident->driver_notified ? 'The driver was notified.' : ($incident->driver_notice_reason ?: 'No driver was notified.'),
             'primary' => ['label' => 'View incident', 'close' => true],
             'secondary' => ['label' => 'Report another', 'url' => route('guard.incidents.create')],
         ]);
+
+        // The pop-up on the next page also lets the Guard enter a resolution at once, when the matter is already dealt with.
+        return $redirect->with('offer_resolution', true);
     }
 
     /** Live check for the form: is this plate parked in the lot right now, and in which slot? */

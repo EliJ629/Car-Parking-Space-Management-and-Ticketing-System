@@ -15,7 +15,7 @@
   @if ($q !== '')<a class="btn ghost sm" href="{{ route('guard.bans') }}">Clear</a>@endif
 </form>
 
-<div class="g-card" style="margin-top:16px;">
+<div style="margin-top:16px;">
   @include('staff.partials.banned-table')
 </div>
 @endsection

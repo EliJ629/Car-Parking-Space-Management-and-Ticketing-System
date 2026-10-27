@@ -276,7 +276,24 @@
       }
     });
 
-    inc.addEventListener('change', function (e) { if (e.target.name === 'category') applyRules(); });
+    /* A vehicle can be reported only once under a category: its slot is switched off for that category. */
+    var markTaken = function () {
+      var c = cat();
+      Array.prototype.forEach.call(placeIn.options, function (o) {
+        var t = o.getAttribute('data-taken');
+        if (!t) return;
+        var list = [];
+        try { list = JSON.parse(t); } catch (e) { list = []; }
+        var base = o.getAttribute('data-base') || o.textContent;
+        o.setAttribute('data-base', base);
+        var taken = !!c && list.indexOf(c) >= 0;
+        o.disabled = taken;
+        o.textContent = taken ? base + ' (already reported)' : base;
+        if (taken && o.selected) placeIn.value = '';
+      });
+    };
+    inc.addEventListener('change', function (e) { if (e.target.name === 'category') { applyRules(); markTaken(); } });
+    markTaken();
 
     /* Say what is missing before the form leaves the screen. The server checks it all again. */
     inc.addEventListener('submit', function (e) {

@@ -18,7 +18,7 @@
   @if ($longParked && $i->status !== 'resolved')
     <form method="POST" action="{{ route('guard.incidents.notify-driver', $i) }}" data-busy data-busy-label="Notifying" style="display:inline">@csrf<button class="btn" type="submit">Notify driver</button></form>
   @endif
-  @if ($i->status !== 'resolved')<button class="btn {{ $longParked ? 'ghost' : '' }}" type="button" data-open="#status-dlg">Update status</button>@endif
+  @if ($i->status !== 'resolved' && ! $longParked)<button class="btn" type="button" data-open="#status-dlg">Update status</button>@endif
   <a class="btn ghost" href="{{ route('guard.incidents') }}">Back to list</a>
 </div>
 
@@ -98,7 +98,24 @@
   </form>
 </dialog>
 
-@if ($i->status !== 'resolved')
+@if ($i->status !== 'resolved' && ! $longParked && session('offer_resolution'))
+<dialog class="gdlg g-form" id="resolve-now-dlg" aria-labelledby="rn-t" data-autoopen>
+  <form class="in" method="POST" action="{{ route('guard.incidents.status', $i) }}" data-busy data-busy-label="Saving">
+    @csrf
+    <input type="hidden" name="status" value="resolved">
+    <h2 id="rn-t">Incident submitted</h2>
+    <p>{{ $i->code }} was sent to the Parking Manager. {{ $i->driver_notified ? 'The driver was notified.' : ($i->driver_notice_reason ?: 'No driver was notified.') }}</p>
+    <p style="margin-top:10px"><b>Already dealt with?</b> If the driver has been spoken to or the matter is settled, enter the resolution and the incident is marked Resolved now.</p>
+    <div class="fld" style="margin-top:12px">
+      <label class="f" for="resolve-note">Resolution</label>
+      <textarea id="resolve-note" name="note" maxlength="500" style="min-height:90px" placeholder="For example: Driver was spoken to and moved the vehicle."></textarea>
+    </div>
+    <div class="actions"><button class="btn" type="submit">Mark as resolved</button><button class="btn ghost" type="button" data-close>Not yet</button><a class="btn ghost" href="{{ route('guard.incidents.create') }}">Report another</a></div>
+  </form>
+</dialog>
+@endif
+
+@if ($i->status !== 'resolved' && ! $longParked)
 <dialog class="gdlg g-form" id="status-dlg" aria-labelledby="st-t">
   <form class="in" method="POST" action="{{ route('guard.incidents.status', $i) }}" data-busy data-busy-label="Saving">
     @csrf

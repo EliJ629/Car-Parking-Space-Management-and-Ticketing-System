@@ -303,7 +303,9 @@ class AuditValidationTest extends TestCase
         $this->post(route('manager.incidents.store'), ['category' => 'Made up'] + $good)->assertSessionHasErrors('category');
 
         $this->post(route('manager.incidents.store'), $good)->assertSessionHasNoErrors();
-        $this->post(route('manager.incidents.store'), $good)->assertSessionHasNoErrors();
+        // The same vehicle cannot be reported twice under one category, so the second report uses another one.
+        $this->post(route('manager.incidents.store'), $good)->assertSessionHasErrors('plate_number');
+        $this->post(route('manager.incidents.store'), ['category' => 'Violation'] + $good)->assertSessionHasNoErrors();
         $this->assertSame(['INC-0001', 'INC-0002'], Incident::orderBy('id')->pluck('code')->all());
         $this->assertSame('ABC1234', Incident::first()->plate_number);
 

@@ -19,7 +19,7 @@
         'bans' => ['Banned list', route('guard.bans')],
     ];
     $idleMinutes = (int) \App\Models\SystemSetting::value('idle_timeout_minutes', 15);
-    $flashModal = session('modal');
+    $flashModal = session('offer_resolution') ? null : session('modal');
     // A short message is shown as a pop-up the guard closes, not as a toast that disappears by itself.
     if (! $flashModal && ($flashToast = session('toast'))) {
         $flashModal = ['title' => $flashToast[0], 'body' => $flashToast[1] ?? '', 'primary' => ['label' => 'OK', 'close' => true]];

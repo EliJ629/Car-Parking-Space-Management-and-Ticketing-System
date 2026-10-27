@@ -92,6 +92,26 @@ class IncidentService
     }
 
     /**
+     * Occupied slots that already have a report under a category, so the form can switch them off for that category.
+     *
+     * @return array<string, list<string>> slot code => categories already reported for the vehicle parked there
+     */
+    public function takenSlots(): array
+    {
+        $taken = [];
+
+        foreach (ParkingSession::query()->whereIn('status', ParkingSession::OPEN_STATUSES)->with('slot')->get() as $session) {
+            $categories = Incident::query()->where('session_id', $session->id)->where('category', '!=', 'Vehicle damage')->pluck('category')->unique()->values()->all();
+
+            if ($categories !== []) {
+                $taken[(string) ($session->slot?->code ?? $session->slot_code)] = $categories;
+            }
+        }
+
+        return $taken;
+    }
+
+    /**
      * A manual report by a Guard or Manager. The vehicle and slot fill in when the plate has an open session.
      * For vehicle damage, plate_number is the damaged vehicle and responsible_plate is the vehicle at fault; the
      * incident counts against the responsible vehicle only. A second report of the same damage on the same day
@@ -351,6 +371,11 @@ class IncidentService
             throw new \InvalidArgumentException('A resolved incident stays resolved. It cannot be reopened.');
         }
 
+        // A long-parking incident has no hand-set status. It is resolved by payment and a confirmed exit, nothing else.
+        if ($incident->category === self::LONG_PARKED) {
+            throw new \InvalidArgumentException('A long-parking incident cannot be updated by hand. It is resolved once the fees are paid and the vehicle has left within the exit time set by the Parking Manager.');
+        }
+
         if ($rank[$status] < $rank[$incident->status]) {
             throw new \InvalidArgumentException('An incident can only move forward: open, under review, resolved.');
         }
@@ -481,6 +506,16 @@ class IncidentService
         }
 
         $parkedSlot = $session ? (string) ($session->slot?->code ?? $session->slot_code) : '';
+
+        // The same vehicle cannot be reported twice under the same category. (Vehicle damage keeps its follow-up rule: a second
+        // report of the same damage is added to the first one.)
+        if ($session && ! isset($errors['plate_number']) && $data['category'] !== 'Vehicle damage') {
+            $existing = Incident::query()->where('session_id', $session->id)->where('category', $data['category'])->oldest('id')->first();
+
+            if ($existing) {
+                $errors['plate_number'] = Lot::plate($session->plate_number)." was already reported as ".strtolower(Incident::guardLabel($data['category']))." ({$existing->code}). The same vehicle can be reported only once under the same category. Add a note to {$existing->code} instead.";
+            }
+        }
 
         if ($place !== '' && ! in_array($place, $occupied, true)) {
             $errors['location'] = "There is no vehicle in slot {$place} right now. Choose a slot from the list.";

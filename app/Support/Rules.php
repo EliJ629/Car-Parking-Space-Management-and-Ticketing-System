@@ -47,9 +47,16 @@ class Rules
             'last_name' => ['required', 'string', 'min:2', 'max:40', 'regex:'.self::NAME_PART_PATTERN],
             'name' => [
                 // Looked up only when the parts themselves are well formed: a badly typed name has nothing to look up.
-                fn (string $attribute, mixed $value, \Closure $fail) => self::namePartsWellFormed() && self::driverNameTaken((string) $value)
-                    ? $fail('An account with this name already exists. If it is yours, sign in instead.')
-                    : null,
+                function (string $attribute, mixed $value, \Closure $fail): void {
+                    if (! self::namePartsWellFormed() || ! self::driverNameTaken((string) $value)) {
+                        return;
+                    }
+
+                    // The name is taken. Say so plainly when its owner is banned, and sign-in would be refused anyway.
+                    $fail(app(\App\Services\BanService::class)->nameBanned((string) $value)
+                        ? \App\Services\BanService::NAME_MESSAGE
+                        : 'An account with this name already exists. If it is yours, sign in instead.');
+                },
             ],
         ];
     }

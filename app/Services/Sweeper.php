@@ -16,6 +16,7 @@ class Sweeper
         private ReservationService $reservations,
         private GateService $gate,
         private LongParkingService $longParking,
+        private IncidentReminders $incidentReminders,
     ) {}
 
     public function run(bool $force = false): void
@@ -28,6 +29,10 @@ class Sweeper
 
         if ($force || Cache::add('bayline:sweep:long-parking', 1, 300)) {
             $this->longParking->detect();
+        }
+
+        if ($force || Cache::add('bayline:sweep:incident-reminders', 1, 600)) {
+            $this->incidentReminders->send();
         }
     }
 }

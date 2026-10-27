@@ -1,6 +1,7 @@
 <?php
 
 use App\Services\GateService;
+use App\Services\IncidentReminders;
 use App\Services\LongParkingService;
 use App\Services\ReservationReminders;
 use App\Services\ReservationService;
@@ -35,6 +36,10 @@ Artisan::command('bayline:exit-windows', function (GateService $gate) {
 Artisan::command('bayline:long-parking', function (LongParkingService $longParking) {
     $this->info('Created '.$longParking->detect().' long-parking incident(s).');
 })->purpose('Detect vehicles parked past the long-parking limit');
+
+Artisan::command('bayline:incident-reminders', function (IncidentReminders $reminders) {
+    $this->info('Checked '.$reminders->send().' incident(s) that are unresolved after 24 hours or more.');
+})->purpose('Tell the Guard and the Manager about incidents still unresolved after 24 hours, every 24 hours');
 
 Artisan::command('bayline:reservation-reminders', function (ReservationReminders $reminders) {
     if (! $reminders->enabled()) {
@@ -73,4 +78,5 @@ Artisan::command('bayline:test-sms {to : A Philippine mobile number, 09171234567
 Schedule::command('bayline:reservations')->everyMinute()->withoutOverlapping();
 Schedule::command('bayline:exit-windows')->everyMinute()->withoutOverlapping();
 Schedule::command('bayline:long-parking')->everyFiveMinutes()->withoutOverlapping();
+Schedule::command('bayline:incident-reminders')->everyTenMinutes()->withoutOverlapping();
 Schedule::command('bayline:reservation-reminders')->everyMinute()->withoutOverlapping();

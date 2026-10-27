@@ -65,7 +65,7 @@
         <select id="location" name="location" @error('location') aria-invalid="true" @enderror @disabled($occupied->isEmpty())>
           <option value="">{{ $occupied->isEmpty() ? 'No vehicle is parked right now' : 'Choose an occupied slot' }}</option>
           @foreach ($occupied as $row)
-            <option value="{{ $row['code'] }}" data-plate="{{ $row['plate'] }}" data-label="{{ $row['plate_label'] }}" @selected($val('location') === $row['code'])>{{ $row['code'] }} - {{ $row['plate_label'] }}</option>
+            <option value="{{ $row['code'] }}" data-plate="{{ $row['plate'] }}" data-label="{{ $row['plate_label'] }}" @if (! empty($taken[$row['code']])) data-taken="{{ json_encode($taken[$row['code']]) }}" @endif @selected($val('location') === $row['code'])>{{ $row['code'] }} - {{ $row['plate_label'] }}</option>
           @endforeach
         </select>
         @error('location')<p class="g-err">{{ $message }}</p>@else<p class="hint" id="place-hint">Only slots with a vehicle in them are listed.</p>@enderror

@@ -9,12 +9,13 @@
 <tr>
   <th scope="row"><span class="manager-slot-code">{{ \App\Support\Lot::plate($ban->plate_number) }}</span></th>
   <td>{{ $ban->reason }}</td>
-  <td>@foreach ($counted($ban->plate_number) as $i) <a href="{{ route('manager.incidents.show', $i) }}">{{ $i->code }}</a>@if (! $loop->last), @endif @endforeach</td>
+  <td>{{ $counted($ban->plate_number)->count() }} {{ \Illuminate\Support\Str::plural('report', $counted($ban->plate_number)->count()) }}</td>
   <td>{{ \App\Support\Lot::local($ban->banned_at)?->format('M j, Y g:i A') }}<br><small>{{ $ban->banner?->name ?? 'System' }}</small></td>
   <td>{{ $ban->owner?->name ?? 'No linked account' }}</td>
   <td>@if ($ban->lifted_at){{ \App\Support\Lot::local($ban->lifted_at)?->format('M j, Y g:i A') }}<br><small>{{ $ban->lifter?->name ?? 'Former staff' }}: {{ $ban->lift_note }}</small>@else
     <form method="POST" action="{{ route('manager.bans.lift', $ban) }}" data-busy>@csrf<input name="note" required minlength="3" maxlength="255" placeholder="Why lift the ban?" aria-label="Reason for lifting the ban for {{ \App\Support\Lot::plate($ban->plate_number) }}"><button class="btn ghost sm" type="submit">Lift ban</button></form>@endif</td>
 </tr>
+<tr><td colspan="6" style="padding:0 12px 16px;"><details open><summary style="cursor:pointer;color:var(--muted);">Reports behind this ban</summary>@include('staff.partials.ban-incident-boxes', ['ban' => $ban, 'incidentRoute' => 'manager.incidents.show'])</details></td></tr>
 @empty<tr><td colspan="6" class="manager-table-empty">{{ ($filters['state'] ?? 'active') === 'lifted' ? 'No ban has been lifted.' : 'No vehicle is banned.' }}</td></tr>@endforelse
 </tbody></table></div>
 <div class="manager-table-footer"><span>Showing {{ $bans->firstItem() ?? 0 }}&ndash;{{ $bans->lastItem() ?? 0 }} of {{ $bans->total() }}</span>{{ $bans->links() }}</div>

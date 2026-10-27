@@ -222,10 +222,10 @@ class RegisterController extends Controller
             // Anything can have changed in the hours since the form was sent. The first person to confirm keeps the name, mailbox and plate.
             if (Rules::emailTaken($pending->email)) {
                 $problem = ['email', 'This Gmail account is already registered. Sign in instead.'];
-            } elseif (Rules::driverNameTaken($pending->name)) {
-                $problem = ['name', 'An account with this name already exists. If it is yours, sign in instead.'];
             } elseif ($ban = app(BanService::class)->signUpProblem($pending->name, $pending->plate_number, $pending->phone)) {
                 $problem = $ban;
+            } elseif (Rules::driverNameTaken($pending->name)) {
+                $problem = ['name', 'An account with this name already exists. If it is yours, sign in instead.'];
             } elseif ($pending->plate_number !== null && Vehicle::withTrashed()->where('plate_number', $pending->plate_number)->lockForUpdate()->exists()) {
                 $problem = ['plate_number', Lot::plate($pending->plate_number).' is already registered to an account. A plate can belong to one account only.'];
             }

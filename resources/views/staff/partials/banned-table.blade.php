@@ -1,41 +1,20 @@
-{{-- Shared by the Guard and the booth attendant. $bans, $counted, $labelOf and $incidentLinks come from BannedListController. --}}
-<div style="overflow-x:auto;">
-  <table style="width:100%;border-collapse:collapse;font-size:14px;text-align:left;">
-    <thead>
-      <tr style="border-bottom:2px solid var(--line);color:var(--muted);font-size:12px;text-transform:uppercase;">
-        <th style="padding:10px 8px;">Plate</th>
-        <th style="padding:10px 8px;">Driver</th>
-        <th style="padding:10px 8px;">Mobile</th>
-        <th style="padding:10px 8px;">Banned</th>
-        <th style="padding:10px 8px;">Why (reports)</th>
-      </tr>
-    </thead>
-    <tbody>
-      @forelse ($bans as $ban)
-        <tr style="border-bottom:1px solid var(--line);vertical-align:top;">
-          <th scope="row" style="padding:10px 8px;white-space:nowrap;">{{ \App\Support\Lot::plate($ban->plate_number) }}</th>
-          <td style="padding:10px 8px;">{{ $ban->driver_name ?: ($ban->owner?->name ?? 'Walk-in driver') }}</td>
-          <td style="padding:10px 8px;white-space:nowrap;">{{ $ban->driver_phone ?: ($ban->owner?->phone ?: 'Not on record') }}</td>
-          <td style="padding:10px 8px;white-space:nowrap;">{{ \App\Support\Lot::local($ban->banned_at)?->format('M j, Y g:i A') }}</td>
-          <td style="padding:10px 8px;min-width:260px;">
-            <div>{{ $ban->reason }}</div>
-            <ul style="margin:6px 0 0;padding-left:18px;">
-              @foreach ($counted($ban->plate_number) as $i)
-                <li>
-                  @if ($incidentLinks)<a href="{{ route('guard.incidents.show', $i) }}">{{ $i->code }}</a>@else<b>{{ $i->code }}</b>@endif
-                  &middot; {{ $labelOf($i) }} &middot; {{ \App\Support\Lot::stamp($i->reported_at) }}@if ($i->location) &middot; {{ $i->location }}@endif
-                  <br><small>{{ \Illuminate\Support\Str::limit((string) $i->description, 140) }}</small>
-                </li>
-              @endforeach
-            </ul>
-          </td>
-        </tr>
-      @empty
-        <tr><td colspan="5" style="padding:24px 8px;text-align:center;color:var(--muted);">{{ $q !== '' ? 'No banned driver matches this search.' : 'No vehicle is banned.' }}</td></tr>
-      @endforelse
-    </tbody>
-  </table>
-</div>
+{{-- Shared by the Guard and the booth attendant. $bans, $counted and $incidentLinks come from BannedListController. --}}
+@forelse ($bans as $ban)
+  <section style="border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:16px;">
+    <header style="display:flex;flex-wrap:wrap;gap:8px 24px;align-items:baseline;justify-content:space-between;">
+      <h2 style="margin:0;font-size:22px;">{{ \App\Support\Lot::plate($ban->plate_number) }}</h2>
+      <span style="color:var(--muted);">Banned {{ \App\Support\Lot::local($ban->banned_at)?->format('M j, Y g:i A') }}</span>
+    </header>
+    <dl style="margin:10px 0 0;display:grid;grid-template-columns:auto 1fr;gap:4px 16px;font-size:14px;">
+      <dt style="color:var(--muted);">Driver</dt><dd style="margin:0;">{{ $ban->driver_name ?: ($ban->owner?->name ?? 'Walk-in driver') }}</dd>
+      <dt style="color:var(--muted);">Mobile</dt><dd style="margin:0;">{{ $ban->driver_phone ?: ($ban->owner?->phone ?: 'Not on record') }}</dd>
+      <dt style="color:var(--muted);">Why</dt><dd style="margin:0;">Banned because of numerous incident reports. {{ $ban->reason }}</dd>
+    </dl>
+    @include('staff.partials.ban-incident-boxes', ['ban' => $ban, 'incidentRoute' => $incidentLinks ? 'guard.incidents.show' : null])
+  </section>
+@empty
+  <p style="padding:24px 8px;text-align:center;color:var(--muted);">{{ $q !== '' ? 'No banned driver matches this search.' : 'No vehicle is banned.' }}</p>
+@endforelse
 <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-top:12px;">
   <span>Showing {{ $bans->firstItem() ?? 0 }}&ndash;{{ $bans->lastItem() ?? 0 }} of {{ $bans->total() }}</span>
   {{ $bans->links() }}

@@ -18,7 +18,7 @@
   </form>
 </div>
 
-<div class="ba-card">
+<div>
   @include('staff.partials.banned-table')
 </div>
 @endsection

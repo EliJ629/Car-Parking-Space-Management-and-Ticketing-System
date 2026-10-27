@@ -160,7 +160,15 @@ class BanService
     {
         $key = self::nameKey($name);
 
-        return $key === '' ? null : BannedPlate::query()->active()->whereNotNull('driver_name')->whereRaw('lower(driver_name) = ?', [$key])->first();
+        if ($key === '') {
+            return null;
+        }
+
+        // The name saved on the ban, or the name of the account the ban is linked to (a ban made before names were saved).
+        return BannedPlate::query()->active()
+            ->where(fn ($q) => $q->whereRaw('lower(driver_name) = ?', [$key])
+                ->orWhereIn('user_id', fn ($u) => $u->select('id')->from('users')->whereRaw('lower(name) = ?', [$key])))
+            ->first();
     }
 
     /** The active ban held by a driver with this mobile number, or null. */
@@ -200,22 +208,24 @@ class BanService
     public function signUpProblem(?string $name, ?string $plate, ?string $phone): ?array
     {
         if ($plate && $this->isBanned($plate)) {
-            return ['plate_number', Lot::plate($plate).' is on the banned list, so it cannot be used to sign up.'];
+            return ['plate_number', Lot::plate($plate).' is banned because of numerous incident reports, so it cannot be used to sign up.'];
         }
 
         if ($this->nameBanned($name)) {
-            return ['first_name', 'This name is on the banned list, so it cannot be used to sign up.'];
+            return ['first_name', self::NAME_MESSAGE];
         }
 
         if ($this->phoneBanned($phone)) {
-            return ['phone', 'This mobile number belongs to a banned driver, so it cannot be used to sign up.'];
+            return ['phone', 'This mobile number belongs to a driver who is banned because of numerous incident reports, so it cannot be used to sign up.'];
         }
 
         return null;
     }
 
     /** Message shown to a banned driver who tries to sign in. */
-    public const LOGIN_MESSAGE = 'This account is banned because of repeated incident reports. Please contact the Parking Manager.';
+    public const LOGIN_MESSAGE = 'This account is banned because of numerous incident reports. Please contact the Parking Manager.';
+
+    public const NAME_MESSAGE = 'This driver is banned because of numerous incident reports, so this name cannot be used to sign up.';
 
     /** The confirmed incidents that count for a plate right now. */
     public function counted(?string $plate): Collection
@@ -234,6 +244,8 @@ class BanService
             ->whereIn('category', Incident::BAN_CATEGORIES)
             ->where('confirmation', Incident::CONFIRMED)
             ->when($since, fn ($q) => $q->where('confirmed_at', '>', $since))
+            ->with(['reporter', 'confirmer'])
+            ->withCount('photos')
             ->orderBy('confirmed_at')
             ->orderBy('id')
             ->get();

@@ -293,6 +293,18 @@ class NoticeService
             "{$incident->code} ".Incident::guardLabel($incident->category)." reported by {$by}.", $incident, [], "s04-{$incident->id}");
     }
 
+    /** S-07. An incident is still not resolved after 24 hours, and again after every further 24 hours. */
+    public function staffIncidentUnresolved(Incident $incident, int $days): void
+    {
+        $where = $incident->location ? " at {$incident->location}" : '';
+        $plate = $incident->plate_number ? ' for '.Lot::plate($incident->plate_number) : '';
+        $since = $days === 1 ? 'a day' : "{$days} days";
+
+        $this->toRoles([User::ROLE_MANAGER, User::ROLE_GUARD], 'S-07', 'incident_unresolved', 'Incident not resolved',
+            "{$incident->code}, ".Incident::guardLabel($incident->category)."{$plate}{$where}, has been unresolved for {$since} (reported ".Lot::stamp($incident->reported_at).').',
+            $incident, ['days' => $days], "s07-{$incident->id}-{$days}");
+    }
+
     public function staffExitWindowEnded(ParkingSession $s): void
     {
         $this->toRoles([User::ROLE_ATTENDANT, User::ROLE_GUARD], 'S-05', 'exit_window_ended', 'Exit window ended',
